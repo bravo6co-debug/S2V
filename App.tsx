@@ -1,10 +1,25 @@
 
 import React, { useState, useEffect } from 'react';
-import { GeneratedItem, ImageData, Chapter, DragItem, Character, AspectRatio } from './types';
-import { generateImages, generateCharacterPortraits, editImage, extractCharacterData } from './services/geminiService';
+import { GeneratedItem, ImageData, Chapter, DragItem, Character, AspectRatio, Scenario, ScenarioConfig, Scene } from './types';
+import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
 import { ResultDisplay } from './components/ResultDisplay';
 import { IdIcon, LayersIcon, SparklesIcon, MagnifyingGlassPlusIcon, PlusCircleIcon, CheckCircleIcon, TrashIcon, ClearIcon, PencilIcon, AspectRatioHorizontalIcon, AspectRatioVerticalIcon } from './components/Icons';
 import { ChapterDisplay } from './components/ChapterDisplay';
+import { ScenarioGenerator } from './components/ScenarioGenerator';
+import { ScenarioEditor } from './components/ScenarioEditor';
+
+// Icon for scenario mode toggle
+const FilmIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+  </svg>
+);
+
+const ImageModeIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
 
 const cinematicLooksData = {
   "장르 기반 시네마틱 룩 (Genre-Based)": [
@@ -438,6 +453,12 @@ const getFriendlyErrorMessage = (originalError: unknown): string => {
     if (message.includes('Video generation failed')) {
         return '오류: 동영상 생성에 실패했습니다. API 문제, 서비스 점검, 또는 부적절한 프롬프트일 수 있습니다. 잠시 후 다시 시도해 주세요.';
     }
+    if (message.includes('Scenario generation failed')) {
+        return '오류: 시나리오 생성에 실패했습니다. 주제를 더 구체적으로 작성하거나, 잠시 후 다시 시도해 주세요.';
+    }
+    if (message.includes('Scene regeneration failed')) {
+        return '오류: 씬 재생성에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+    }
     return message;
 };
 
@@ -492,6 +513,15 @@ const App: React.FC = () => {
 
     // Character Sheet Modal State
     const [sheetModalState, setSheetModalState] = useState<{ isOpen: boolean; character: Character | null }>({ isOpen: false, character: null });
+
+    // Scenario Mode States
+    const [appMode, setAppMode] = useState<'image' | 'scenario'>('image');
+    const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
+    const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
+    const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
+    const [regeneratingSceneId, setRegeneratingSceneId] = useState<string | null>(null);
+    const [generatingImageSceneId, setGeneratingImageSceneId] = useState<string | null>(null);
+    const [isGeneratingAllImages, setIsGeneratingAllImages] = useState(false);
 
     // --- Cinematic Look Handlers ---
     const handleRemoveFilter = (title: string) => {
@@ -669,6 +699,135 @@ const App: React.FC = () => {
         } finally {
             setRegeneratingImageId(null);
         }
+    };
+
+    // --- Scenario Handlers ---
+    const handleGenerateScenario = async (config: ScenarioConfig) => {
+        setIsGeneratingScenario(true);
+        setError(null);
+        try {
+            const scenario = await generateScenario(config);
+            setCurrentScenario(scenario);
+            setIsScenarioModalOpen(false);
+            setAppMode('scenario');
+        } catch (e) {
+            setError(getFriendlyErrorMessage(e));
+        } finally {
+            setIsGeneratingScenario(false);
+        }
+    };
+
+    const handleRegenerateScene = async (sceneId: string, instruction?: string) => {
+        if (!currentScenario) return;
+        setRegeneratingSceneId(sceneId);
+        setError(null);
+        try {
+            const newScene = await regenerateScene(currentScenario, sceneId, instruction);
+            setCurrentScenario(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    scenes: prev.scenes.map(s => s.id === sceneId ? newScene : s),
+                    updatedAt: Date.now(),
+                };
+            });
+        } catch (e) {
+            setError(getFriendlyErrorMessage(e));
+        } finally {
+            setRegeneratingSceneId(null);
+        }
+    };
+
+    const handleGenerateSceneImage = async (sceneId: string) => {
+        if (!currentScenario) return;
+        const scene = currentScenario.scenes.find(s => s.id === sceneId);
+        if (!scene) return;
+
+        setGeneratingImageSceneId(sceneId);
+        setError(null);
+        try {
+            const characterImages = activeCharacters.filter((c): c is Character => c !== null).map(c => c.image);
+            const imageData = await generateSceneImage(scene, characterImages, aspectRatio);
+            setCurrentScenario(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    scenes: prev.scenes.map(s => s.id === sceneId ? { ...s, generatedImage: imageData } : s),
+                    updatedAt: Date.now(),
+                };
+            });
+        } catch (e) {
+            setError(getFriendlyErrorMessage(e));
+        } finally {
+            setGeneratingImageSceneId(null);
+        }
+    };
+
+    const handleGenerateAllSceneImages = async () => {
+        if (!currentScenario) return;
+        const scenesWithoutImages = currentScenario.scenes.filter(s => !s.generatedImage);
+        if (scenesWithoutImages.length === 0) {
+            alert('모든 씬에 이미지가 이미 생성되어 있습니다.');
+            return;
+        }
+
+        setIsGeneratingAllImages(true);
+        setError(null);
+        const characterImages = activeCharacters.filter((c): c is Character => c !== null).map(c => c.image);
+
+        for (const scene of scenesWithoutImages) {
+            setGeneratingImageSceneId(scene.id);
+            try {
+                const imageData = await generateSceneImage(scene, characterImages, aspectRatio);
+                setCurrentScenario(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        scenes: prev.scenes.map(s => s.id === scene.id ? { ...s, generatedImage: imageData } : s),
+                        updatedAt: Date.now(),
+                    };
+                });
+            } catch (e) {
+                console.error(`Failed to generate image for scene ${scene.sceneNumber}:`, e);
+                // Continue with other scenes even if one fails
+            }
+        }
+        setGeneratingImageSceneId(null);
+        setIsGeneratingAllImages(false);
+    };
+
+    const handleSaveScenario = () => {
+        if (!currentScenario) return;
+        const dataStr = JSON.stringify(currentScenario, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `scenario_${currentScenario.title.replace(/\s+/g, '_')}_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleLoadScenario = async (file: File) => {
+        try {
+            const text = await file.text();
+            const loaded = JSON.parse(text) as Scenario;
+            // Validate basic structure
+            if (!loaded.id || !loaded.title || !loaded.scenes || !Array.isArray(loaded.scenes)) {
+                throw new Error('Invalid scenario file format');
+            }
+            setCurrentScenario(loaded);
+            setAppMode('scenario');
+        } catch (e) {
+            setError('시나리오 파일을 불러오는데 실패했습니다. 올바른 JSON 파일인지 확인해주세요.');
+        }
+    };
+
+    const handleCloseScenarioEditor = () => {
+        setCurrentScenario(null);
+        setAppMode('image');
     };
 
     const handleGenerate = async () => {
@@ -933,7 +1092,162 @@ ${characterDetails}
 
     return (
         <div className="h-screen bg-gray-900 text-gray-200 flex flex-col p-4">
+            {/* Mode Toggle Header */}
+            <div className="w-full max-w-screen-3xl mx-auto mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setAppMode('image')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                            appMode === 'image'
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        }`}
+                    >
+                        <ImageModeIcon className="w-5 h-5" />
+                        이미지 생성
+                    </button>
+                    <button
+                        onClick={() => currentScenario ? setAppMode('scenario') : setIsScenarioModalOpen(true)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                            appMode === 'scenario'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        }`}
+                    >
+                        <FilmIcon className="w-5 h-5" />
+                        시나리오 모드
+                    </button>
+                </div>
+                {appMode === 'image' && (
+                    <button
+                        onClick={() => setIsScenarioModalOpen(true)}
+                        disabled={isGeneratingScenario}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-500 hover:to-indigo-500 transition-all disabled:opacity-50"
+                    >
+                        <SparklesIcon className="w-5 h-5" />
+                        새 시나리오 생성
+                    </button>
+                )}
+            </div>
+
             <main className="w-full max-w-screen-3xl mx-auto flex-grow grid grid-cols-1 lg:grid-cols-10 gap-4 min-h-0">
+                {/* Scenario Mode View */}
+                {appMode === 'scenario' && currentScenario ? (
+                    <>
+                        {/* Left Panel - Character Library (narrower in scenario mode) */}
+                        <section className="w-full lg:col-span-3 p-4 bg-gray-800/50 rounded-xl border border-gray-700 flex flex-col gap-4 overflow-y-auto">
+                            <div>
+                                <h3 className="text-lg font-bold text-purple-300 mb-2">캐릭터 라이브러리</h3>
+                                <p className="text-xs text-gray-500 mb-3">시나리오의 등장인물 이미지를 등록하세요. 이미지 생성 시 참조됩니다.</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {characterLibrary.map((char, i) => {
+                                        const fileInputId = `scenario-library-upload-${i}`;
+                                        return (
+                                            <div key={i} className="flex flex-col gap-2">
+                                                <div className="relative aspect-video w-full bg-gray-800 border-2 border-dashed border-gray-600 rounded-xl flex items-center justify-center group">
+                                                    <input
+                                                        type="file"
+                                                        id={fileInputId}
+                                                        accept="image/*"
+                                                        onChange={(e) => handleLibraryFileUpload(e, i)}
+                                                        className="hidden"
+                                                    />
+                                                    {char ? (
+                                                        <>
+                                                            <img
+                                                                src={`data:${char.image.mimeType};base64,${char.image.data}`}
+                                                                alt={char.name}
+                                                                className="object-cover w-full h-full rounded-lg"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                                <button
+                                                                    onClick={() => handleActivateCharacter(i)}
+                                                                    className="p-2 bg-indigo-600 rounded-full text-white hover:bg-indigo-700"
+                                                                    title="활성화"
+                                                                >
+                                                                    <PlusCircleIcon className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteLibraryImage(i)}
+                                                                    className="p-2 bg-red-600 rounded-full text-white hover:bg-red-700"
+                                                                    title="삭제"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <label htmlFor={fileInputId} className="cursor-pointer text-center text-gray-500 hover:text-purple-400">
+                                                            <div className="text-2xl mx-auto">+</div>
+                                                            <p className="text-xs">업로드</p>
+                                                        </label>
+                                                    )}
+                                                </div>
+                                                {char && <span className="text-xs text-gray-400 truncate text-center">{char.name}</span>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-purple-300 mb-2">활성화된 캐릭터</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {activeCharacters.filter(c => c !== null).length === 0 ? (
+                                        <p className="text-xs text-gray-500">라이브러리에서 캐릭터를 활성화하세요</p>
+                                    ) : (
+                                        activeCharacters.map((char, i) => char && (
+                                            <div key={i} className="relative">
+                                                <img
+                                                    src={`data:${char.image.mimeType};base64,${char.image.data}`}
+                                                    alt={char.name}
+                                                    className="w-12 h-12 object-cover rounded-lg border-2 border-purple-500"
+                                                />
+                                                <button
+                                                    onClick={() => handleDeactivateCharacter(i)}
+                                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center"
+                                                >
+                                                    x
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                            <div className="mt-auto">
+                                <h3 className="text-sm font-bold text-purple-300 mb-2">이미지 비율</h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setAspectRatio('16:9')} className={`flex items-center justify-center gap-2 p-2 rounded-lg transition-colors ${aspectRatio === '16:9' ? 'bg-purple-600 ring-2 ring-purple-400' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                        <AspectRatioHorizontalIcon className="w-5 h-5"/>
+                                        <span className="text-sm">16:9</span>
+                                    </button>
+                                    <button onClick={() => setAspectRatio('9:16')} className={`flex items-center justify-center gap-2 p-2 rounded-lg transition-colors ${aspectRatio === '9:16' ? 'bg-purple-600 ring-2 ring-purple-400' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                        <AspectRatioVerticalIcon className="w-5 h-5"/>
+                                        <span className="text-sm">9:16</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Scenario Editor (takes most of the space) */}
+                        <section className="w-full lg:col-span-7 flex flex-col min-h-0">
+                            <ScenarioEditor
+                                scenario={currentScenario}
+                                onUpdateScenario={setCurrentScenario}
+                                onRegenerateScene={handleRegenerateScene}
+                                onGenerateSceneImage={handleGenerateSceneImage}
+                                onGenerateAllImages={handleGenerateAllSceneImages}
+                                onSaveScenario={handleSaveScenario}
+                                onLoadScenario={handleLoadScenario}
+                                onClose={handleCloseScenarioEditor}
+                                regeneratingSceneId={regeneratingSceneId}
+                                generatingImageSceneId={generatingImageSceneId}
+                                isGeneratingAllImages={isGeneratingAllImages}
+                            />
+                        </section>
+                    </>
+                ) : (
+                /* Image Mode View (Original Layout) */
+                <>
                 <section className="w-full lg:col-span-3 p-4 bg-gray-800/50 rounded-xl border border-gray-700 flex flex-col gap-4 overflow-y-auto">
                      
                     <div>
@@ -1217,36 +1531,45 @@ ${characterDetails}
                         onRemoveItemFromChapter={handleRemoveItemFromChapter}
                     />
                 </section>
-
-                 {modalItem && <ItemModal item={modalItem} onClose={() => setModalItem(null)} />}
-                 {confirmationConfig && (
-                    <ConfirmationModal
-                        config={confirmationConfig}
-                        onClose={() => setConfirmationConfig(null)}
-                    />
+                </>
                 )}
-                 <RegenerationModal 
-                    isOpen={regenModalState.isOpen}
-                    onClose={handleCloseRegenModal}
-                    prompt={regenModalState.prompt}
-                    onPromptChange={(p) => setRegenModalState(s => ({...s, prompt: p}))}
-                    onSubmit={handleEditImage}
-                    isLoading={regeneratingImageId !== null}
-                 />
-                 <CharacterCreationModal
-                    isOpen={isCharacterModalOpen}
-                    onClose={() => setIsCharacterModalOpen(false)}
-                    onSubmit={handleCreateCharacter}
-                    isLoading={isCreatingCharacter}
-                 />
-                 {sheetModalState.isOpen && sheetModalState.character && (
-                    <CharacterSheetModal
-                        character={sheetModalState.character}
-                        onSave={handleSaveCharacterSheet}
-                        onClose={() => setSheetModalState({ isOpen: false, character: null })}
-                    />
-                 )}
             </main>
+
+            {/* Global Modals */}
+            {modalItem && <ItemModal item={modalItem} onClose={() => setModalItem(null)} />}
+            {confirmationConfig && (
+                <ConfirmationModal
+                    config={confirmationConfig}
+                    onClose={() => setConfirmationConfig(null)}
+                />
+            )}
+            <RegenerationModal
+                isOpen={regenModalState.isOpen}
+                onClose={handleCloseRegenModal}
+                prompt={regenModalState.prompt}
+                onPromptChange={(p) => setRegenModalState(s => ({...s, prompt: p}))}
+                onSubmit={handleEditImage}
+                isLoading={regeneratingImageId !== null}
+            />
+            <CharacterCreationModal
+                isOpen={isCharacterModalOpen}
+                onClose={() => setIsCharacterModalOpen(false)}
+                onSubmit={handleCreateCharacter}
+                isLoading={isCreatingCharacter}
+            />
+            {sheetModalState.isOpen && sheetModalState.character && (
+                <CharacterSheetModal
+                    character={sheetModalState.character}
+                    onSave={handleSaveCharacterSheet}
+                    onClose={() => setSheetModalState({ isOpen: false, character: null })}
+                />
+            )}
+            <ScenarioGenerator
+                isOpen={isScenarioModalOpen}
+                onClose={() => setIsScenarioModalOpen(false)}
+                onGenerate={handleGenerateScenario}
+                isLoading={isGeneratingScenario}
+            />
         </div>
     );
 };
