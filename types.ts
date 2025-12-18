@@ -97,6 +97,10 @@ export interface Scenario {
   tone: ScenarioTone;
   suggestedCharacters: SuggestedCharacter[];
   scenes: Scene[];
+  // 썸네일 관련 필드
+  thumbnailText: string; // 썸네일에 들어갈 문구 (한국어, 짧고 임팩트 있는)
+  thumbnailImagePrompt: string; // 썸네일 이미지 생성용 프롬프트 (영어)
+  thumbnailImage?: ImageData; // 생성된 썸네일 이미지
   createdAt: number;
   updatedAt: number;
 }

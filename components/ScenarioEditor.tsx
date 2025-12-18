@@ -401,6 +401,40 @@ export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({
           </div>
         )}
 
+        {/* Thumbnail Info */}
+        <div className="mt-3 pt-3 border-t border-gray-700">
+          <p className="text-xs font-medium text-gray-400 mb-2">썸네일 정보:</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Thumbnail Text */}
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">썸네일 문구</p>
+              <p className="text-lg font-bold text-yellow-400">{scenario.thumbnailText}</p>
+            </div>
+            {/* Thumbnail Image Preview / Prompt */}
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">썸네일 이미지</p>
+              {scenario.thumbnailImage ? (
+                <div className="relative aspect-video bg-gray-900 rounded overflow-hidden">
+                  <img
+                    src={`data:${scenario.thumbnailImage.mimeType};base64,${scenario.thumbnailImage.data}`}
+                    alt="Thumbnail"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-gray-400 hover:text-gray-300">
+                    프롬프트 보기 (영어)
+                  </summary>
+                  <pre className="mt-1 p-2 bg-gray-800 rounded text-gray-300 whitespace-pre-wrap text-xs max-h-20 overflow-y-auto">
+                    {scenario.thumbnailImagePrompt}
+                  </pre>
+                </details>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Action Bar */}
         <div className="flex flex-wrap gap-2 mt-4">
           <button

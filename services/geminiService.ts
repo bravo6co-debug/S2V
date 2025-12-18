@@ -415,7 +415,19 @@ export const generateScenario = async (config: ScenarioConfig): Promise<Scenario
 
 ### 5. 등장인물 제안
 - 시나리오에 필요한 주요 등장인물들을 제안
-- 각 인물의 이름, 역할, 외형/성격 설명 포함`;
+- 각 인물의 이름, 역할, 외형/성격 설명 포함
+
+### 6. 썸네일 생성
+- **thumbnailText**: 썸네일에 들어갈 짧고 임팩트 있는 문구 (한국어)
+  - 1-2줄, 최대 20자 내외
+  - 클릭을 유도하는 강렬한 문구
+  - 호기심 자극 또는 감정 자극
+  - 예: "퇴사 후 제주도로 떠난 그녀", "눈물이 멈추지 않았다", "인생이 바뀐 순간"
+- **thumbnailImagePrompt**: 썸네일 이미지 생성용 영어 프롬프트
+  - 영상의 핵심 장면 또는 가장 인상적인 순간을 담은 이미지
+  - 시선을 끄는 구도와 표정
+  - 감정이 드러나는 장면
+  - 고품질 시네마틱 스타일`;
 
     try {
         const response = await ai.models.generateContent({
@@ -463,8 +475,16 @@ export const generateScenario = async (config: ScenarioConfig): Promise<Scenario
                                 required: ["sceneNumber", "duration", "storyBeat", "visualDescription", "narration", "cameraAngle", "mood", "imagePrompt"],
                             },
                         },
+                        thumbnailText: {
+                            type: Type.STRING,
+                            description: "썸네일에 들어갈 짧고 임팩트 있는 문구 (한국어, 20자 내외)",
+                        },
+                        thumbnailImagePrompt: {
+                            type: Type.STRING,
+                            description: "썸네일 이미지 생성용 상세 프롬프트 (영어)",
+                        },
                     },
-                    required: ["title", "synopsis", "suggestedCharacters", "scenes"],
+                    required: ["title", "synopsis", "suggestedCharacters", "scenes", "thumbnailText", "thumbnailImagePrompt"],
                 },
             },
         });
@@ -491,6 +511,8 @@ export const generateScenario = async (config: ScenarioConfig): Promise<Scenario
                 mood: scene.mood,
                 imagePrompt: scene.imagePrompt,
             })),
+            thumbnailText: parsed.thumbnailText,
+            thumbnailImagePrompt: parsed.thumbnailImagePrompt,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };
