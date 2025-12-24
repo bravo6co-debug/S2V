@@ -428,6 +428,116 @@ const ConfirmationModal: React.FC<{
 };
 
 
+// Home Icon for navigation
+const HomeIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+  </svg>
+);
+
+// Intro Screen Component
+const IntroScreen: React.FC<{
+    onSelectMode: (mode: 'image' | 'scenario') => void;
+    onOpenScenarioModal: () => void;
+}> = ({ onSelectMode, onOpenScenarioModal }) => {
+    return (
+        <div className="flex-1 flex items-center justify-center p-4">
+            <div className="max-w-4xl w-full">
+                <div className="text-center mb-12">
+                    <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
+                        시니어롱폼 이미지 생성기
+                    </h1>
+                    <p className="text-gray-400 text-lg">
+                        AI를 활용한 캐릭터 기반 이미지 생성 도구
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Image Generation Mode Card */}
+                    <div className="bg-gray-800/70 rounded-2xl border border-gray-700 p-6 hover:border-indigo-500/50 transition-all group">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-3 bg-indigo-600/20 rounded-xl">
+                                <ImageModeIcon className="w-8 h-8 text-indigo-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-indigo-300">이미지 생성</h2>
+                        </div>
+                        <div className="space-y-3 mb-6 text-gray-400 text-sm">
+                            <p>개별 이미지를 자유롭게 생성하는 모드입니다.</p>
+                            <ul className="space-y-2 ml-4">
+                                <li className="flex items-start gap-2">
+                                    <span className="text-indigo-400 mt-0.5">•</span>
+                                    <span><strong className="text-gray-300">캐릭터 라이브러리</strong>에 등장인물을 등록하고 관리</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-indigo-400 mt-0.5">•</span>
+                                    <span><strong className="text-gray-300">시네마틱 룩</strong> 필터로 영화 같은 분위기 연출</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-indigo-400 mt-0.5">•</span>
+                                    <span>장면 설명과 카메라 앵글을 지정하여 이미지 생성</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-indigo-400 mt-0.5">•</span>
+                                    <span>생성된 이미지를 <strong className="text-gray-300">챕터별로 정리</strong></span>
+                                </li>
+                            </ul>
+                        </div>
+                        <button
+                            onClick={() => onSelectMode('image')}
+                            className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 group-hover:shadow-lg group-hover:shadow-indigo-500/20"
+                        >
+                            <ImageModeIcon className="w-5 h-5" />
+                            이미지 생성 시작하기
+                        </button>
+                    </div>
+
+                    {/* Scenario Mode Card */}
+                    <div className="bg-gray-800/70 rounded-2xl border border-gray-700 p-6 hover:border-purple-500/50 transition-all group">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-3 bg-purple-600/20 rounded-xl">
+                                <FilmIcon className="w-8 h-8 text-purple-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-purple-300">시나리오 모드</h2>
+                        </div>
+                        <div className="space-y-3 mb-6 text-gray-400 text-sm">
+                            <p>AI가 시나리오를 생성하고 씬별 이미지를 만듭니다.</p>
+                            <ul className="space-y-2 ml-4">
+                                <li className="flex items-start gap-2">
+                                    <span className="text-purple-400 mt-0.5">•</span>
+                                    <span><strong className="text-gray-300">주제와 톤</strong>을 입력하면 AI가 시나리오 자동 생성</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-purple-400 mt-0.5">•</span>
+                                    <span>각 씬별 <strong className="text-gray-300">나레이션, 비주얼 설명, 카메라 앵글</strong> 제공</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-purple-400 mt-0.5">•</span>
+                                    <span>60초/90초/120초 <strong className="text-gray-300">영상 길이</strong> 선택 가능</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-purple-400 mt-0.5">•</span>
+                                    <span>씬 편집, 재생성, 이미지 일괄 생성 지원</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <button
+                            onClick={onOpenScenarioModal}
+                            className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 group-hover:shadow-lg group-hover:shadow-purple-500/20"
+                        >
+                            <SparklesIcon className="w-5 h-5" />
+                            새 시나리오 만들기
+                        </button>
+                    </div>
+                </div>
+
+                <p className="text-center text-gray-500 text-sm mt-8">
+                    원하는 모드를 선택하여 시작하세요. 언제든지 다른 모드로 전환할 수 있습니다.
+                </p>
+            </div>
+        </div>
+    );
+};
+
 const getFriendlyErrorMessage = (originalError: unknown): string => {
     const message = originalError instanceof Error ? originalError.message : '알 수 없는 오류가 발생했습니다.';
     if (message.startsWith('PROMPT_BLOCKED:')) {
@@ -514,8 +624,8 @@ const App: React.FC = () => {
     // Character Sheet Modal State
     const [sheetModalState, setSheetModalState] = useState<{ isOpen: boolean; character: Character | null }>({ isOpen: false, character: null });
 
-    // Scenario Mode States
-    const [appMode, setAppMode] = useState<'image' | 'scenario'>('image');
+    // App Mode States (intro -> choose mode, image -> image generation, scenario -> scenario editor)
+    const [appMode, setAppMode] = useState<'intro' | 'image' | 'scenario'>('intro');
     const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
     const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
     const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
@@ -1092,9 +1202,25 @@ ${characterDetails}
 
     return (
         <div className="h-screen bg-gray-900 text-gray-200 flex flex-col p-4">
-            {/* Mode Toggle Header */}
+            {/* Intro Mode - Show mode selection screen */}
+            {appMode === 'intro' ? (
+                <IntroScreen
+                    onSelectMode={setAppMode}
+                    onOpenScenarioModal={() => setIsScenarioModalOpen(true)}
+                />
+            ) : (
+            <>
+            {/* Mode Toggle Header - Only shown in image/scenario modes */}
             <div className="w-full max-w-screen-3xl mx-auto mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setAppMode('intro')}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
+                        title="홈으로"
+                    >
+                        <HomeIcon className="w-5 h-5" />
+                    </button>
+                    <div className="w-px h-6 bg-gray-700 mx-1" />
                     <button
                         onClick={() => setAppMode('image')}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
@@ -1534,6 +1660,8 @@ ${characterDetails}
                 </>
                 )}
             </main>
+            </>
+            )}
 
             {/* Global Modals */}
             {modalItem && <ItemModal item={modalItem} onClose={() => setModalItem(null)} />}
