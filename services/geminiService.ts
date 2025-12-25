@@ -912,10 +912,6 @@ export const checkVeoApiAvailability = async (): Promise<{ available: boolean; e
         const testOperation = await ai.models.generateVideos({
             model: MODELS.VIDEO,
             prompt: 'test',
-            config: {
-                numberOfVideos: 1,
-                durationSeconds: 5,
-            },
         });
 
         // If we get here, the API is accessible
