@@ -1000,9 +1000,7 @@ Technical Requirements:
                     numberOfVideos: 1,
                     durationSeconds: Math.min(durationSeconds, 8),
                     aspectRatio: '16:9',
-                    // Veo 3.1 새 옵션
-                    resolution: '1080p',
-                    fps: 24,
+                    // Veo 3.1 새 옵션 (fps는 Gemini API에서 지원 안함 - 기본 24fps)
                     includeAudio: true,  // 오디오 자동 생성
                 },
             });
