@@ -90,24 +90,6 @@ export const BackgroundCard: React.FC<BackgroundCardProps> = ({
           </div>
         )}
 
-        {/* 활성화 버튼 */}
-        {onActivate && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onActivate();
-            }}
-            className={`absolute bottom-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-              isActive
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-900/80 text-gray-400 hover:bg-green-600 hover:text-white'
-            }`}
-            title={isActive ? '비활성화' : '활성화'}
-          >
-            {isActive ? '✓' : '+'}
-          </button>
-        )}
-
         {/* 호버 오버레이 */}
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
           {onZoom && (
@@ -145,6 +127,24 @@ export const BackgroundCard: React.FC<BackgroundCardProps> = ({
             <TrashIcon className="w-5 h-5" />
           </button>
         </div>
+
+        {/* 활성화 버튼 - 호버 오버레이 위에 표시 */}
+        {onActivate && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onActivate();
+            }}
+            className={`absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10 shadow-lg ${
+              isActive
+                ? 'bg-green-500 text-white'
+                : 'bg-gray-900/90 text-gray-300 hover:bg-green-600 hover:text-white'
+            }`}
+            title={isActive ? '비활성화' : '활성화'}
+          >
+            {isActive ? '✓' : '+'}
+          </button>
+        )}
       </div>
 
       {/* 정보 영역 */}
