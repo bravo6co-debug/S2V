@@ -404,8 +404,9 @@ Your primary task is to intelligently modify the provided base image according t
 
     parts.push({ text: finalPrompt });
 
+    // Use Gemini 3 Pro Image for better editing capabilities
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: { parts },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -483,15 +484,24 @@ const generateOneImage = async (
 
     const variationPrompt = addVariation ? "\n**VARIATION:** Create a different composition, pose, or camera angle from previous generations for this prompt." : "";
 
-    // Build prop reference section if props exist
+    // Build prop reference section if props exist - ENHANCED for Gemini 3 Pro Image
     const propReferenceSection = propImages.length > 0 ? `
 ---
-**PROP REFERENCE (Images ${characterImages.length + 1} to ${characterImages.length + propImages.length})**
-**CRITICAL:** Any props/objects mentioned in the scene description MUST look IDENTICAL to these reference images.
-- Match the EXACT design, color, shape, logo, brand name, and all visual details
-- The prop should be clearly visible and immediately recognizable as the same object
-- Do NOT generate a generic or different version of the prop
-- This is a NON-NEGOTIABLE requirement for product/brand consistency
+**2. PRODUCT/PROP REFERENCE - HIGH FIDELITY REQUIRED**
+**Reference Images ${characterImages.length + 1} to ${characterImages.length + propImages.length} are PRODUCT PHOTOS**
+
+**ABSOLUTE REQUIREMENT - THIS IS THE MOST CRITICAL INSTRUCTION FOR PROPS:**
+You MUST include these EXACT products in the generated image with HIGH FIDELITY:
+
+1. **EXACT CONTAINER/BOTTLE SHAPE** - The bottle, tube, or container must be IDENTICAL
+2. **EXACT LABEL & BRANDING** - If the reference shows "ATOMU" or any brand name, it MUST appear exactly the same
+3. **EXACT COLOR SCHEME** - Match the precise colors of the product packaging
+4. **EXACT CAP/DISPENSER** - The top/cap must match the reference exactly
+5. **EXACT PROPORTIONS** - The product size and proportions must be accurate
+
+**PLACEMENT:** The character should be holding, using, or interacting with THIS EXACT product.
+**WARNING:** Do NOT substitute with a generic, similar-looking, or different product. The product must be IMMEDIATELY RECOGNIZABLE as the same item from the reference photo.
+**FIDELITY LEVEL:** Treat these as product placement shots - the brand must be clearly identifiable.
 ` : '';
 
     // Build background reference section if background exists
@@ -532,11 +542,13 @@ ${variationPrompt}
 -   **CRITICAL RESTRICTION:** The generated image MUST NOT contain any text, letters, words, numbers, watermarks, or any form of typography. This is a strict rule.
 - DO NOT use white borders or create multi-panel layouts.
 `;
-    
+
     parts.push({ text: finalPrompt });
 
+    // Use Gemini 3 Pro Image (Nano Banana Pro) for better reference image consistency
+    // Supports up to 14 reference images (6 objects + 5 humans) with high fidelity
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: { parts },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
