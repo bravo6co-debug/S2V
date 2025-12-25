@@ -6,6 +6,7 @@ import {
   Scene,
   ImageData,
 } from '../types';
+import { generateVideoFromImage } from '../services/geminiService';
 
 interface UseVideoReturn {
   // 상태
@@ -210,20 +211,33 @@ export function useVideo(): UseVideoReturn {
     setError(null);
 
     try {
-      // TODO: AI 영상 생성 API 연동 (Veo, Runway, Pika 등)
-      // 현재는 시뮬레이션
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Update status to 'generating'
+      const generatingClips = timeline.clips.map(c =>
+        c.id === clipId ? { ...c, status: 'generating' as const } : c
+      );
+      contextSetTimeline({
+        ...timeline,
+        clips: generatingClips,
+        updatedAt: Date.now(),
+      });
 
-      // 시뮬레이션: 생성 완료
+      // Generate video using Veo API
+      const result = await generateVideoFromImage(
+        clip.sourceImage,
+        clip.motionPrompt || 'Cinematic camera movement with subtle motion',
+        Math.min(clip.duration, 8) // Veo supports max 8 seconds per clip
+      );
+
+      // Update with generated video
       const updatedClips = timeline.clips.map(c =>
         c.id === clipId
           ? {
               ...c,
               status: 'complete' as const,
               generatedVideo: {
-                url: '', // 실제 API 연동 시 URL
-                thumbnailUrl: `data:${c.sourceImage?.mimeType};base64,${c.sourceImage?.data}`,
-                duration: c.duration,
+                url: result.videoUrl,
+                thumbnailUrl: result.thumbnailUrl,
+                duration: result.duration,
               },
             }
           : c

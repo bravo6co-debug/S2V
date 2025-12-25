@@ -860,3 +860,120 @@ ${scene.imagePrompt}
 
     return generateOneImage(enhancedPrompt, characterImages, propImages, backgroundImage, false, aspectRatio);
 };
+
+
+// ============================================
+// VIDEO GENERATION FUNCTIONS (Veo API)
+// ============================================
+
+export interface VideoGenerationResult {
+    videoUrl: string;
+    thumbnailUrl: string;
+    duration: number;
+}
+
+/**
+ * Generates a video clip from a source image using Google Veo API.
+ * Uses image-to-video generation with motion prompt.
+ */
+export const generateVideoFromImage = async (
+    sourceImage: ImageData,
+    motionPrompt: string,
+    durationSeconds: number = 5
+): Promise<VideoGenerationResult> => {
+    try {
+        console.log('Starting video generation with Veo API...');
+        console.log('Motion prompt:', motionPrompt);
+        console.log('Duration:', durationSeconds, 'seconds');
+
+        // Prepare the enhanced prompt for video generation
+        const enhancedPrompt = `
+**Cinematic video generation from reference image:**
+${motionPrompt}
+
+**Motion & Camera Requirements:**
+- Smooth, natural camera movements
+- Realistic motion physics
+- Cinematic quality, film-like aesthetics
+- Korean drama/movie style cinematography
+
+**Technical Requirements:**
+- High quality video output
+- Consistent lighting throughout
+- No sudden jumps or artifacts
+`.trim();
+
+        // Generate video using Veo model
+        let operation = await ai.models.generateVideos({
+            model: 'veo-2.0-generate-001',
+            prompt: enhancedPrompt,
+            image: {
+                imageBytes: sourceImage.data,
+                mimeType: sourceImage.mimeType as 'image/jpeg' | 'image/png',
+            },
+            config: {
+                numberOfVideos: 1,
+                durationSeconds: Math.min(durationSeconds, 8), // Veo supports up to 8 seconds
+                aspectRatio: '16:9',
+            },
+        });
+
+        console.log('Video generation started, polling for completion...');
+
+        // Poll until video generation is complete (max 5 minutes timeout)
+        const maxPollingTime = 300000; // 5 minutes
+        const pollInterval = 10000; // 10 seconds
+        const startTime = Date.now();
+
+        while (!operation.done) {
+            if (Date.now() - startTime > maxPollingTime) {
+                throw new Error('Video generation timed out after 5 minutes');
+            }
+
+            console.log('Waiting for video generation to complete...');
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+            operation = await ai.operations.getVideosOperation({
+                operation: operation,
+            });
+        }
+
+        console.log('Video generation completed!');
+
+        // Check for errors in the operation
+        if (!operation.response?.generatedVideos || operation.response.generatedVideos.length === 0) {
+            throw new Error('Video generation completed but no videos were returned');
+        }
+
+        const generatedVideo = operation.response.generatedVideos[0];
+
+        // Get video URL - the video file object contains the URL
+        const videoFile = generatedVideo.video;
+        if (!videoFile || !videoFile.uri) {
+            throw new Error('Generated video does not contain a valid URI');
+        }
+
+        return {
+            videoUrl: videoFile.uri,
+            thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`, // Use source image as thumbnail
+            duration: durationSeconds,
+        };
+
+    } catch (e) {
+        console.error('Error during video generation:', e);
+        if (e instanceof Error) {
+            // Check for specific error types
+            if (e.message.includes('PERMISSION_DENIED') || e.message.includes('403')) {
+                throw new Error('Video generation API access denied. Please check your API key permissions.');
+            }
+            if (e.message.includes('QUOTA_EXCEEDED') || e.message.includes('429')) {
+                throw new Error('Video generation quota exceeded. Please try again later.');
+            }
+            if (e.message.includes('not found') || e.message.includes('404')) {
+                throw new Error('Video generation model not available. Veo API may not be enabled for your account.');
+            }
+            throw new Error(`Video generation failed: ${e.message}`);
+        }
+        throw new Error('An unknown error occurred during video generation.');
+    }
+};

@@ -71,6 +71,7 @@ interface ClipCardProps {
   onRegenerate: () => void;
   onDelete: () => void;
   isGenerating: boolean;
+  onPlayVideo?: () => void;
 }
 
 const ClipCard: React.FC<ClipCardProps> = ({
@@ -81,8 +82,10 @@ const ClipCard: React.FC<ClipCardProps> = ({
   onRegenerate,
   onDelete,
   isGenerating,
+  onPlayVideo,
 }) => {
   const thumbnailUrl = clip.generatedVideo?.thumbnailUrl || (clip.sourceImage ? `data:${clip.sourceImage.mimeType};base64,${clip.sourceImage.data}` : null);
+  const hasVideo = clip.generatedVideo?.url;
 
   return (
     <div
@@ -104,6 +107,21 @@ const ClipCard: React.FC<ClipCardProps> = ({
           <div className="w-full h-full flex items-center justify-center">
             <FilmIcon className="w-8 h-8 text-gray-600" />
           </div>
+        )}
+
+        {/* 비디오 재생 버튼 (비디오가 있을 때만) */}
+        {hasVideo && !isGenerating && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlayVideo?.();
+            }}
+            className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
+              <PlayIcon className="w-6 h-6 text-gray-900 ml-1" />
+            </div>
+          </button>
         )}
 
         {/* 상태 오버레이 */}
@@ -262,6 +280,60 @@ const Timeline: React.FC<TimelineProps> = ({
           style={{ left: `${playheadPosition}%` }}
         >
           <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-500" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 비디오 재생 모달
+interface VideoPlayerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  videoUrl: string;
+  clipNumber: number;
+}
+
+const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
+  isOpen,
+  onClose,
+  videoUrl,
+  clipNumber,
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (isOpen && videoRef.current) {
+      videoRef.current.play().catch(console.error);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+      <div className="relative w-full max-w-4xl">
+        <button
+          onClick={onClose}
+          className="absolute -top-10 right-0 text-white hover:text-gray-300"
+        >
+          <ClearIcon className="w-8 h-8" />
+        </button>
+        <div className="bg-gray-900 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gray-800 border-b border-gray-700">
+            <h3 className="text-white font-medium">클립 #{clipNumber} 미리보기</h3>
+          </div>
+          <div className="aspect-video bg-black">
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              controls
+              autoPlay
+              className="w-full h-full"
+            >
+              브라우저가 비디오 재생을 지원하지 않습니다.
+            </video>
+          </div>
         </div>
       </div>
     </div>
@@ -435,6 +507,7 @@ export const VideoTab: React.FC = () => {
 
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [playingVideoClip, setPlayingVideoClip] = useState<VideoClip | null>(null);
 
   // 활성화된 캐릭터의 참조 이미지
   const referenceImages = activeCharacterIds
@@ -564,6 +637,7 @@ export const VideoTab: React.FC = () => {
                     onRegenerate={() => handleGenerateClip(clip.id)}
                     onDelete={() => removeClip(clip.id)}
                     isGenerating={generatingClipId === clip.id}
+                    onPlayVideo={() => clip.generatedVideo?.url && setPlayingVideoClip(clip)}
                   />
                 ))}
               </div>
@@ -673,6 +747,16 @@ export const VideoTab: React.FC = () => {
           onClose={() => setIsImportModalOpen(false)}
           scenes={scenario.scenes}
           onImport={handleImportScenes}
+        />
+      )}
+
+      {/* Video Player Modal */}
+      {playingVideoClip && playingVideoClip.generatedVideo?.url && (
+        <VideoPlayerModal
+          isOpen={true}
+          onClose={() => setPlayingVideoClip(null)}
+          videoUrl={playingVideoClip.generatedVideo.url}
+          clipNumber={playingVideoClip.order + 1}
         />
       )}
     </div>
