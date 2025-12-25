@@ -549,8 +549,10 @@ export const ScenarioTab: React.FC = () => {
     toggleActiveCharacter,
     props,
     activePropIds,
+    toggleActiveProp,
     backgrounds,
     activeBackgroundId,
+    setActiveBackgroundId,
     aspectRatio,
     setAspectRatio,
   } = useProject();
@@ -699,26 +701,78 @@ export const ScenarioTab: React.FC = () => {
               </button>
             </div>
 
-            {/* Active Characters */}
-            {activeCharacters.length > 0 && (
+            {/* Active Assets (Characters, Props, Background) */}
+            {(activeCharacters.length > 0 || activeProps.length > 0 || activeBackground) && (
               <div className="mt-3 pt-3 border-t border-gray-700">
-                <p className="text-xs font-medium text-gray-400 mb-2">활성화된 캐릭터 (이미지 생성 참조):</p>
-                <div className="flex flex-wrap gap-2">
-                  {activeCharacters.map((char) => (
-                    <div key={char.id} className="relative group">
-                      <img
-                        src={`data:${char.image.mimeType};base64,${char.image.data}`}
-                        alt={char.name}
-                        className="w-10 h-10 object-cover rounded-lg border-2 border-purple-500"
-                      />
-                      <button
-                        onClick={() => toggleActiveCharacter(char.id)}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        ×
-                      </button>
+                <p className="text-xs font-medium text-gray-400 mb-2">활성화된 에셋 (이미지 생성 참조):</p>
+                <div className="flex flex-wrap items-center gap-4">
+                  {/* 캐릭터 */}
+                  {activeCharacters.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-indigo-400">캐릭터:</span>
+                      <div className="flex gap-1">
+                        {activeCharacters.map((char) => (
+                          <div key={char.id} className="relative group" title={char.name}>
+                            <img
+                              src={`data:${char.image.mimeType};base64,${char.image.data}`}
+                              alt={char.name}
+                              className="w-8 h-8 object-cover rounded-lg border-2 border-indigo-500"
+                            />
+                            <button
+                              onClick={() => toggleActiveCharacter(char.id)}
+                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* 소품 */}
+                  {activeProps.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-amber-400">소품:</span>
+                      <div className="flex gap-1">
+                        {activeProps.map((prop) => (
+                          <div key={prop.id} className="relative group" title={prop.name}>
+                            <img
+                              src={`data:${prop.image.mimeType};base64,${prop.image.data}`}
+                              alt={prop.name}
+                              className="w-8 h-8 object-cover rounded-lg border-2 border-amber-500"
+                            />
+                            <button
+                              onClick={() => toggleActiveProp(prop.id)}
+                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 배경 */}
+                  {activeBackground && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-green-400">배경:</span>
+                      <div className="relative group" title={activeBackground.name}>
+                        <img
+                          src={`data:${activeBackground.image.mimeType};base64,${activeBackground.image.data}`}
+                          alt={activeBackground.name}
+                          className="w-12 h-8 object-cover rounded-lg border-2 border-green-500"
+                        />
+                        <button
+                          onClick={() => setActiveBackgroundId(null)}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
