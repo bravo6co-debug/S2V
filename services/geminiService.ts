@@ -8,6 +8,21 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// ============================================
+// MODEL CONFIGURATION
+// ============================================
+const MODELS = {
+    // 텍스트/프롬프트 생성용 모델
+    TEXT: 'gemini-3.0-flash',
+
+    // 이미지 생성용 모델
+    IMAGE_PORTRAIT: 'imagen-4.0-generate-001',  // 캐릭터/소품/배경 초상화 (참조 없이 생성)
+    IMAGE_SCENE: 'gemini-3-pro-image-preview',  // 씬 이미지 (참조 이미지 기반)
+
+    // 비디오 생성용 모델
+    VIDEO: 'veo-3.1-generate-preview',
+} as const;
+
 // Highly specific, photography-based style prompts to ensure realism.
 // Removed ambiguous terms like "digital painting" that could lead to non-photorealistic results.
 const PHOTOREALISTIC_STYLES = [
@@ -28,7 +43,7 @@ const PHOTOREALISTIC_STYLES = [
 export const extractCharacterData = async (description: string): Promise<Omit<Character, 'id' | 'image'> & { englishDescription: string }> => {
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: MODELS.TEXT,
             contents: `다음 한국어 캐릭터 설명을 분석해주세요. 캐릭터의 이름, 나이, 성격, 대표 의상을 추출하고, 이미지 생성 AI를 위해 외형 묘사를 영어로 번역해주세요. 모든 정보를 JSON 형식으로 반환해야 합니다. 만약 특정 정보가 없다면 빈 문자열("")을 사용하세요. 영어 번역은 캐릭터의 시각적 특징에 초점을 맞춰 상세하게 작성해야 합니다.\n\n---\n캐릭터 설명:\n"${description}"\n---`,
             config: {
                 responseMimeType: "application/json",
@@ -112,7 +127,7 @@ const generateOneCharacterPortrait = async (prompt: string, aspectRatio: AspectR
 
     try {
         const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: MODELS.IMAGE_PORTRAIT,
             prompt: finalPrompt,
             config: {
                 numberOfImages: 1, // Generate one at a time
@@ -204,7 +219,7 @@ const generateOnePropImage = async (prompt: string, aspectRatio: AspectRatio): P
 
     try {
         const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: MODELS.IMAGE_PORTRAIT,
             prompt: finalPrompt,
             config: {
                 numberOfImages: 1,
@@ -303,7 +318,7 @@ const generateOneBackgroundImage = async (
 
     try {
         const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: MODELS.IMAGE_PORTRAIT,
             prompt: finalPrompt,
             config: {
                 numberOfImages: 1,
@@ -406,7 +421,7 @@ Your primary task is to intelligently modify the provided base image according t
 
     // Use Gemini 3 Pro Image for better editing capabilities
     const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
+        model: MODELS.IMAGE_SCENE,
         contents: { parts },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -548,7 +563,7 @@ ${variationPrompt}
     // Use Gemini 3 Pro Image (Nano Banana Pro) for better reference image consistency
     // Supports up to 14 reference images (6 objects + 5 humans) with high fidelity
     const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
+        model: MODELS.IMAGE_SCENE,
         contents: { parts },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -667,7 +682,7 @@ export const generateScenario = async (config: ScenarioConfig): Promise<Scenario
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: MODELS.TEXT,
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -803,7 +818,7 @@ ${customInstruction ? `**사용자 지시**: ${customInstruction}` : '새로운 
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: MODELS.TEXT,
             contents: contextPrompt,
             config: {
                 responseMimeType: "application/json",
@@ -895,7 +910,7 @@ export const checkVeoApiAvailability = async (): Promise<{ available: boolean; e
         // Simple test - try to initiate a minimal request
         // This will fail fast if API key doesn't have Veo access
         const testOperation = await ai.models.generateVideos({
-            model: 'veo-2.0-generate-001',
+            model: MODELS.VIDEO,
             prompt: 'test',
             config: {
                 numberOfVideos: 1,
@@ -947,7 +962,7 @@ export const generateVideoFromImage = async (
 ): Promise<VideoGenerationResult> => {
     try {
         console.log('=== VIDEO GENERATION START ===');
-        console.log('Model: veo-2.0-generate-001');
+        console.log(`Model: ${MODELS.VIDEO}`);
         console.log('Motion prompt:', motionPrompt);
         console.log('Duration:', durationSeconds, 'seconds');
         console.log('Image MIME type:', sourceImage.mimeType);
@@ -975,7 +990,7 @@ Technical Requirements:
         let operation;
         try {
             operation = await ai.models.generateVideos({
-                model: 'veo-2.0-generate-001',
+                model: MODELS.VIDEO,
                 prompt: enhancedPrompt,
                 image: {
                     imageBytes: sourceImage.data,
@@ -985,6 +1000,10 @@ Technical Requirements:
                     numberOfVideos: 1,
                     durationSeconds: Math.min(durationSeconds, 8),
                     aspectRatio: '16:9',
+                    // Veo 3.1 새 옵션
+                    resolution: '1080p',
+                    fps: 24,
+                    includeAudio: true,  // 오디오 자동 생성
                 },
             });
             console.log('Operation created successfully');
@@ -1081,7 +1100,7 @@ Technical Requirements:
                 throw new Error('Veo API 할당량을 초과했습니다. 잠시 후 다시 시도하세요.');
             }
             if (msg.includes('not found') || msg.includes('404') || msg.includes('does not exist')) {
-                throw new Error('Veo 모델(veo-2.0-generate-001)을 찾을 수 없습니다. API 키가 Veo API를 지원하는지 확인하세요.');
+                throw new Error(`Veo 모델(${MODELS.VIDEO})을 찾을 수 없습니다. API 키가 Veo API를 지원하는지 확인하세요.`);
             }
             if (msg.includes('INVALID_ARGUMENT') || msg.includes('400')) {
                 throw new Error(`잘못된 요청: ${msg}`);
