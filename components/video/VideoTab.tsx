@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useProject } from '../../contexts/ProjectContext';
 import { useVideo } from '../../hooks/useVideo';
 import { useScenario } from '../../hooks/useScenario';
-import { VideoClip, Scene } from '../../types';
+import { VideoClip, Scene, Character } from '../../types';
 import { checkVeoApiAvailability } from '../../services/geminiService';
+import { VideoPromptBuilder } from './VideoPromptBuilder';
 import {
   SparklesIcon,
   TrashIcon,
@@ -85,6 +86,13 @@ const RefreshIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+// 편집 아이콘
+const EditIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
+
 // 클립 카드 컴포넌트
 interface ClipCardProps {
   clip: VideoClip;
@@ -93,6 +101,7 @@ interface ClipCardProps {
   onSelect: () => void;
   onRegenerate: () => void;
   onDelete: () => void;
+  onEditPrompt: () => void;
   isGenerating: boolean;
   onPlayVideo?: () => void;
 }
@@ -104,6 +113,7 @@ const ClipCard: React.FC<ClipCardProps> = ({
   onSelect,
   onRegenerate,
   onDelete,
+  onEditPrompt,
   isGenerating,
   onPlayVideo,
 }) => {
@@ -188,16 +198,28 @@ const ClipCard: React.FC<ClipCardProps> = ({
         {/* 호버 액션 */}
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
           {clip.sourceImage && !isGenerating && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRegenerate();
-              }}
-              className="p-2 bg-blue-600 rounded-full text-white hover:bg-blue-700"
-              title="비디오 재생성"
-            >
-              <RefreshIcon className="w-5 h-5" />
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditPrompt();
+                }}
+                className="p-2 bg-purple-600 rounded-full text-white hover:bg-purple-700"
+                title="프롬프트 편집"
+              >
+                <EditIcon className="w-5 h-5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRegenerate();
+                }}
+                className="p-2 bg-blue-600 rounded-full text-white hover:bg-blue-700"
+                title="비디오 재생성"
+              >
+                <RefreshIcon className="w-5 h-5" />
+              </button>
+            </>
           )}
           <button
             onClick={(e) => {
@@ -519,6 +541,7 @@ export const VideoTab: React.FC = () => {
     addClipsFromScenes,
     removeClip,
     reorderClip,
+    updateClip,
     generateClipVideo,
     generateAllClipVideos,
     play,
@@ -531,10 +554,17 @@ export const VideoTab: React.FC = () => {
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [playingVideoClip, setPlayingVideoClip] = useState<VideoClip | null>(null);
+  const [isPromptBuilderOpen, setIsPromptBuilderOpen] = useState(false);
+  const [editingClipId, setEditingClipId] = useState<string | null>(null);
 
   // Veo API 상태
   const [veoApiStatus, setVeoApiStatus] = useState<VeoApiStatus>('unknown');
   const [veoApiError, setVeoApiError] = useState<string | undefined>();
+
+  // 활성화된 캐릭터 가져오기
+  const activeCharacter = activeCharacterIds.length > 0
+    ? characters.find(c => c.id === activeCharacterIds[0])
+    : undefined;
 
   // Veo API 상태 체크
   const checkApiStatus = async () => {
@@ -575,6 +605,23 @@ export const VideoTab: React.FC = () => {
 
   const handleGenerateClip = async (clipId: string) => {
     await generateClipVideo(clipId, referenceImages);
+  };
+
+  // 프롬프트 빌더로 클립 생성
+  const handleGenerateWithPromptBuilder = async (prompt: string, _negativePrompt: string) => {
+    if (editingClipId) {
+      // 기존 클립의 프롬프트 업데이트 후 생성
+      updateClip(editingClipId, { motionPrompt: prompt });
+      await generateClipVideo(editingClipId, referenceImages);
+    }
+    setIsPromptBuilderOpen(false);
+    setEditingClipId(null);
+  };
+
+  // 클립 프롬프트 편집 열기
+  const openPromptBuilderForClip = (clipId: string) => {
+    setEditingClipId(clipId);
+    setIsPromptBuilderOpen(true);
   };
 
   const handleGenerateAllClips = async () => {
@@ -713,6 +760,7 @@ export const VideoTab: React.FC = () => {
                     onSelect={() => setSelectedClipId(clip.id)}
                     onRegenerate={() => handleGenerateClip(clip.id)}
                     onDelete={() => removeClip(clip.id)}
+                    onEditPrompt={() => openPromptBuilderForClip(clip.id)}
                     isGenerating={generatingClipId === clip.id}
                     onPlayVideo={() => clip.generatedVideo?.url && setPlayingVideoClip(clip)}
                   />
@@ -759,7 +807,15 @@ export const VideoTab: React.FC = () => {
                       {selectedClip.generatedVideo ? '비디오 생성 완료' : '대기 중'}
                     </p>
                   </div>
-                  <div className="flex items-end">
+                  <div className="flex items-end gap-2">
+                    <button
+                      onClick={() => openPromptBuilderForClip(selectedClip.id)}
+                      disabled={isGenerating || !selectedClip.sourceImage}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-purple-600 rounded hover:bg-purple-500 disabled:opacity-50"
+                      title="프롬프트 빌더로 편집"
+                    >
+                      ✨ 프롬프트 편집
+                    </button>
                     <button
                       onClick={() => handleGenerateClip(selectedClip.id)}
                       disabled={isGenerating || !selectedClip.sourceImage || veoApiStatus === 'unavailable'}
@@ -836,6 +892,24 @@ export const VideoTab: React.FC = () => {
           videoUrl={playingVideoClip.generatedVideo.url}
           clipNumber={playingVideoClip.order + 1}
         />
+      )}
+
+      {/* Prompt Builder Modal */}
+      {isPromptBuilderOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-2xl">
+            <VideoPromptBuilder
+              character={activeCharacter}
+              initialAction={editingClipId ? clips.find(c => c.id === editingClipId)?.motionPrompt || '' : ''}
+              onGenerate={handleGenerateWithPromptBuilder}
+              onCancel={() => {
+                setIsPromptBuilderOpen(false);
+                setEditingClipId(null);
+              }}
+              isGenerating={isGenerating}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
