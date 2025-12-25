@@ -689,9 +689,135 @@ AI 영상 생성 서비스는 **5~7초** 클립을 생성하므로, 장면을 �
 - 시나리오에 사용할 캐릭터 선택
 - 드래그 앤 드롭 지원
 
-#### Task 3.3: 장면-캐릭터 연결
-- 각 장면에 등장하는 캐릭터 지정
-- 캐릭터 참조 이미지로 일관된 이미지 생성
+#### Task 3.3: 장면별 에셋 및 역할 지정
+**목적:** 각 장면에 등장하는 캐릭터/소품을 지정하고, 역할 정보를 이미지 생성에 반영
+
+**장면별 에셋 선택 UI:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  장면 3: Development                                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  등장 캐릭터:                                                │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ ┌────────┐  ┌────────┐  ┌────────┐                   │   │
+│  │ │  민지   │  │  철수   │  │   +    │  ← 캐릭터 추가    │   │
+│  │ │ ⭐주인공│  │ 👥조연  │  │  추가  │                   │   │
+│  │ │ ☑ 중심  │  │ ☐ 배경  │  │        │                   │   │
+│  │ └────────┘  └────────┘  └────────┘                   │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                             │
+│  등장 소품:                                                  │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ ┌────────┐  ┌────────┐                               │   │
+│  │ │  반지   │  │   +    │  ← 소품 추가                  │   │
+│  │ │ 📦핵심  │  │  추가  │                               │   │
+│  │ │ ☑ 클로즈업│ │        │                               │   │
+│  │ └────────┘  └────────┘                               │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                             │
+│  배경: [추억의 카페 ▼]                                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**역할별 이미지 생성 가중치:**
+| 역할 | 프롬프트 반영 | 참조 이미지 | 화면 비중 |
+|------|-------------|------------|----------|
+| 주인공 (중심) | ✅ 상세 묘사 | ✅ 필수 포함 | 화면 중심, 크게 |
+| 주인공 (배경) | ✅ 간략 묘사 | ✅ 필수 포함 | 화면 일부 |
+| 조연 (중심) | ✅ 상세 묘사 | ✅ 필수 포함 | 주인공과 함께 |
+| 조연 (배경) | ⚠️ 간략 묘사 | ⚠️ 선택적 | 화면 일부 |
+| 단역 | ⚠️ 최소 묘사 | ❌ 미포함 | 배경 요소 |
+| 핵심 소품 (클로즈업) | ✅ 상세 묘사 | ✅ 필수 포함 | 화면 중심 |
+| 핵심 소품 (일반) | ✅ 간략 묘사 | ✅ 필수 포함 | 자연스럽게 배치 |
+| 일반 소품 | ⚠️ 최소 묘사 | ❌ 미포함 | 배경 요소 |
+
+**이미지 프롬프트 자동 생성:**
+```typescript
+// 장면 에셋 정보를 프롬프트에 반영
+const generateImagePrompt = (scene: Scene, assets: SceneAssets) => {
+  let prompt = scene.visualDescription;
+
+  // 주인공 (중심) - 상세 묘사
+  const protagonistCenter = assets.characters
+    .filter(c => c.role === 'protagonist' && c.sceneRole === 'center');
+  if (protagonistCenter.length > 0) {
+    prompt += ` The main focus is on ${protagonistCenter.map(c =>
+      `${c.name}, a ${c.age} ${c.personality} person wearing ${c.outfit}`
+    ).join(' and ')}.`;
+  }
+
+  // 조연 - 함께 등장
+  const supporting = assets.characters
+    .filter(c => c.role === 'supporting' && c.sceneRole === 'center');
+  if (supporting.length > 0) {
+    prompt += ` Also prominently featured: ${supporting.map(c =>
+      `${c.name} (${c.relationship})`
+    ).join(', ')}.`;
+  }
+
+  // 핵심 소품 (클로즈업)
+  const keyPropCloseup = assets.props
+    .filter(p => p.role === 'keyProp' && p.sceneRole === 'closeup');
+  if (keyPropCloseup.length > 0) {
+    prompt += ` Close-up focus on ${keyPropCloseup.map(p =>
+      `${p.name} (${p.significance})`
+    ).join(', ')}.`;
+  }
+
+  // 배경 정보
+  if (assets.background) {
+    prompt += ` Setting: ${assets.background.description}, ` +
+      `${assets.background.timeOfDay}, ${assets.background.weather} atmosphere.`;
+  }
+
+  return prompt;
+};
+```
+
+**장면별 역할 지정 타입:**
+```typescript
+type SceneRole = 'center' | 'background' | 'closeup';
+
+interface SceneAsset {
+  assetId: string;
+  sceneRole: SceneRole;  // 이 장면에서의 역할
+}
+
+interface SceneAssets {
+  characters: (Character & { sceneRole: SceneRole })[];
+  props: (Prop & { sceneRole: SceneRole })[];
+  background: Background | null;
+}
+
+interface Scene {
+  // 기존 필드...
+  assets: SceneAsset[];  // 장면에 등장하는 에셋 목록
+}
+```
+
+**역할 정보가 반영된 이미지 생성 흐름:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  역할 기반 이미지 생성 흐름                                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. 장면에 에셋 지정 + 역할(중심/배경/클로즈업) 설정           │
+│         ↓                                                   │
+│  2. 역할에 따라 이미지 프롬프트 자동 생성                      │
+│     - 주인공(중심): "The main focus is on 민지..."           │
+│     - 조연(배경): "In the background, 철수..."               │
+│     - 소품(클로즈업): "Close-up focus on 반지..."            │
+│         ↓                                                   │
+│  3. 컨텍스트 유지 에셋의 참조 이미지 수집                      │
+│     - 주인공/조연(중심): 참조 이미지 필수                      │
+│     - 핵심 소품(클로즈업): 참조 이미지 필수                    │
+│         ↓                                                   │
+│  4. AI에게 프롬프트 + 참조 이미지 전달하여 생성                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 #### Task 3.4: 장면 이미지 수정 워크플로우
 **목적:** 생성된 장면 이미지가 마음에 들지 않을 경우, 외부 툴로 수정 후 다시 적용
@@ -1216,7 +1342,8 @@ interface ProjectContextValue {
 - [ ] 장면 세분화 (5~7초 단위)
 - [ ] ScenarioTab 재구성
 - [ ] ActiveCharacterPanel 컴포넌트
-- [ ] 장면-캐릭터 연결 기능
+- [ ] 장면별 에셋/역할 지정 (중심/배경/클로즈업)
+- [ ] 역할 기반 이미지 프롬프트 자동 생성
 - [ ] 장면 이미지 수정 워크플로우 (다운로드/교체)
 - [ ] 시나리오 직접 수정 기능 (인라인 편집)
 - [ ] 장면 관리 기능 (추가/삭제/복제/순서변경)
