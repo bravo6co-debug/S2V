@@ -1070,8 +1070,31 @@ Technical Requirements:
         console.log('=== VIDEO GENERATION SUCCESS ===');
         console.log('Video URL:', videoUrl);
 
+        // Download the video with API key authentication and convert to Blob URL
+        console.log('Downloading video with API key authentication...');
+        let blobUrl: string;
+        try {
+            const videoResponse = await fetch(videoUrl, {
+                headers: {
+                    'x-goog-api-key': process.env.API_KEY!
+                }
+            });
+
+            if (!videoResponse.ok) {
+                throw new Error(`비디오 다운로드 실패: ${videoResponse.status} ${videoResponse.statusText}`);
+            }
+
+            const videoBlob = await videoResponse.blob();
+            blobUrl = URL.createObjectURL(videoBlob);
+            console.log('Video downloaded and converted to Blob URL:', blobUrl);
+            console.log('Video size:', (videoBlob.size / 1024 / 1024).toFixed(2), 'MB');
+        } catch (downloadError) {
+            console.error('Failed to download video:', downloadError);
+            throw new Error(`비디오 다운로드 실패: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`);
+        }
+
         return {
-            videoUrl: videoUrl,
+            videoUrl: blobUrl,
             thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
             duration: durationSeconds,
         };
