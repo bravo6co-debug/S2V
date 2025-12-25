@@ -556,6 +556,15 @@ ${variationPrompt}
 -   **OUTPUT:** Generate ONE SINGLE, full-bleed image.
 -   **CRITICAL RESTRICTION:** The generated image MUST NOT contain any text, letters, words, numbers, watermarks, or any form of typography. This is a strict rule.
 - DO NOT use white borders or create multi-panel layouts.
+---
+**5. NEGATIVE PROMPT (ABSOLUTE PROHIBITIONS)**
+You MUST NOT generate any of the following in the image:
+- blurry, low resolution, jpeg artifacts, compression artifacts
+- watermark, text, logo, signature, letters, numbers
+- deformed face, distorted face, extra fingers, extra limbs, mutated hands
+- bad anatomy, weird eyes, crossed eyes, plastic skin, uncanny valley
+- cartoon, anime, illustration, painting, drawing, 3D render, CGI
+- oversaturated colors, HDR overprocessed, heavy vignette
 `;
 
     parts.push({ text: finalPrompt });
@@ -668,13 +677,53 @@ export const generateScenario = async (config: ScenarioConfig): Promise<Scenario
 - 마지막은 여운이 남거나 반전이 있게
 - 내레이션은 자연스러운 한국어 구어체로
 
-### 4. 이미지 프롬프트 작성 규칙 (imagePrompt)
-- 반드시 영어로 작성
-- 한국인 인물 묘사 시 "Korean" 명시
-- 인물의 표정, 자세, 시선 방향 구체적으로
-- 배경, 조명, 시간대 명시
-- 감정과 분위기를 시각적으로 표현
-- 영화적/시네마틱한 품질 강조
+### 4. 이미지 프롬프트 9-Block 구조 (imagePrompt) - 매우 중요!
+
+모든 imagePrompt는 다음 9가지 요소를 순서대로 포함해야 합니다:
+
+**[1. SUBJECT]** - 주인공 + 행동/상태 + 핵심 소품
+- 예: "Korean woman in her 20s, looking thoughtfully out the window, holding a coffee cup"
+- 한국인 인물은 반드시 "Korean" 명시
+- 표정, 자세, 시선 방향 구체적으로
+
+**[2. SETTING]** - 장소 + 시간대 + 분위기
+- 예: "cozy apartment interior, rainy evening, melancholic atmosphere"
+
+**[3. COMPOSITION]** - 샷타입 + 시점 + 프레이밍
+- 샷: extreme close-up / close-up / medium close-up / medium / wide
+- 시점: eye-level / low-angle / high-angle / dutch angle
+- 프레이밍: subject on left/right third / centered / negative space at top
+- 예: "medium close-up shot, eye-level angle, subject on left third of frame"
+
+**[4. CAMERA/LENS]** - 렌즈mm + 조리개 + 심도 + 포커스
+- 인물: 85mm portrait lens, f/1.8, shallow depth of field, creamy bokeh
+- 환경: 35mm lens, f/2.8, moderate depth of field
+- 디테일: 135mm, f/2, strong background separation
+- 예: "85mm portrait lens, f/1.8, shallow depth of field, focus on eyes"
+
+**[5. LIGHTING]** - 광원 종류 + 방향 + 대비 + 림라이트
+- 예: "soft natural window light from left, gentle shadows, subtle warm rim light"
+- 예: "neon side lighting, strong rim light, high contrast"
+- 예: "golden hour warm sunlight, long dramatic shadows"
+
+**[6. MATERIAL/DETAIL]** - 질감 키워드 3개 이상
+- 피부: natural skin texture, realistic pores
+- 천: silk fabric, cotton texture, leather grain
+- 환경: wet asphalt reflections, steam rising, raindrops on glass
+- 예: "natural skin texture, cozy sweater fabric, steam rising from cup"
+
+**[7. STYLE]** - 스타일 레벨 (필수)
+- 필수: "ultra photoreal, cinematic color grading"
+- 옵션 추가: subtle film grain, editorial look, documentary style
+
+**[8. QUALITY]** - 품질 지시 (필수)
+- 필수: "highly detailed, 8K resolution, tack sharp focus"
+
+**[9. NEGATIVE 표시]** - 금지 요소 (별도로 관리되므로 프롬프트에 포함하지 않음)
+
+### 이미지 프롬프트 예시
+
+"Korean woman in her late 20s with a contemplative expression, looking out through rain-streaked window, holding warm coffee cup. Cozy apartment interior, rainy evening, melancholic atmosphere. Medium close-up shot, eye-level angle, subject on left third of frame. 85mm portrait lens, f/1.8, shallow depth of field with creamy bokeh background. Soft diffused window light, gentle shadows on face, subtle rim light from lamp. Natural skin texture, raindrops on glass, steam rising from cup, cozy sweater texture. Ultra photoreal, cinematic color grading, subtle film grain. Highly detailed, 8K resolution, tack sharp focus on eyes."
 
 ### 5. 등장인물 제안
 - 시나리오에 필요한 주요 등장인물들을 제안
