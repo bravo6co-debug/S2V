@@ -20,7 +20,7 @@ const MODELS = {
     IMAGE_SCENE: 'gemini-3-pro-image-preview',  // 씬 이미지 (참조 이미지 기반)
 
     // 비디오 생성용 모델
-    VIDEO: 'veo-3.1-generate-preview',
+    VIDEO: 'veo-3.1-fast-generate-001',
 } as const;
 
 // Highly specific, photography-based style prompts to ensure realism.
