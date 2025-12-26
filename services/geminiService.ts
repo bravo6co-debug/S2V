@@ -1085,64 +1085,32 @@ Technical Requirements:
             };
         }
 
-        // URI만 있는 경우 - SDK를 통해 파일 다운로드 시도
+        // URI만 있는 경우 - Vercel API 프록시를 통해 다운로드
         if (videoUrl) {
-            console.log('Attempting to download video via SDK...');
-            try {
-                // 파일 이름 추출 (예: files/abc123 에서 abc123)
-                const fileMatch = videoUrl.match(/files\/([^:/?]+)/);
-                if (fileMatch) {
-                    const fileName = `files/${fileMatch[1]}`;
-                    console.log('Downloading file:', fileName);
+            // 파일 ID 추출 (예: files/abc123 에서 abc123)
+            const fileMatch = videoUrl.match(/files\/([^:/?]+)/);
+            if (fileMatch) {
+                const fileId = fileMatch[1];
+                console.log('=== VIDEO GENERATION SUCCESS ===');
+                console.log('File ID:', fileId);
 
-                    // @google/genai SDK의 files API 사용
-                    const fileResponse = await ai.files.download({ file: fileName });
-                    console.log('File download response:', fileResponse);
+                // Vercel API 프록시 URL 생성
+                // 개발 환경: /api/download-video?fileId=xxx
+                // 프로덕션: 같은 도메인의 /api/download-video?fileId=xxx
+                const proxyUrl = `/api/download-video?fileId=${fileId}`;
+                console.log('Proxy URL:', proxyUrl);
 
-                    if (fileResponse) {
-                        // 응답이 ReadableStream인 경우
-                        if (fileResponse instanceof ReadableStream || (fileResponse as any).body) {
-                            const stream = (fileResponse as any).body || fileResponse;
-                            const reader = stream.getReader();
-                            const chunks: Uint8Array[] = [];
-
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) break;
-                                chunks.push(value);
-                            }
-
-                            const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-                            const videoBytes = new Uint8Array(totalLength);
-                            let offset = 0;
-                            for (const chunk of chunks) {
-                                videoBytes.set(chunk, offset);
-                                offset += chunk.length;
-                            }
-
-                            // Uint8Array를 base64로 변환
-                            const base64 = btoa(String.fromCharCode(...videoBytes));
-                            const videoDataUrl = `data:video/mp4;base64,${base64}`;
-                            console.log('=== VIDEO GENERATION SUCCESS (downloaded via SDK) ===');
-                            console.log('Video data length:', videoDataUrl.length);
-
-                            return {
-                                videoUrl: videoDataUrl,
-                                thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
-                                duration: durationSeconds,
-                            };
-                        }
-                    }
-                }
-            } catch (downloadError) {
-                console.error('SDK file download failed:', downloadError);
+                return {
+                    videoUrl: proxyUrl,
+                    thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
+                    duration: durationSeconds,
+                };
             }
 
-            // 최후의 수단: API 키가 포함된 URL 반환 (CORS 문제로 작동 안 할 수 있음)
-            console.warn('Falling back to authenticated URL (may not work due to CORS)');
-            const authenticatedUrl = `${videoUrl}${videoUrl.includes('?') ? '&' : '?'}key=${process.env.API_KEY}`;
+            // fileId를 추출할 수 없는 경우 원본 URL 반환 (폴백)
+            console.warn('Could not extract fileId, falling back to original URL');
             return {
-                videoUrl: authenticatedUrl,
+                videoUrl: videoUrl,
                 thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
                 duration: durationSeconds,
             };
