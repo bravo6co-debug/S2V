@@ -93,22 +93,22 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg">
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h3 className="text-lg font-bold text-white">비디오 내보내기</h3>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700 flex-shrink-0">
+          <h3 className="text-base sm:text-lg font-bold text-white">비디오 내보내기</h3>
           <button
             onClick={onClose}
             disabled={isExporting}
             className="text-gray-400 hover:text-white disabled:opacity-50"
           >
-            <ClearIcon className="w-6 h-6" />
+            <ClearIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
+        <div className="p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto flex-grow">
           {/* 비디오 정보 */}
           <div className="bg-gray-900/50 rounded-lg p-3">
             <div className="flex items-center justify-between text-sm">
@@ -295,18 +295,18 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 p-4 border-t border-gray-700">
+        <div className="flex justify-end gap-2 sm:gap-3 p-3 sm:p-4 border-t border-gray-700 flex-shrink-0">
           <button
             onClick={onClose}
             disabled={isExporting}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-600 rounded-lg hover:bg-gray-500 disabled:opacity-50"
+            className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-600 rounded-lg hover:bg-gray-500 disabled:opacity-50"
           >
             취소
           </button>
           <button
             onClick={handleExport}
             disabled={isExporting || scenesWithImages.length === 0}
-            className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExporting ? '내보내는 중...' : '내보내기'}
           </button>

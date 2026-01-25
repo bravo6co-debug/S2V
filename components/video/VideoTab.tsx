@@ -427,19 +427,19 @@ const SceneImportModal: React.FC<SceneImportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h3 className="text-lg font-bold text-white">시나리오에서 씬 가져오기</h3>
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700">
+          <h3 className="text-base sm:text-lg font-bold text-white">씬 가져오기</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <ClearIcon className="w-6 h-6" />
+            <ClearIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
-        <div className="p-4 border-b border-gray-700">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">
-              이미지가 있는 씬: {scenesWithImages.length}개 / 선택됨: {selectedSceneIds.length}개
+        <div className="p-3 sm:p-4 border-b border-gray-700">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-xs sm:text-sm text-gray-400">
+              {scenesWithImages.length}개 / 선택: {selectedSceneIds.length}개
             </p>
             <div className="flex gap-2">
               <button
@@ -452,19 +452,19 @@ const SceneImportModal: React.FC<SceneImportModalProps> = ({
                 onClick={deselectAll}
                 className="text-xs text-gray-400 hover:text-gray-300"
               >
-                선택 해제
+                해제
               </button>
             </div>
           </div>
         </div>
 
-        <div className="flex-grow overflow-y-auto p-4">
+        <div className="flex-grow overflow-y-auto p-2 sm:p-4">
           {scenesWithImages.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              이미지가 있는 씬이 없습니다. 먼저 시나리오 탭에서 이미지를 생성하세요.
+            <div className="text-center text-gray-500 py-8 text-sm">
+              이미지가 있는 씬이 없습니다.
             </div>
           ) : (
-            <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
               {scenesWithImages.map((scene) => {
                 const image = scene.customImage || scene.generatedImage;
                 const isSelected = selectedSceneIds.includes(scene.id);
@@ -742,46 +742,49 @@ export const VideoTab: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-gray-800/50 rounded-xl border border-gray-700 overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-700 bg-gray-800">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white">영상 제작</h2>
-            <p className="text-sm text-gray-400 mt-1">
+      <div className="flex-shrink-0 p-3 sm:p-4 border-b border-gray-700 bg-gray-800">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white">영상 제작</h2>
+            <p className="text-xs sm:text-sm text-gray-400 mt-0.5 sm:mt-1 truncate">
               {videoMode === 'remotion'
                 ? `${scenario?.scenes.filter(s => s.generatedImage || s.customImage).length || 0}개 씬 · ${scenario?.scenes.reduce((acc, s) => acc + (s.generatedImage || s.customImage ? s.duration : 0), 0) || 0}초`
-                : `${clips.length}개 클립 · ${totalDuration}초 · ${completedClips}/${clips.length} 완료`}
+                : `${clips.length}개 클립 · ${totalDuration}초`}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
             {videoMode === 'remotion' ? (
               <button
                 onClick={() => setIsExportModalOpen(true)}
                 disabled={!scenario || scenario.scenes.every(s => !s.generatedImage && !s.customImage)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-500 hover:to-emerald-500 disabled:opacity-50"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-500 hover:to-emerald-500 disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                비디오 내보내기
+                <span className="hidden sm:inline">비디오 내보내기</span>
+                <span className="sm:hidden">내보내기</span>
               </button>
             ) : (
               <>
                 {scenario && scenario.scenes.some(s => s.generatedImage || s.customImage) && (
                   <button
                     onClick={() => setIsImportModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600"
+                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600"
                   >
                     <LayersIcon className="w-4 h-4" />
-                    시나리오에서 가져오기
+                    <span className="hidden sm:inline">시나리오에서 가져오기</span>
+                    <span className="sm:hidden">가져오기</span>
                   </button>
                 )}
                 <button
                   onClick={handleGenerateAllClips}
                   disabled={isGenerating || clips.length === 0 || clips.every(c => c.generatedVideo) || veoApiStatus === 'unavailable'}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50"
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50"
                 >
                   <SparklesIcon className="w-4 h-4" />
-                  {isGenerating ? '생성 중...' : '전체 비디오 생성'}
+                  <span className="hidden sm:inline">{isGenerating ? '생성 중...' : '전체 비디오 생성'}</span>
+                  <span className="sm:hidden">{isGenerating ? '생성중' : '전체 생성'}</span>
                 </button>
               </>
             )}
@@ -867,12 +870,12 @@ export const VideoTab: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-grow flex flex-col overflow-hidden p-4 gap-4">
+      <div className="flex-grow flex flex-col overflow-hidden p-2 sm:p-4 gap-3 sm:gap-4">
         {videoMode === 'remotion' ? (
           /* Remotion 모드 */
-          <div className="flex-grow flex flex-col items-center justify-center">
+          <div className="flex-grow flex flex-col items-center justify-center overflow-y-auto">
             {scenario && scenario.scenes.some(s => s.generatedImage || s.customImage) ? (
-              <div className="w-full max-w-md mx-auto">
+              <div className="w-full max-w-sm sm:max-w-md mx-auto px-2 sm:px-0">
                 <RemotionPlayer
                   scenes={scenario.scenes}
                   aspectRatio="9:16"
@@ -1056,7 +1059,7 @@ export const VideoTab: React.FC = () => {
           <>
             {/* 클립 그리드 */}
             <div className="flex-grow overflow-y-auto">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
                 {clips.map((clip) => (
                   <ClipCard
                     key={clip.id}

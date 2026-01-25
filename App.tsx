@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
-import { TabNavigation } from './components/common/TabNavigation';
+import { TabNavigation, TabNavigationCompact } from './components/common/TabNavigation';
 import { AssetTab } from './components/character/AssetTab';
 import { ScenarioTab } from './components/scenario/ScenarioTab';
 import { VideoTab } from './components/video/VideoTab';
@@ -308,13 +308,19 @@ const AppContent: React.FC = () => {
     return (
         <div className="h-screen bg-gray-900 text-gray-200 flex flex-col">
             {/* 헤더: 탭 네비게이션 + 설정 */}
-            <header className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
-                <TabNavigation currentTab={currentTab} onTabChange={setCurrentTab} />
+            <header className="flex items-center justify-between px-2 sm:px-4 py-2 border-b border-gray-800">
+                {/* 모바일에서는 Compact, 데스크탑에서는 Full 네비게이션 */}
+                <div className="sm:hidden">
+                    <TabNavigationCompact currentTab={currentTab} onTabChange={setCurrentTab} />
+                </div>
+                <div className="hidden sm:block">
+                    <TabNavigation currentTab={currentTab} onTabChange={setCurrentTab} />
+                </div>
                 <ProjectSettingsDropdown />
             </header>
 
             {/* 메인 콘텐츠 영역 */}
-            <main className="flex-grow overflow-hidden p-4">
+            <main className="flex-grow overflow-hidden p-2 sm:p-4">
                 <div className="h-full w-full max-w-screen-2xl mx-auto">
                     {renderTabContent()}
                 </div>

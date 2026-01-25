@@ -171,26 +171,28 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
   return (
     <div className="h-full flex flex-col bg-gray-800/50 rounded-xl border border-gray-700 overflow-hidden">
       {/* 헤더 */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-700 bg-gray-800">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <LayersIcon className="w-6 h-6" />
-            에셋 관리
+      <div className="flex-shrink-0 p-3 sm:p-4 border-b border-gray-700 bg-gray-800">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+            <LayersIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+            <span className="hidden sm:inline">에셋 관리</span>
+            <span className="sm:hidden">에셋</span>
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => handleOpenCreator('ai')}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-500 hover:to-purple-500 transition-all"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-500 hover:to-purple-500 transition-all"
             >
               <SparklesIcon className="w-4 h-4" />
-              AI로 생성
+              <span className="hidden sm:inline">AI로 생성</span>
+              <span className="sm:hidden">AI</span>
             </button>
             <button
               onClick={() => handleOpenCreator('upload')}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
             >
               <PlusCircleIcon className="w-4 h-4" />
-              업로드
+              <span className="hidden sm:inline">업로드</span>
             </button>
           </div>
         </div>
@@ -218,27 +220,27 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
       </div>
 
       {/* 필터 바 */}
-      <div className="flex-shrink-0 p-3 border-b border-gray-700 bg-gray-800/50">
-        <div className="flex items-center gap-3">
+      <div className="flex-shrink-0 p-2 sm:p-3 border-b border-gray-700 bg-gray-800/50">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           {/* 검색 */}
           <div className="flex-grow">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="이름 또는 설명으로 검색..."
+              placeholder="검색..."
               className="w-full px-3 py-2 text-sm bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:outline-none"
             />
           </div>
 
           {/* 역할 필터 */}
           {roleFilterOptions.length > 1 && (
-            <div className="flex gap-1">
+            <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
               {roleFilterOptions.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setRoleFilter(opt.value as RoleFilter)}
-                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  className={`px-2 sm:px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                     roleFilter === opt.value
                       ? 'bg-indigo-600 text-white'
                       : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
@@ -254,10 +256,10 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
       </div>
 
       {/* 에셋 그리드 */}
-      <div className="flex-grow overflow-y-auto p-4">
+      <div className="flex-grow overflow-y-auto p-2 sm:p-4">
         {/* 캐릭터 그리드 */}
         {activeCategory === 'character' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4">
             {filteredCharacters.map((character) => (
               <CharacterCard
                 key={character.id}
@@ -280,7 +282,7 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
 
         {/* 소품 그리드 */}
         {activeCategory === 'prop' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4">
             {filteredProps.map((prop) => (
               <PropCard
                 key={prop.id}
@@ -303,7 +305,7 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
 
         {/* 배경 그리드 */}
         {activeCategory === 'background' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
             {filteredBackgrounds.map((bg) => (
               <BackgroundCard
                 key={bg.id}
@@ -327,8 +329,8 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
 
       {/* 활성화된 에셋 바 */}
       {(activeCharacterIds.length > 0 || activePropIds.length > 0 || activeBackgroundId) && (
-        <div className="flex-shrink-0 p-3 border-t border-gray-700 bg-gray-800">
-          <div className="flex items-center gap-6 flex-wrap">
+        <div className="flex-shrink-0 p-2 sm:p-3 border-t border-gray-700 bg-gray-800">
+          <div className="flex items-center gap-3 sm:gap-6 overflow-x-auto pb-1">
             {/* 활성화된 캐릭터 */}
             {activeCharacterIds.length > 0 && (
               <div className="flex items-center gap-2">

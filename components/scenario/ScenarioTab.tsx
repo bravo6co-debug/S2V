@@ -135,38 +135,38 @@ const SceneCard: React.FC<SceneCardProps> = ({
     <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
       {/* Header */}
       <div
-        className="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-750 transition-colors"
+        className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 cursor-pointer hover:bg-gray-750 transition-colors"
         onClick={onToggleExpand}
       >
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-lg font-bold text-gray-400">#{scene.sceneNumber}</span>
-          <span className={`px-2 py-0.5 text-xs font-medium text-white rounded ${storyBeatColors[scene.storyBeat] || 'bg-gray-600'}`}>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <span className="text-base sm:text-lg font-bold text-gray-400">#{scene.sceneNumber}</span>
+          <span className={`px-1.5 sm:px-2 py-0.5 text-xs font-medium text-white rounded ${storyBeatColors[scene.storyBeat] || 'bg-gray-600'}`}>
             {scene.storyBeat}
           </span>
-          <span className="text-xs text-gray-500">{scene.duration}초</span>
+          <span className="text-xs text-gray-500 hidden sm:inline">{scene.duration}초</span>
         </div>
-        <p className="flex-grow text-sm text-gray-300 truncate">{scene.visualDescription}</p>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <p className="flex-grow text-xs sm:text-sm text-gray-300 truncate">{scene.visualDescription}</p>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {currentImage && (
             <span className="text-green-400" title="이미지 있음">
               <CheckCircleIcon className="w-4 h-4" />
             </span>
           )}
           {scene.imageSource === 'custom' && (
-            <span className="text-xs text-amber-400">교체됨</span>
+            <span className="text-xs text-amber-400 hidden sm:inline">교체됨</span>
           )}
           {isExpanded ? (
-            <ChevronUpIcon className="w-5 h-5 text-gray-400" />
+            <ChevronUpIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
           ) : (
-            <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+            <ChevronDownIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
           )}
         </div>
       </div>
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t border-gray-700 p-4 space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="border-t border-gray-700 p-3 sm:p-4 space-y-3 sm:space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             {/* Left: Scene Details */}
             <div className="space-y-3">
               {isEditing ? (
@@ -402,8 +402,8 @@ const ScenarioGeneratorModal: React.FC<ScenarioGeneratorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
-      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col gap-5 p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col gap-4 sm:gap-5 p-4 sm:p-6" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={handleClose}
           disabled={isLoading}
@@ -440,7 +440,7 @@ const ScenarioGeneratorModal: React.FC<ScenarioGeneratorModalProps> = ({
           {/* Scenario Mode Selection */}
           <div>
             <label className="text-sm font-medium text-gray-300 mb-2 block">시나리오 모드</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {SCENARIO_MODE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -465,7 +465,7 @@ const ScenarioGeneratorModal: React.FC<ScenarioGeneratorModalProps> = ({
           {/* Image Style Selection */}
           <div>
             <label className="text-sm font-medium text-gray-300 mb-2 block">이미지 스타일</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {IMAGE_STYLE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -557,7 +557,7 @@ const ScenarioGeneratorModal: React.FC<ScenarioGeneratorModalProps> = ({
           {/* Tone Selection */}
           <div>
             <label className="text-sm font-medium text-gray-300 mb-2 block">톤/분위기</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {TONE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -777,12 +777,12 @@ export const ScenarioTab: React.FC = () => {
         /* 시나리오가 있을 때 */
         <div className="h-full flex flex-col bg-gray-800/50 rounded-xl border border-gray-700 overflow-hidden">
           {/* Header */}
-          <div className="flex-shrink-0 p-4 border-b border-gray-700 bg-gray-800">
-            <div className="flex items-start justify-between gap-4">
+          <div className="flex-shrink-0 p-3 sm:p-4 border-b border-gray-700 bg-gray-800">
+            <div className="flex items-start justify-between gap-2 sm:gap-4">
               <div className="flex-grow min-w-0">
-                <h2 className="text-xl font-bold text-white truncate">{scenario.title}</h2>
-                <p className="text-sm text-gray-400 mt-1 line-clamp-2">{scenario.synopsis}</p>
-                <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                <h2 className="text-lg sm:text-xl font-bold text-white truncate">{scenario.title}</h2>
+                <p className="text-xs sm:text-sm text-gray-400 mt-1 line-clamp-2">{scenario.synopsis}</p>
+                <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2 text-xs">
                   <span className="px-2 py-1 bg-gray-700 rounded text-gray-300">
                     {scenario.totalDuration >= 60
                       ? `${Math.floor(scenario.totalDuration / 60)}분 ${scenario.totalDuration % 60}초`
@@ -898,28 +898,30 @@ export const ScenarioTab: React.FC = () => {
             )}
 
             {/* Action Bar */}
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-3 sm:mt-4">
               <button
                 onClick={handleGenerateAllImages}
                 disabled={isGeneratingAllImages || !!generatingImageSceneId}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
               >
                 <LayersIcon className="w-4 h-4" />
-                {isGeneratingAllImages ? '이미지 생성 중...' : '전체 이미지 생성'}
+                <span className="hidden sm:inline">{isGeneratingAllImages ? '이미지 생성 중...' : '전체 이미지 생성'}</span>
+                <span className="sm:hidden">{isGeneratingAllImages ? '생성중...' : '전체 생성'}</span>
               </button>
               <button
                 onClick={saveScenarioToFile}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600"
               >
                 <DownloadIcon className="w-4 h-4" />
-                저장
+                <span className="hidden sm:inline">저장</span>
               </button>
               <button
                 onClick={() => setIsGeneratorOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600"
               >
                 <SparklesIcon className="w-4 h-4" />
-                새 시나리오
+                <span className="hidden sm:inline">새 시나리오</span>
+                <span className="sm:hidden">새로</span>
               </button>
             </div>
 
@@ -935,7 +937,7 @@ export const ScenarioTab: React.FC = () => {
           </div>
 
           {/* Scene List */}
-          <div className="flex-grow overflow-y-auto p-4 space-y-3">
+          <div className="flex-grow overflow-y-auto p-2 sm:p-4 space-y-2 sm:space-y-3">
             {scenario.scenes.map((scene) => (
               <SceneCard
                 key={scene.id}
