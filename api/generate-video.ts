@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ai, MODELS, sanitizePrompt, setCorsHeaders } from './lib/gemini';
-import type { GenerateVideoRequest, VideoGenerationResult, ApiErrorResponse } from './lib/types';
+import { ai, MODELS, sanitizePrompt, setCorsHeaders } from './lib/gemini.js';
+import type { GenerateVideoRequest, VideoGenerationResult, ApiErrorResponse } from './lib/types.js';
 
 /**
  * POST /api/generate-video

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { setCorsHeaders } from './lib/gemini';
+import { setCorsHeaders } from './lib/gemini.js';
 
 /**
  * GET /api/download-video?fileId=xxx

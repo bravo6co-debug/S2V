@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders } from './lib/gemini';
-import type { GenerateScenarioRequest, Scenario, Scene, ScenarioTone, StoryBeat, CameraAngle, ApiErrorResponse } from './lib/types';
+import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders } from './lib/gemini.js';
+import type { GenerateScenarioRequest, Scenario, Scene, ScenarioTone, StoryBeat, CameraAngle, ApiErrorResponse } from './lib/types.js';
 
 const TONE_DESCRIPTIONS: Record<ScenarioTone, string> = {
     emotional: '따뜻하고 감성적이며, 공감을 이끌어내는 여운 있는 스토리',

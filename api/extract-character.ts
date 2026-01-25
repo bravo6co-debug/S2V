@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders } from './lib/gemini';
-import type { ExtractCharacterRequest, ExtractCharacterResponse, ApiErrorResponse } from './lib/types';
+import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders } from './lib/gemini.js';
+import type { ExtractCharacterRequest, ExtractCharacterResponse, ApiErrorResponse } from './lib/types.js';
 
 /**
  * POST /api/extract-character

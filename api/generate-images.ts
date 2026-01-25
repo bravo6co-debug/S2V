@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ai, MODELS, Modality, Part, sanitizePrompt, setCorsHeaders, PHOTOREALISTIC_STYLES } from './lib/gemini';
-import type { GenerateImagesRequest, ImageData, ApiErrorResponse } from './lib/types';
+import { ai, MODELS, Modality, Part, sanitizePrompt, setCorsHeaders, PHOTOREALISTIC_STYLES } from './lib/gemini.js';
+import type { GenerateImagesRequest, ImageData, ApiErrorResponse } from './lib/types.js';
 
 /**
  * Generates a single scene image with character/prop/background references
