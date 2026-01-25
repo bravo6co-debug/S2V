@@ -1,0 +1,5 @@
+{
+  "name": "시니어롱폼 이미지 생성기_v1",
+  "description": "참조 이미지를 기반으로 일관된 스타일의 캐릭터 일러스트를 생성하는 도구",
+  "requestFramePermissions": []
+}
