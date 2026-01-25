@@ -525,7 +525,7 @@ const SceneImportModal: React.FC<SceneImportModalProps> = ({
 
 // 메인 VideoTab 컴포넌트
 export const VideoTab: React.FC = () => {
-  const { characters, activeCharacterIds } = useProject();
+  const { characters, activeCharacterIds, updateScene, aspectRatio } = useProject();
   const { scenario } = useScenario();
   const {
     timeline,
@@ -562,7 +562,6 @@ export const VideoTab: React.FC = () => {
 
   // TTS 나레이션 상태
   const [ttsVoice, setTtsVoice] = useState<TTSVoice>('Kore');
-  const { updateScene } = useProject();
 
   // 나레이션 미리듣기 상태
   const [previewingSceneId, setPreviewingSceneId] = useState<string | null>(null);
@@ -941,7 +940,7 @@ export const VideoTab: React.FC = () => {
               <div className="w-full max-w-sm sm:max-w-md mx-auto px-2 sm:px-0">
                 <RemotionPlayer
                   scenes={scenario.scenes}
-                  aspectRatio="9:16"
+                  aspectRatio={aspectRatio}
                   transitionType="fade"
                   showSubtitles={true}
                   className="rounded-lg overflow-hidden shadow-2xl"

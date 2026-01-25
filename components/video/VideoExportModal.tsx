@@ -48,7 +48,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
     transitionDuration: 15,
     showSubtitles: true,
     includeAudio: true,  // 기본적으로 오디오 포함
-    format: 'mp4',
+    format: 'webm',  // webm이 오디오 지원이 더 안정적
   });
 
   const [isExporting, setIsExporting] = useState(false);

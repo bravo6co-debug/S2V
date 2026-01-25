@@ -89,6 +89,8 @@ export const Subtitles: React.FC<SubtitlesProps> = ({
         justifyContent: 'center',
         alignItems: needsScroll ? 'flex-end' : 'flex-end',
         padding: '0 3%',
+        zIndex: 100,  // 자막이 항상 위에 표시되도록
+        pointerEvents: 'none',  // 클릭 이벤트 통과
         ...positionStyles,
       }}
     >
