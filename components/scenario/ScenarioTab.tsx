@@ -11,6 +11,8 @@ import {
   ScenarioMode,
   ImageStyle,
   SuggestedCharacter,
+  CharacterAsset,
+  CharacterRole,
   TONE_OPTIONS,
   SCENARIO_MODE_OPTIONS,
   IMAGE_STYLE_OPTIONS,
@@ -655,6 +657,7 @@ export const ScenarioTab: React.FC = () => {
     characters,
     activeCharacterIds,
     toggleActiveCharacter,
+    addCharacter,
     props,
     activePropIds,
     toggleActiveProp,
@@ -726,6 +729,44 @@ export const ScenarioTab: React.FC = () => {
       (char) => !isCharacterCreated(char.name)
     );
   }, [scenario?.suggestedCharacters, characters]);
+
+  // 역할 매핑: suggestedCharacter.role → CharacterRole
+  const mapRoleToCharacterRole = (role: string): CharacterRole => {
+    const normalized = role.toLowerCase().trim();
+    if (normalized.includes('주인공') || normalized.includes('main') || normalized.includes('protagonist')) {
+      return 'protagonist';
+    }
+    if (normalized.includes('조연') || normalized.includes('supporting')) {
+      return 'supporting';
+    }
+    return 'extra';
+  };
+
+  // 캐릭터 이미지 업로드 처리
+  const handleUploadCharacterImage = (char: SuggestedCharacter, imageData: ImageData) => {
+    const characterRole = mapRoleToCharacterRole(char.role);
+
+    const newCharacter: CharacterAsset = {
+      id: crypto.randomUUID(),
+      name: char.name,
+      role: characterRole,
+      image: imageData,
+      description: char.description,
+      maintainContext: characterRole !== 'extra',
+      age: '',
+      personality: '',
+      outfit: '',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    addCharacter(newCharacter);
+
+    // 주인공/조연은 자동 활성화
+    if (characterRole !== 'extra') {
+      toggleActiveCharacter(newCharacter.id);
+    }
+  };
 
   // 모든 미생성 캐릭터 일괄 생성
   const handleGenerateAllMissingCharacters = async () => {
@@ -1048,7 +1089,7 @@ export const ScenarioTab: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-xs text-gray-400 mb-3">
-                  시나리오에 필요한 캐릭터입니다. "생성" 버튼으로 AI가 자동으로 생성합니다.
+                  시나리오에 필요한 캐릭터입니다. "생성" 버튼으로 AI가 자동 생성하거나, 업로드 아이콘으로 기존 이미지를 사용할 수 있습니다.
                 </p>
                 {quickGenError && (
                   <div className="mb-3 p-2 bg-red-900/50 border border-red-700 rounded text-xs text-red-300 flex items-center justify-between">
@@ -1067,6 +1108,7 @@ export const ScenarioTab: React.FC = () => {
                       isGenerating={isQuickGenerating && generatingCharacterName === char.name}
                       createdThumbnail={getCreatedCharacterThumbnail(char.name)}
                       onQuickGenerate={() => quickGenerateCharacter(char)}
+                      onUpload={(imageData) => handleUploadCharacterImage(char, imageData)}
                     />
                   ))}
                 </div>

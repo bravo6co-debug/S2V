@@ -10,6 +10,7 @@ interface SubtitlesProps {
   fadeIn?: boolean;
   fadeOut?: boolean;
   scrollMode?: 'none' | 'scroll' | 'auto';  // 스크롤 모드
+  letterSpacing?: number;  // 글자 간격 (em 단위, 기본값 0.05)
 }
 
 // 한국어 기준 초당 읽을 수 있는 글자 수
@@ -17,13 +18,14 @@ const CHARS_PER_SECOND = 5;
 
 export const Subtitles: React.FC<SubtitlesProps> = ({
   text,
-  fontSize = 48,  // 32 → 48 증가
+  fontSize = 96,  // 48 → 96 증가
   fontColor = '#ffffff',
   backgroundColor = 'rgba(0, 0, 0, 0.75)',
   position = 'bottom',
   fadeIn = true,
   fadeOut = true,
   scrollMode = 'auto',
+  letterSpacing = 0.1,  // 기본 글자 간격 (em 단위)
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames, fps, width } = useVideoConfig();
@@ -112,6 +114,7 @@ export const Subtitles: React.FC<SubtitlesProps> = ({
             textAlign: needsScroll ? 'left' : 'center',
             margin: 0,
             lineHeight: 1.4,
+            letterSpacing: `${letterSpacing}em`,
             fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, sans-serif',
             wordBreak: needsScroll ? 'keep-all' : 'keep-all',
             whiteSpace: needsScroll ? 'nowrap' : 'normal',
