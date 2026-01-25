@@ -209,6 +209,19 @@ export interface AnimationConfig {
 
 export type AspectRatio = '16:9' | '9:16';
 
+// 이미지 스타일 타입
+export type ImageStyle = 'photorealistic' | 'animation' | 'illustration' | 'cinematic' | 'watercolor' | '3d_render';
+
+// 이미지 스타일 옵션
+export const IMAGE_STYLE_OPTIONS: { value: ImageStyle; label: string; emoji: string }[] = [
+  { value: 'photorealistic', label: '포토리얼리즘', emoji: '📷' },
+  { value: 'animation', label: '애니메이션', emoji: '🎨' },
+  { value: 'illustration', label: '일러스트', emoji: '✏️' },
+  { value: 'cinematic', label: '시네마틱', emoji: '🎬' },
+  { value: 'watercolor', label: '수채화', emoji: '💧' },
+  { value: '3d_render', label: '3D 렌더링', emoji: '🎮' },
+];
+
 export type GeneratedItem = {
   id: string;
   prompt: string;

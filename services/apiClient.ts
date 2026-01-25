@@ -4,7 +4,7 @@
  * to keep API keys secure on the server side.
  */
 
-import { Character, ImageData, AspectRatio, ScenarioConfig, Scenario, Scene } from '../types';
+import { Character, ImageData, AspectRatio, ScenarioConfig, Scenario, Scene, ImageStyle } from '../types';
 import {
     ApiError,
     QuotaExceededError,
@@ -108,12 +108,14 @@ interface GenerateImagesResponse {
 export const generateCharacterPortraits = async (
     prompt: string,
     numberOfImages: number,
-    aspectRatio: AspectRatio
+    aspectRatio: AspectRatio,
+    imageStyle?: ImageStyle
 ): Promise<ImageData[]> => {
     const response = await post<GenerateImagesResponse>('/api/generate-portraits', {
         prompt,
         numberOfImages,
         aspectRatio,
+        imageStyle,
     }, 'image-portrait');
     return response.images;
 };
@@ -121,12 +123,14 @@ export const generateCharacterPortraits = async (
 export const generatePropImages = async (
     prompt: string,
     numberOfImages: number,
-    aspectRatio: AspectRatio
+    aspectRatio: AspectRatio,
+    imageStyle?: ImageStyle
 ): Promise<ImageData[]> => {
     const response = await post<GenerateImagesResponse>('/api/generate-props', {
         prompt,
         numberOfImages,
         aspectRatio,
+        imageStyle,
     }, 'image-prop');
     return response.images;
 };
@@ -137,7 +141,8 @@ export const generateBackgroundImages = async (
     timeOfDay: string,
     weather: string,
     numberOfImages: number,
-    aspectRatio: AspectRatio
+    aspectRatio: AspectRatio,
+    imageStyle?: ImageStyle
 ): Promise<ImageData[]> => {
     const response = await post<GenerateImagesResponse>('/api/generate-backgrounds', {
         prompt,
@@ -146,6 +151,7 @@ export const generateBackgroundImages = async (
         weather,
         numberOfImages,
         aspectRatio,
+        imageStyle,
     }, 'image-background');
     return response.images;
 };
@@ -156,7 +162,8 @@ export const generateImages = async (
     propImages: ImageData[],
     backgroundImage: ImageData | null,
     numberOfImages: number,
-    aspectRatio: AspectRatio
+    aspectRatio: AspectRatio,
+    imageStyle?: ImageStyle
 ): Promise<ImageData[]> => {
     const response = await post<GenerateImagesResponse>('/api/generate-images', {
         prompt,
@@ -165,6 +172,7 @@ export const generateImages = async (
         backgroundImage,
         numberOfImages,
         aspectRatio,
+        imageStyle,
     }, 'image-scene');
     return response.images;
 };
@@ -223,7 +231,8 @@ export const generateSceneImage = async (
     characterImages: ImageData[],
     propImages: ImageData[],
     backgroundImage: ImageData | null,
-    aspectRatio: AspectRatio
+    aspectRatio: AspectRatio,
+    imageStyle?: ImageStyle
 ): Promise<ImageData> => {
     // Use the generate-images endpoint with the scene's imagePrompt
     const enhancedPrompt = `
@@ -246,6 +255,7 @@ ${scene.imagePrompt}
         backgroundImage,
         numberOfImages: 1,
         aspectRatio,
+        imageStyle,
     }, 'image-scene');
 
     if (!response.images || response.images.length === 0) {

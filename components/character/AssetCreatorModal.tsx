@@ -10,6 +10,8 @@ import {
   TimeOfDay,
   Weather,
   ImageData,
+  ImageStyle,
+  IMAGE_STYLE_OPTIONS,
 } from '../../types';
 import { useProject } from '../../contexts/ProjectContext';
 import { SparklesIcon, ClearIcon, LayersIcon } from '../Icons';
@@ -56,6 +58,7 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
   // 이미지 상태
   const [uploadedImage, setUploadedImage] = useState<ImageData | null>(null);
   const [generatedCount, setGeneratedCount] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [imageStyle, setImageStyle] = useState<ImageStyle>('photorealistic');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 캐릭터 관련 상태
@@ -107,7 +110,7 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
           throw new Error('캐릭터 설명 분석에 실패했습니다.');
         }
 
-        const imagesData = await generateCharacterPortraits(englishDescription, generatedCount, aspectRatio);
+        const imagesData = await generateCharacterPortraits(englishDescription, generatedCount, aspectRatio, imageStyle);
 
         imagesData.forEach((imgData) => {
           const newCharacter: CharacterAsset = {
@@ -127,7 +130,7 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
         });
       } else if (category === 'prop') {
         // 소품 AI 생성 - 소품 전용 함수 사용 (인물 없이 물건만 생성)
-        const imagesData = await generatePropImages(description, generatedCount, aspectRatio);
+        const imagesData = await generatePropImages(description, generatedCount, aspectRatio, imageStyle);
 
         imagesData.forEach((imgData) => {
           const newProp: PropAsset = {
@@ -152,7 +155,8 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
           timeOfDay,
           weather,
           generatedCount,
-          aspectRatio
+          aspectRatio,
+          imageStyle
         );
 
         imagesData.forEach((imgData) => {
@@ -250,6 +254,7 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
     setMaintainContext(true);
     setUploadedImage(null);
     setGeneratedCount(1);
+    setImageStyle('photorealistic');
     setCharacterRole('protagonist');
     setAge('');
     setPersonality('');
@@ -383,6 +388,28 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
                       }`}
                     >
                       {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 이미지 스타일 */}
+              <div>
+                <label className={labelClass}>이미지 스타일</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {IMAGE_STYLE_OPTIONS.map((style) => (
+                    <button
+                      key={style.value}
+                      onClick={() => setImageStyle(style.value)}
+                      disabled={isLoading}
+                      className={`py-2 px-3 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                        imageStyle === style.value
+                          ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      <span>{style.emoji}</span>
+                      <span>{style.label}</span>
                     </button>
                   ))}
                 </div>
