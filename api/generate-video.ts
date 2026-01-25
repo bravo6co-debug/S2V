@@ -64,7 +64,6 @@ Technical Requirements:
                     numberOfVideos: 1,
                     durationSeconds: Math.min(durationSeconds, 8),
                     aspectRatio: '16:9',
-                    includeAudio: true,
                 },
             });
             console.log('Operation created successfully');

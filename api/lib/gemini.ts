@@ -30,7 +30,7 @@ export const MODELS = {
 } as const;
 
 // Re-export types for convenience
-export { Modality, Part, Type };
+export type { Modality, Part, Type };
 
 // ============================================
 // PHOTOREALISTIC STYLE PROMPTS
