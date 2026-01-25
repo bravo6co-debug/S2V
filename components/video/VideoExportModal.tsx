@@ -41,7 +41,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
   onExport,
 }) => {
   const [config, setConfig] = useState<ExportConfig>({
-    aspectRatio: '9:16',
+    aspectRatio: '16:9',
     resolution: '1080p',
     fps: 30,
     transitionType: 'fade',
