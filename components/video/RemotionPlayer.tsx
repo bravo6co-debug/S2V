@@ -34,7 +34,7 @@ interface RemotionPlayerProps {
 
 export const RemotionPlayer: React.FC<RemotionPlayerProps> = ({
   scenes,
-  aspectRatio = '9:16',
+  aspectRatio = '16:9',
   transitionType = 'fade',
   transitionDuration = 15,
   showSubtitles = true,

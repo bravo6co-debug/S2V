@@ -578,8 +578,18 @@ export const VideoTab: React.FC = () => {
     setRenderProgress(0);
 
     try {
+      // previewAudios에 있는 오디오를 씬에 병합
+      const scenesWithAudio = scenario.scenes.map(scene => {
+        // 이미 씬에 오디오가 있으면 그대로 사용, 없으면 previewAudios에서 가져옴
+        const previewAudio = previewAudios.get(scene.id);
+        if (!scene.narrationAudio && previewAudio) {
+          return { ...scene, narrationAudio: previewAudio };
+        }
+        return scene;
+      });
+
       const result = await renderVideo(
-        scenario.scenes,
+        scenesWithAudio,
         config,
         (progress) => {
           setRenderProgress(progress.progress);
@@ -599,7 +609,7 @@ export const VideoTab: React.FC = () => {
       setIsRendering(false);
       setRenderProgress(0);
     }
-  }, [scenario]);
+  }, [scenario, previewAudios]);
 
   // 씬의 TTS 상태 확인
   const getTTSStatus = useCallback(() => {
