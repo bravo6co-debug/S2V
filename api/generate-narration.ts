@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ai, MODELS, TTS_VOICES, setCorsHeaders } from './lib/gemini.js';
 import type { TTSVoice } from './lib/gemini.js';
 import type { ApiErrorResponse } from './lib/types.js';
-import { WaveFile } from 'wavefile';
+import WaveFile from 'wavefile';
 
 interface GenerateNarrationRequest {
     text: string;           // 나레이션 텍스트
