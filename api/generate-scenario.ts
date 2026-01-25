@@ -189,7 +189,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const { topic, duration, tone, mode = 'character', imageStyle = 'photorealistic', customTone } = config;
-        const sanitizedTopic = sanitizePrompt(topic, 500);
+        const sanitizedTopic = sanitizePrompt(topic, 5000);
         const durationConfig = getDurationConfig(duration);
         const toneDescription = tone === 'custom' && customTone ? customTone : (TONE_DESCRIPTIONS[tone as ScenarioTone] || TONE_DESCRIPTIONS.emotional);
         const modeInfo = MODE_DESCRIPTIONS[mode] || MODE_DESCRIPTIONS.character;
