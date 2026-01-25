@@ -664,6 +664,7 @@ export const ScenarioTab: React.FC = () => {
     aspectRatio,
     setAspectRatio,
     imageStyle: projectImageStyle,
+    setImageStyle: setProjectImageStyle,
   } = useProject();
 
   // Quick character generation hook
@@ -756,6 +757,10 @@ export const ScenarioTab: React.FC = () => {
   const handleGenerateScenario = async (config: ScenarioConfig) => {
     try {
       await generateScenario(config);
+      // 시나리오 스타일을 프로젝트 스타일로 동기화 (캐릭터 생성 시 동일 스타일 적용)
+      if (config.imageStyle) {
+        setProjectImageStyle(config.imageStyle);
+      }
       setIsGeneratorOpen(false);
     } catch (e) {
       // error is handled by hook
