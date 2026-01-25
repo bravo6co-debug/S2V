@@ -9,10 +9,12 @@ import {
   ScenarioTone,
   ScenarioMode,
   ImageStyle,
+  SuggestedCharacter,
   TONE_OPTIONS,
   SCENARIO_MODE_OPTIONS,
   IMAGE_STYLE_OPTIONS,
 } from '../../types';
+import { SuggestedCharacterCard } from './SuggestedCharacterCard';
 
 // TTS 음성 옵션
 const TTS_VOICE_OPTIONS: { value: TTSVoice; label: string }[] = [
@@ -660,6 +662,8 @@ export const ScenarioTab: React.FC = () => {
     aspectRatio,
     setAspectRatio,
     imageStyle: projectImageStyle,
+    setCurrentTab,
+    setPendingCharacterCreation,
   } = useProject();
   const {
     scenario,
@@ -688,6 +692,19 @@ export const ScenarioTab: React.FC = () => {
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
   const [ttsVoice, setTtsVoice] = useState<TTSVoice>('Kore');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 제안된 캐릭터가 이미 생성되었는지 확인
+  const isCharacterCreated = (characterName: string): boolean => {
+    return characters.some(
+      (c) => c.name.toLowerCase() === characterName.toLowerCase()
+    );
+  };
+
+  // 제안된 캐릭터 생성 핸들러
+  const handleCreateSuggestedCharacter = (char: SuggestedCharacter) => {
+    setPendingCharacterCreation(char);
+    setCurrentTab('character');
+  };
 
   // 활성화된 캐릭터 목록
   const activeCharacters = activeCharacterIds
@@ -973,6 +990,33 @@ export const ScenarioTab: React.FC = () => {
                 <button onClick={clearError} className="text-red-400 hover:text-red-300">
                   <ClearIcon className="w-4 h-4" />
                 </button>
+              </div>
+            )}
+
+            {/* Suggested Characters */}
+            {scenario.suggestedCharacters && scenario.suggestedCharacters.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium text-gray-300">
+                    제안된 등장인물
+                  </h3>
+                  <span className="text-xs text-gray-500">
+                    {scenario.suggestedCharacters.filter(c => isCharacterCreated(c.name)).length}/{scenario.suggestedCharacters.length} 생성됨
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mb-3">
+                  시나리오에 필요한 캐릭터입니다. 클릭하여 에셋 탭에서 생성하세요.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {scenario.suggestedCharacters.map((char, idx) => (
+                    <SuggestedCharacterCard
+                      key={`${char.name}-${idx}`}
+                      character={char}
+                      isCreated={isCharacterCreated(char.name)}
+                      onCreateClick={() => handleCreateSuggestedCharacter(char)}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>

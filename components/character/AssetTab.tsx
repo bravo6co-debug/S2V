@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CharacterAsset,
   PropAsset,
@@ -36,6 +36,8 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
     activeBackgroundId,
     setActiveBackgroundId,
     aspectRatio,
+    pendingCharacterCreation,
+    setPendingCharacterCreation,
   } = useProject();
 
   // 탭 상태
@@ -49,6 +51,26 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
 
   // 선택된 에셋 상태
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+
+  // 제안된 캐릭터 생성용 초기값
+  const [initialDescription, setInitialDescription] = useState('');
+  const [initialName, setInitialName] = useState('');
+
+  // 시나리오에서 제안된 캐릭터 생성 처리
+  useEffect(() => {
+    if (pendingCharacterCreation) {
+      // 캐릭터 탭으로 전환
+      setActiveCategory('character');
+      // 초기값 설정
+      setInitialDescription(pendingCharacterCreation.description);
+      setInitialName(pendingCharacterCreation.name);
+      // AI 모드로 모달 열기
+      setCreatorMode('ai');
+      setIsCreatorModalOpen(true);
+      // 처리 후 초기화
+      setPendingCharacterCreation(null);
+    }
+  }, [pendingCharacterCreation, setPendingCharacterCreation]);
 
   // =============================================
   // 필터링된 에셋 목록
@@ -435,9 +457,16 @@ export const AssetTab: React.FC<AssetTabProps> = ({ onAssetSelect }) => {
       {isCreatorModalOpen && (
         <AssetCreatorModal
           isOpen={isCreatorModalOpen}
-          onClose={() => setIsCreatorModalOpen(false)}
+          onClose={() => {
+            setIsCreatorModalOpen(false);
+            // 초기값 초기화
+            setInitialDescription('');
+            setInitialName('');
+          }}
           category={activeCategory}
           mode={creatorMode}
+          initialDescription={activeCategory === 'character' ? initialDescription : undefined}
+          initialName={activeCategory === 'character' ? initialName : undefined}
         />
       )}
     </div>

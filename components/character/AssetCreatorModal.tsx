@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   CharacterAsset,
   PropAsset,
@@ -24,6 +24,8 @@ interface AssetCreatorModalProps {
   onClose: () => void;
   category: AssetCategory;
   mode: 'ai' | 'upload';
+  initialDescription?: string;
+  initialName?: string;
 }
 
 // 파일을 데이터 URL로 변환
@@ -45,14 +47,16 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
   onClose,
   category,
   mode,
+  initialDescription = '',
+  initialName = '',
 }) => {
   const { addCharacter, addProp, addBackground, aspectRatio, imageStyle: projectImageStyle, setImageStyle: setProjectImageStyle } = useProject();
 
   // 공통 상태
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [description, setDescription] = useState('');
-  const [name, setName] = useState('');
+  const [description, setDescription] = useState(initialDescription);
+  const [name, setName] = useState(initialName);
   const [maintainContext, setMaintainContext] = useState(true);
 
   // 이미지 상태
@@ -83,6 +87,16 @@ export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [weather, setWeather] = useState<Weather>('sunny');
   const [mood, setMood] = useState('');
+
+  // 초기값 동기화 (외부에서 prefill할 때)
+  useEffect(() => {
+    if (initialDescription) {
+      setDescription(initialDescription);
+    }
+    if (initialName) {
+      setName(initialName);
+    }
+  }, [initialDescription, initialName]);
 
   if (!isOpen) return null;
 

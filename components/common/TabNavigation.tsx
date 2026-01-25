@@ -35,16 +35,16 @@ const VideoIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 const TABS: TabConfig[] = [
   {
-    mode: 'character',
-    label: '등장인물/소품',
-    icon: <CharacterIcon className="w-5 h-5" />,
-    activeColor: 'from-indigo-600 to-blue-600',
-  },
-  {
     mode: 'scenario',
     label: '시나리오',
     icon: <ScenarioIcon className="w-5 h-5" />,
     activeColor: 'from-purple-600 to-indigo-600',
+  },
+  {
+    mode: 'character',
+    label: '등장인물/소품',
+    icon: <CharacterIcon className="w-5 h-5" />,
+    activeColor: 'from-indigo-600 to-blue-600',
   },
   {
     mode: 'video',

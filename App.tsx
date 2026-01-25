@@ -294,14 +294,14 @@ const AppContent: React.FC = () => {
     // 탭별 콘텐츠 렌더링
     const renderTabContent = () => {
         switch (currentTab) {
-            case 'assets':
+            case 'character':
                 return <AssetTab />;
             case 'scenario':
                 return <ScenarioTab />;
             case 'video':
                 return <VideoTab />;
             default:
-                return <AssetTab />;
+                return <ScenarioTab />;
         }
     };
 
