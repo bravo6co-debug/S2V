@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useProject } from '../../contexts/ProjectContext';
 import { useVideo } from '../../hooks/useVideo';
 import { useScenario } from '../../hooks/useScenario';
@@ -618,6 +618,18 @@ export const VideoTab: React.FC = () => {
     return { generated: scenesWithAudio.length, total: scenesWithNarration.length };
   }, [scenario]);
 
+  // 미리보기용 씬 데이터 (previewAudios 병합)
+  const scenesForPreview = useMemo(() => {
+    if (!scenario?.scenes) return [];
+    return scenario.scenes.map(scene => {
+      const previewAudio = previewAudios.get(scene.id);
+      if (!scene.narrationAudio && previewAudio) {
+        return { ...scene, narrationAudio: previewAudio };
+      }
+      return scene;
+    });
+  }, [scenario?.scenes, previewAudios]);
+
   // 나레이션 미리듣기 생성
   const handleGeneratePreview = useCallback(async (sceneId: string, narrationText: string) => {
     if (!narrationText?.trim()) return;
@@ -939,7 +951,7 @@ export const VideoTab: React.FC = () => {
             {scenario && scenario.scenes.some(s => s.generatedImage || s.customImage) ? (
               <div className="w-full max-w-sm sm:max-w-md mx-auto px-2 sm:px-0">
                 <RemotionPlayer
-                  scenes={scenario.scenes}
+                  scenes={scenesForPreview}
                   aspectRatio={aspectRatio}
                   transitionType="fade"
                   showSubtitles={true}

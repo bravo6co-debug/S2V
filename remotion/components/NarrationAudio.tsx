@@ -101,6 +101,7 @@ export const NarrationAudio: React.FC<NarrationAudioProps> = ({
       src={audioUrl}
       volume={currentVolume}
       startFrom={0}
+      endAt={durationInFrames}
     />
   );
 };
