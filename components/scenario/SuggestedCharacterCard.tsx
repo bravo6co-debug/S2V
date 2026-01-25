@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import type { SuggestedCharacter, ImageData } from '../../types';
 
 interface SuggestedCharacterCardProps {
@@ -7,6 +7,7 @@ interface SuggestedCharacterCardProps {
   isGenerating?: boolean;
   createdThumbnail?: ImageData;
   onQuickGenerate: () => void;
+  onUpload?: (imageData: ImageData) => void;
 }
 
 const CheckCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -26,13 +27,40 @@ const SpinnerIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+// 업로드 아이콘
+const UploadIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+  </svg>
+);
+
 export const SuggestedCharacterCard: React.FC<SuggestedCharacterCardProps> = ({
   character,
   isCreated,
   isGenerating = false,
   createdThumbnail,
   onQuickGenerate,
+  onUpload,
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onUpload) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const base64Data = dataUrl.split(',')[1];
+        onUpload({ mimeType: file.type, data: base64Data });
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset input
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
   return (
     <div
       className={`p-3 rounded-lg border transition-all duration-200 ${
@@ -83,13 +111,35 @@ export const SuggestedCharacterCard: React.FC<SuggestedCharacterCardProps> = ({
           ) : isGenerating ? (
             <span className="text-xs text-purple-400">생성중...</span>
           ) : (
-            <button
-              onClick={onQuickGenerate}
-              disabled={isGenerating}
-              className="px-2.5 py-1 text-xs font-medium text-white bg-purple-600 rounded hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              생성
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onQuickGenerate}
+                disabled={isGenerating}
+                className="px-2.5 py-1 text-xs font-medium text-white bg-purple-600 rounded hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="AI로 캐릭터 이미지 생성"
+              >
+                생성
+              </button>
+              {onUpload && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isGenerating}
+                    className="p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="이미지 업로드"
+                  >
+                    <UploadIcon className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
