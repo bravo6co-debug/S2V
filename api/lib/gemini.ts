@@ -86,6 +86,7 @@ export const getAllowedOrigins = (): string[] => {
         'http://localhost:3000',
         'http://localhost:5173',
         'https://image-gen-coral.vercel.app',
+        'https://image-gen-neon-mu.vercel.app',
     ];
 };
 
