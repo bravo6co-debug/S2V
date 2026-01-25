@@ -29,8 +29,9 @@ export const MODELS = {
     VIDEO: 'veo-3.1-fast-generate-preview',
 } as const;
 
-// Re-export types for convenience
-export type { Modality, Part, Type };
+// Re-export runtime values and types
+export { Modality, Type };
+export type { Part };
 
 // ============================================
 // PHOTOREALISTIC STYLE PROMPTS
