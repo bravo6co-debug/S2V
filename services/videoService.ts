@@ -3,11 +3,19 @@
  *
  * 이 서비스는 Remotion을 사용하여 클라이언트 측에서 비디오를 생성합니다.
  * Veo API 대비 99% 비용 절감이 가능합니다.
+ * TTS 나레이션 오디오 지원 포함.
  */
 
-import type { Scene, AspectRatio } from '../types';
+import type { Scene, AspectRatio, NarrationAudio } from '../types';
 import { scenesToRemotionScenes, type RemotionSceneData, type TransitionConfig } from '../remotion/types';
 import type { ExportConfig } from '../components/video/VideoExportModal';
+
+// 오디오 데이터 타입
+interface AudioSegment {
+  buffer: AudioBuffer;
+  startTime: number; // 초 단위
+  duration: number;
+}
 
 // 렌더링 상태 타입
 export type RenderStatus = 'idle' | 'preparing' | 'rendering' | 'encoding' | 'complete' | 'error';
@@ -42,6 +50,116 @@ export function prepareScenes(scenes: Scene[]): RemotionSceneData[] {
 }
 
 /**
+ * Base64 오디오 데이터를 AudioBuffer로 변환
+ */
+async function base64ToAudioBuffer(
+  audioContext: AudioContext,
+  base64Data: string,
+  mimeType: string = 'audio/wav'
+): Promise<AudioBuffer> {
+  // Base64를 ArrayBuffer로 변환
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  // ArrayBuffer를 AudioBuffer로 디코딩
+  return await audioContext.decodeAudioData(bytes.buffer);
+}
+
+/**
+ * 씬들의 나레이션 오디오를 AudioSegment 배열로 변환
+ */
+async function prepareAudioSegments(
+  audioContext: AudioContext,
+  remotionScenes: RemotionSceneData[]
+): Promise<AudioSegment[]> {
+  const segments: AudioSegment[] = [];
+  let currentTime = 0;
+
+  for (const scene of remotionScenes) {
+    if (scene.narrationAudio?.data) {
+      try {
+        const buffer = await base64ToAudioBuffer(
+          audioContext,
+          scene.narrationAudio.data,
+          scene.narrationAudio.mimeType
+        );
+
+        segments.push({
+          buffer,
+          startTime: currentTime,
+          duration: scene.duration,
+        });
+      } catch (error) {
+        console.warn(`Failed to decode audio for scene ${scene.id}:`, error);
+      }
+    }
+    currentTime += scene.duration;
+  }
+
+  return segments;
+}
+
+/**
+ * 모든 오디오 세그먼트를 하나의 AudioBuffer로 병합
+ */
+function mergeAudioSegments(
+  audioContext: AudioContext,
+  segments: AudioSegment[],
+  totalDuration: number,
+  sampleRate: number = 44100
+): AudioBuffer {
+  const totalSamples = Math.ceil(totalDuration * sampleRate);
+  const mergedBuffer = audioContext.createBuffer(2, totalSamples, sampleRate);
+
+  for (const segment of segments) {
+    const startSample = Math.floor(segment.startTime * sampleRate);
+    const sourceBuffer = segment.buffer;
+
+    // 각 채널별로 복사
+    for (let channel = 0; channel < Math.min(2, sourceBuffer.numberOfChannels); channel++) {
+      const sourceData = sourceBuffer.getChannelData(channel);
+      const targetData = mergedBuffer.getChannelData(channel);
+
+      for (let i = 0; i < sourceData.length && (startSample + i) < totalSamples; i++) {
+        targetData[startSample + i] += sourceData[i];
+      }
+    }
+
+    // 모노 오디오를 스테레오로 복사
+    if (sourceBuffer.numberOfChannels === 1) {
+      const sourceData = sourceBuffer.getChannelData(0);
+      const targetData = mergedBuffer.getChannelData(1);
+
+      for (let i = 0; i < sourceData.length && (startSample + i) < totalSamples; i++) {
+        targetData[startSample + i] += sourceData[i];
+      }
+    }
+  }
+
+  return mergedBuffer;
+}
+
+/**
+ * AudioBuffer를 MediaStreamTrack으로 변환
+ */
+function audioBufferToStream(
+  audioContext: AudioContext,
+  audioBuffer: AudioBuffer
+): MediaStreamAudioDestinationNode {
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+
+  const destination = audioContext.createMediaStreamDestination();
+  source.connect(destination);
+  source.start(0);
+
+  return destination;
+}
+
+/**
  * 총 비디오 길이 계산 (초)
  */
 export function calculateTotalDuration(scenes: Scene[]): number {
@@ -73,11 +191,10 @@ export function getResolutionDimensions(
 }
 
 /**
- * 클라이언트 측 비디오 렌더링
+ * 클라이언트 측 비디오 렌더링 (오디오 지원)
  *
- * 참고: 이 함수는 Remotion의 renderMedia API를 사용합니다.
- * 클라이언트에서 직접 렌더링하는 대신 @remotion/player를 사용하여
- * 미리보기를 제공하고, 실제 렌더링은 서버나 Lambda에서 수행할 수 있습니다.
+ * 참고: 이 함수는 Canvas + MediaRecorder를 사용하여 비디오를 생성합니다.
+ * TTS 나레이션 오디오가 있으면 비디오에 합성됩니다.
  */
 export async function renderVideo(
   scenes: Scene[],
@@ -109,12 +226,11 @@ export async function renderVideo(
 
     onProgress?.({
       status: 'preparing',
-      progress: 10,
+      progress: 5,
       totalFrames,
     });
 
-    // Canvas 기반 간단한 렌더링 (데모용)
-    // 실제 프로덕션에서는 @remotion/lambda 또는 서버사이드 렌더링 사용
+    // Canvas 설정
     const canvas = document.createElement('canvas');
     canvas.width = dimensions.width;
     canvas.height = dimensions.height;
@@ -124,12 +240,78 @@ export async function renderVideo(
       throw new Error('Canvas context를 생성할 수 없습니다');
     }
 
-    // MediaRecorder를 사용한 간단한 비디오 생성
-    const stream = canvas.captureStream(fps);
-    const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: config.format === 'webm' ? 'video/webm' : 'video/mp4',
+    // 오디오 준비 (includeAudio가 true이고 나레이션이 있는 경우)
+    let audioContext: AudioContext | null = null;
+    let audioDestination: MediaStreamAudioDestinationNode | null = null;
+    let audioSource: AudioBufferSourceNode | null = null;
+    const hasNarrationAudio = config.includeAudio !== false &&
+      remotionScenes.some(s => s.narrationAudio?.data);
+
+    if (hasNarrationAudio) {
+      onProgress?.({
+        status: 'preparing',
+        progress: 8,
+        totalFrames,
+      });
+
+      try {
+        audioContext = new AudioContext({ sampleRate: 44100 });
+
+        // 오디오 세그먼트 준비
+        const audioSegments = await prepareAudioSegments(audioContext, remotionScenes);
+
+        if (audioSegments.length > 0) {
+          // 오디오 병합
+          const mergedBuffer = mergeAudioSegments(
+            audioContext,
+            audioSegments,
+            totalDuration,
+            audioContext.sampleRate
+          );
+
+          // MediaStream 생성
+          audioDestination = audioContext.createMediaStreamDestination();
+          audioSource = audioContext.createBufferSource();
+          audioSource.buffer = mergedBuffer;
+          audioSource.connect(audioDestination);
+        }
+      } catch (audioError) {
+        console.warn('오디오 준비 실패, 오디오 없이 진행:', audioError);
+        audioContext = null;
+        audioDestination = null;
+      }
+    }
+
+    onProgress?.({
+      status: 'preparing',
+      progress: 10,
+      totalFrames,
+    });
+
+    // 비디오 스트림 생성
+    const videoStream = canvas.captureStream(fps);
+
+    // 오디오 트랙이 있으면 추가
+    let combinedStream: MediaStream;
+    if (audioDestination) {
+      combinedStream = new MediaStream([
+        ...videoStream.getVideoTracks(),
+        ...audioDestination.stream.getAudioTracks(),
+      ]);
+    } else {
+      combinedStream = videoStream;
+    }
+
+    // MediaRecorder 설정 (오디오 코덱 포함)
+    const mimeType = config.format === 'webm'
+      ? (audioDestination ? 'video/webm;codecs=vp9,opus' : 'video/webm')
+      : 'video/mp4';
+
+    const mediaRecorder = new MediaRecorder(combinedStream, {
+      mimeType,
       videoBitsPerSecond: config.resolution === '4k' ? 20000000 :
                           config.resolution === '1080p' ? 10000000 : 5000000,
+      audioBitsPerSecond: audioDestination ? 128000 : undefined,
     });
 
     const chunks: Blob[] = [];
@@ -141,6 +323,18 @@ export async function renderVideo(
 
     return new Promise((resolve) => {
       mediaRecorder.onstop = () => {
+        // 오디오 컨텍스트 정리
+        if (audioSource) {
+          try {
+            audioSource.stop();
+          } catch (e) {
+            // 이미 중지되었을 수 있음
+          }
+        }
+        if (audioContext) {
+          audioContext.close();
+        }
+
         const blob = new Blob(chunks, { type: `video/${config.format}` });
         const url = URL.createObjectURL(blob);
 
@@ -158,6 +352,11 @@ export async function renderVideo(
           duration: totalDuration,
         });
       };
+
+      // 오디오 재생 시작 (있는 경우)
+      if (audioSource) {
+        audioSource.start(0);
+      }
 
       mediaRecorder.start();
 

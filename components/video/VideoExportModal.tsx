@@ -17,6 +17,7 @@ export interface ExportConfig {
   transitionType: TransitionConfig['type'];
   transitionDuration: number;
   showSubtitles: boolean;
+  includeAudio: boolean;  // TTS 나레이션 오디오 포함 여부
   format: 'mp4' | 'webm';
 }
 
@@ -47,6 +48,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
     transitionType: 'fade',
     transitionDuration: 15,
     showSubtitles: true,
+    includeAudio: true,  // 기본적으로 오디오 포함
     format: 'mp4',
   });
 
@@ -56,6 +58,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
 
   const scenesWithImages = scenes.filter(s => s.generatedImage || s.customImage);
   const totalDuration = scenesWithImages.reduce((acc, s) => acc + s.duration, 0);
+
+  // 나레이션 오디오가 있는 씬 수 확인
+  const scenesWithAudio = scenes.filter(s => s.narrationAudio?.data);
+  const hasNarrationAudio = scenesWithAudio.length > 0;
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
@@ -112,6 +118,12 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
             <div className="flex items-center justify-between text-sm mt-1">
               <span className="text-gray-400">총 재생 시간</span>
               <span className="text-white font-medium">{totalDuration}초</span>
+            </div>
+            <div className="flex items-center justify-between text-sm mt-1">
+              <span className="text-gray-400">나레이션 오디오</span>
+              <span className={`font-medium ${hasNarrationAudio ? 'text-green-400' : 'text-gray-500'}`}>
+                {hasNarrationAudio ? `${scenesWithAudio.length}개 씬` : '없음'}
+              </span>
             </div>
           </div>
 
@@ -220,6 +232,43 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
               />
             </button>
           </div>
+
+          {/* 나레이션 오디오 포함 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-300">
+                나레이션 오디오 포함
+              </label>
+              {!hasNarrationAudio && (
+                <span className="text-xs text-gray-500">(오디오 없음)</span>
+              )}
+            </div>
+            <button
+              onClick={() => updateConfig('includeAudio', !config.includeAudio)}
+              disabled={!hasNarrationAudio}
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                config.includeAudio && hasNarrationAudio ? 'bg-green-600' : 'bg-gray-600'
+              } ${!hasNarrationAudio ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  config.includeAudio && hasNarrationAudio ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* 오디오 포함 안내 */}
+          {hasNarrationAudio && config.includeAudio && (
+            <div className="p-3 bg-green-900/30 border border-green-700/50 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-green-400">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+                <span>{scenesWithAudio.length}개 씬의 TTS 나레이션이 비디오에 포함됩니다</span>
+              </div>
+            </div>
+          )}
 
           {/* 에러 메시지 */}
           {error && (

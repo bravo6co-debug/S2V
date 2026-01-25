@@ -4,6 +4,20 @@ import { ShortFormVideo } from '../../remotion/ShortFormVideo';
 import { scenesToRemotionScenes, type RemotionSceneData, type TransitionConfig } from '../../remotion/types';
 import type { Scene, AspectRatio } from '../../types';
 
+// 볼륨 아이콘
+const VolumeIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+  </svg>
+);
+
+const VolumeMuteIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+  </svg>
+);
+
 interface RemotionPlayerProps {
   scenes: Scene[];
   aspectRatio?: AspectRatio;
@@ -33,6 +47,14 @@ export const RemotionPlayer: React.FC<RemotionPlayerProps> = ({
 }) => {
   const playerRef = React.useRef<PlayerRef>(null);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+
+  // 나레이션 오디오가 있는 씬이 있는지 확인
+  const hasAudio = useMemo(() => {
+    return scenes.some(scene => scene.narrationAudio?.data);
+  }, [scenes]);
 
   // Scene 데이터를 Remotion 형식으로 변환
   const remotionScenes: RemotionSceneData[] = useMemo(() => {
@@ -78,6 +100,24 @@ export const RemotionPlayer: React.FC<RemotionPlayerProps> = ({
     playerRef.current?.seekTo(0);
   }, []);
 
+  // 볼륨 토글
+  const handleToggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+  }, []);
+
+  // 볼륨 변경
+  const handleVolumeChange = useCallback((newVolume: number) => {
+    setVolume(newVolume);
+    if (newVolume === 0) {
+      setIsMuted(true);
+    } else if (isMuted) {
+      setIsMuted(false);
+    }
+  }, [isMuted]);
+
+  // 실제 적용 볼륨 계산
+  const effectiveVolume = isMuted ? 0 : volume;
+
   if (remotionScenes.length === 0) {
     return (
       <div className={`flex items-center justify-center bg-gray-900 rounded-lg ${className}`}>
@@ -117,6 +157,7 @@ export const RemotionPlayer: React.FC<RemotionPlayerProps> = ({
             transitionType,
             transitionDuration,
             showSubtitles,
+            playAudio: !isMuted && volume > 0,
           }}
           durationInFrames={Math.max(1, totalDurationInFrames)}
           compositionWidth={videoDimensions.width}
@@ -176,10 +217,61 @@ export const RemotionPlayer: React.FC<RemotionPlayerProps> = ({
               </svg>
             )}
           </button>
+
+          {/* 볼륨 컨트롤 - 오디오가 있을 때만 표시 */}
+          {hasAudio && (
+            <div
+              className="relative flex items-center"
+              onMouseEnter={() => setShowVolumeSlider(true)}
+              onMouseLeave={() => setShowVolumeSlider(false)}
+            >
+              <button
+                onClick={handleToggleMute}
+                className="p-2 text-gray-400 hover:text-white transition-colors"
+                title={isMuted ? '음소거 해제' : '음소거'}
+              >
+                {isMuted || volume === 0 ? (
+                  <VolumeMuteIcon className="w-5 h-5" />
+                ) : (
+                  <VolumeIcon className="w-5 h-5" />
+                )}
+              </button>
+
+              {/* 볼륨 슬라이더 */}
+              {showVolumeSlider && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-gray-800 rounded-lg shadow-lg">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={isMuted ? 0 : volume}
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                    className="w-20 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    style={{ writingMode: 'horizontal-tb' }}
+                  />
+                  <div className="text-xs text-center text-gray-400 mt-1">
+                    {Math.round((isMuted ? 0 : volume) * 100)}%
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="text-sm text-gray-400">
-          {remotionScenes.length}개 씬 · {Math.round(totalDurationInFrames / fps)}초
+        <div className="flex items-center gap-2">
+          {/* 오디오 상태 표시 */}
+          {hasAudio && (
+            <div className="flex items-center gap-1 text-xs text-green-400" title="나레이션 오디오 있음">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+              </svg>
+              <span>오디오</span>
+            </div>
+          )}
+          <div className="text-sm text-gray-400">
+            {remotionScenes.length}개 씬 · {Math.round(totalDurationInFrames / fps)}초
+          </div>
         </div>
       </div>
     </div>
