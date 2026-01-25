@@ -228,7 +228,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 ### 4. 이미지 프롬프트 작성 규칙 (imagePrompt)
 - 반드시 영어로 작성
-- **중요: 이미지 내에 텍스트, 글자, 문자, 간판, 자막 등을 절대 포함하지 마세요. "no text", "no letters", "no words", "no signs with text" 를 프롬프트에 명시하세요.**
 - 아트 스타일 프리픽스 추가: "${stylePromptText.substring(0, 100)}..."
 ${imagePromptGuidelines}
 

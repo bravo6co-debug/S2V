@@ -14,6 +14,7 @@ import {
     VideoGenerationError,
     withRetry,
 } from './errors';
+import { getAudioDurationFromBase64 } from './audioUtils';
 
 // API base URL - empty for same-origin requests
 const API_BASE = '';
@@ -330,10 +331,22 @@ export const generateNarration = async (
         sceneId,
     }, 'tts');
 
+    // Calculate duration using Mediabunny if not provided by API
+    let durationMs = response.durationMs;
+    if (!durationMs && response.audioData) {
+        try {
+            durationMs = await getAudioDurationFromBase64(response.audioData, response.mimeType);
+        } catch (error) {
+            console.warn('Failed to calculate audio duration with Mediabunny:', error);
+            // Fallback: estimate duration from text length (approx 150ms per character for Korean)
+            durationMs = text.length * 150;
+        }
+    }
+
     return {
         data: response.audioData,
         mimeType: response.mimeType,
-        durationMs: response.durationMs,
+        durationMs,
         voice,
     };
 };

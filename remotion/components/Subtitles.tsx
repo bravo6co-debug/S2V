@@ -55,10 +55,10 @@ export const Subtitles: React.FC<SubtitlesProps> = ({
     );
   }
 
-  // 위치 스타일 (bottom: 10% → 5% 로 더 하단에 위치)
+  // 위치 스타일
   const positionStyles: React.CSSProperties = {
     top: position === 'top' ? '8%' : position === 'center' ? '50%' : undefined,
-    bottom: position === 'bottom' ? '5%' : undefined,
+    bottom: position === 'bottom' ? '10%' : undefined,
     transform: position === 'center' ? 'translateY(-50%)' : undefined,
   };
 
