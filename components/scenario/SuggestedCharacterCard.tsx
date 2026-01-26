@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import type { SuggestedCharacter, ImageData } from '../../types';
+import { compressImageFile } from '../../services/imageCompression';
 
 interface SuggestedCharacterCardProps {
   character: SuggestedCharacter;
@@ -51,16 +52,22 @@ export const SuggestedCharacterCard: React.FC<SuggestedCharacterCardProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && onUpload) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const base64Data = dataUrl.split(',')[1];
-        onUpload({ mimeType: file.type, data: base64Data });
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file);
+        onUpload({ mimeType: compressed.mimeType, data: compressed.data });
+      } catch (error) {
+        // Fallback to uncompressed if compression fails
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const base64Data = dataUrl.split(',')[1];
+          onUpload({ mimeType: file.type, data: base64Data });
+        };
+        reader.readAsDataURL(file);
+      }
     }
     // Reset input
     if (e.target) {

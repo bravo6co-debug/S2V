@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageData } from '../types';
 import { DownloadIcon } from './Icons';
+import { compressImageFile } from '../services/imageCompression';
 
 interface ImageUploaderProps {
     title: string;
@@ -9,15 +10,6 @@ interface ImageUploaderProps {
     value?: ImageData | null;
     onImageClick?: (src: string) => void;
 }
-
-const fileToDataUrl = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-};
 
 export const ImageUploader: React.FC<ImageUploaderProps> = ({ title, onImageChange, isDisabled, value = null, onImageClick }) => {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -40,10 +32,24 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ title, onImageChan
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            const dataUrl = await fileToDataUrl(file);
-            const base64Data = dataUrl.split(',')[1];
-            setImagePreview(dataUrl);
-            onImageChange({ mimeType: file.type, data: base64Data });
+            try {
+                // Compress the image before storing to reduce API payload size
+                const compressed = await compressImageFile(file);
+                const dataUrl = `data:${compressed.mimeType};base64,${compressed.data}`;
+                setImagePreview(dataUrl);
+                onImageChange({ mimeType: compressed.mimeType, data: compressed.data });
+            } catch (error) {
+                console.error('Failed to compress image:', error);
+                // Fallback to original if compression fails
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result as string;
+                    const base64Data = dataUrl.split(',')[1];
+                    setImagePreview(dataUrl);
+                    onImageChange({ mimeType: file.type, data: base64Data });
+                };
+                reader.readAsDataURL(file);
+            }
         }
     };
 
