@@ -28,6 +28,13 @@ async function handleResponse<T>(response: Response, context: string): Promise<T
 
         // Map HTTP status codes to specific error types
         switch (response.status) {
+            case 413:
+                throw new ApiError(
+                    '요청 데이터가 너무 큽니다. 이미지 크기를 줄여주세요.',
+                    'PAYLOAD_TOO_LARGE',
+                    413,
+                    false
+                );
             case 429:
                 throw new QuotaExceededError(errorMessage);
             case 403:

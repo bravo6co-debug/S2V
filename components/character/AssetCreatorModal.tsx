@@ -16,6 +16,7 @@ import {
 import { useProject } from '../../contexts/ProjectContext';
 import { SparklesIcon, ClearIcon, LayersIcon } from '../Icons';
 import { extractCharacterData, generateCharacterPortraits, generatePropImages, generateBackgroundImages } from '../../services/geminiService';
+import { compressImageFile } from '../../services/imageCompression';
 
 type AssetCategory = 'character' | 'prop' | 'background';
 
@@ -28,18 +29,24 @@ interface AssetCreatorModalProps {
   initialName?: string;
 }
 
-// 파일을 데이터 URL로 변환
-const fileToImageData = (file: File): Promise<ImageData> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const base64Data = dataUrl.split(',')[1];
-      resolve({ mimeType: file.type, data: base64Data });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+// 파일을 압축된 ImageData로 변환
+const fileToImageData = async (file: File): Promise<ImageData> => {
+  try {
+    const compressed = await compressImageFile(file);
+    return { mimeType: compressed.mimeType, data: compressed.data };
+  } catch (error) {
+    // Fallback to uncompressed if compression fails
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const base64Data = dataUrl.split(',')[1];
+        resolve({ mimeType: file.type, data: base64Data });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
 };
 
 export const AssetCreatorModal: React.FC<AssetCreatorModalProps> = ({

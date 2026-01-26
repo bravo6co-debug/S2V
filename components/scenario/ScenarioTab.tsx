@@ -3,6 +3,7 @@ import { useProject } from '../../contexts/ProjectContext';
 import { useScenario } from '../../hooks/useScenario';
 import { useQuickCharacterGeneration } from '../../hooks/useQuickCharacterGeneration';
 import { TTSVoice } from '../../services/apiClient';
+import { compressImageFile } from '../../services/imageCompression';
 import {
   ScenarioConfig,
   Scene,
@@ -135,13 +136,19 @@ const SceneCard: React.FC<SceneCardProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const base64Data = dataUrl.split(',')[1];
-        onReplaceImage(scene.id, { mimeType: file.type, data: base64Data });
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file);
+        onReplaceImage(scene.id, { mimeType: compressed.mimeType, data: compressed.data });
+      } catch (error) {
+        // Fallback to uncompressed if compression fails
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const base64Data = dataUrl.split(',')[1];
+          onReplaceImage(scene.id, { mimeType: file.type, data: base64Data });
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
