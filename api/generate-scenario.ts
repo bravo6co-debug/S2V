@@ -118,7 +118,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 10,
             chapters: 1,
             storyStructure: 'Hook → Resolution (간소화된 구조, 임팩트 있는 시작과 끝)',
-            narrationMaxLength: 40,  // 5-10초 씬 → 최대 40자
+            narrationMaxLength: 80,  // 5-10초 씬 → 최대 80자 (TTS 최적화)
         };
     }
     if (duration <= 90) {
@@ -129,7 +129,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 12,
             chapters: 1,
             storyStructure: 'Hook → Setup → Development → Climax → Resolution (표준 5단계 구조)',
-            narrationMaxLength: 50,  // 7-12초 씬 → 최대 50자
+            narrationMaxLength: 100,  // 7-12초 씬 → 최대 100자 (TTS 최적화)
         };
     }
     if (duration <= 180) {
@@ -140,7 +140,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 12,
             chapters: 2,
             storyStructure: '2개 챕터로 구성. 각 챕터별로 미니 기승전결 구조.',
-            narrationMaxLength: 50,  // 7-12초 씬 → 최대 50자
+            narrationMaxLength: 100,  // 7-12초 씬 → 최대 100자 (TTS 최적화)
         };
     }
     if (duration <= 300) {
@@ -151,7 +151,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 12,
             chapters: 3,
             storyStructure: '3개 챕터로 구성. 시작-발전-결말의 대단락 구조.',
-            narrationMaxLength: 55,  // 8-12초 씬 → 최대 55자
+            narrationMaxLength: 110,  // 8-12초 씬 → 최대 110자 (TTS 최적화)
         };
     }
     // 5분 이상 (최대 10분)
@@ -162,7 +162,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
         perSceneMax: 15,
         chapters: 6,
         storyStructure: '4-6개 챕터로 구성. 에피소드형 구조로 각 챕터가 독립적인 미니 스토리.',
-        narrationMaxLength: 60,  // 8-15초 씬 → 최대 60자
+        narrationMaxLength: 120,  // 8-15초 씬 → 최대 120자 (TTS 최적화)
     };
 };
 
@@ -334,7 +334,13 @@ ${hookExamples.map(ex => `- ${ex}`).join('\n')}
 - 시청자에게 직접 말하는 듯한 **2인칭 톤** ("당신도 이런 적 있죠?", "여러분")
 - **감정을 자극하는 구체적 디테일** 포함 (추상적 표현 금지)
 - 마지막 문장은 **여운을 남기거나 행동을 유도**
-- 최대 ${durationConfig.narrationMaxLength}자 이내로 간결하게
+
+### 3-1. TTS 최적화 규칙 (필수!)
+- **[핵심] 씬 길이의 80% 이상을 나레이션이 채워야 함!** (침묵 구간 최소화)
+- **[계산법] 1초 = 약 4-5글자** → ${durationConfig.perSceneMin}초 씬 = 최소 ${durationConfig.perSceneMin * 4}자, ${durationConfig.perSceneMax}초 씬 = 최소 ${durationConfig.perSceneMax * 4}자
+- **짧은 나레이션 절대 금지** - 시청자가 지루해하고 이탈함
+- 최대 ${durationConfig.narrationMaxLength}자까지 풍부하게 작성
+- 감정적 여백이 필요한 Climax 직후만 예외적으로 짧게 허용
 
 ### 4. 각 씬 작성 시 포함할 내용
 - **sceneNumber**: 씬 번호 (1부터 시작)

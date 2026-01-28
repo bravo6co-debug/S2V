@@ -1,6 +1,5 @@
 import React, { useMemo, useEffect, useRef } from 'react';
-import { Audio } from '@remotion/media';
-import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import { Audio, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import type { NarrationAudio as NarrationAudioType } from '../../types';
 
 interface NarrationAudioProps {
