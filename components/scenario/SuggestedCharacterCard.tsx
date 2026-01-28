@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import type { SuggestedCharacter, ImageData } from '../../types';
 import { compressImageFile } from '../../services/imageCompression';
 
@@ -9,6 +9,7 @@ interface SuggestedCharacterCardProps {
   createdThumbnail?: ImageData;
   onQuickGenerate: () => void;
   onUpload?: (imageData: ImageData) => void;
+  onEdit?: (updates: Partial<SuggestedCharacter>) => void;
 }
 
 const CheckCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -42,6 +43,27 @@ const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+// 편집 아이콘
+const PencilIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+  </svg>
+);
+
+// 체크 아이콘 (저장용)
+const CheckIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+  </svg>
+);
+
+// X 아이콘 (취소용)
+const XIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
 export const SuggestedCharacterCard: React.FC<SuggestedCharacterCardProps> = ({
   character,
   isCreated,
@@ -49,8 +71,34 @@ export const SuggestedCharacterCard: React.FC<SuggestedCharacterCardProps> = ({
   createdThumbnail,
   onQuickGenerate,
   onUpload,
+  onEdit,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedName, setEditedName] = useState(character.name);
+  const [editedDescription, setEditedDescription] = useState(character.description);
+
+  const handleStartEdit = () => {
+    setEditedName(character.name);
+    setEditedDescription(character.description);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (onEdit && (editedName !== character.name || editedDescription !== character.description)) {
+      onEdit({
+        name: editedName.trim() || character.name,
+        description: editedDescription.trim() || character.description,
+      });
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditedName(character.name);
+    setEditedDescription(character.description);
+    setIsEditing(false);
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -121,20 +169,71 @@ export const SuggestedCharacterCard: React.FC<SuggestedCharacterCardProps> = ({
 
         {/* 캐릭터 정보 */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="font-medium text-white truncate">{character.name}</h4>
-            <span className="text-xs text-gray-400 px-1.5 py-0.5 bg-gray-600 rounded flex-shrink-0">
-              {character.role}
-            </span>
-          </div>
-          <p className="text-sm text-gray-300 mt-1 line-clamp-2">{character.description}</p>
+          {isEditing ? (
+            // 편집 모드
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                placeholder="캐릭터 이름"
+                className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                autoFocus
+              />
+              <textarea
+                value={editedDescription}
+                onChange={(e) => setEditedDescription(e.target.value)}
+                placeholder="캐릭터 설명 (이미지 생성 프롬프트로 사용됨)"
+                rows={2}
+                className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500 resize-none"
+              />
+            </div>
+          ) : (
+            // 일반 모드
+            <>
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium text-white truncate">{character.name}</h4>
+                <span className="text-xs text-gray-400 px-1.5 py-0.5 bg-gray-600 rounded flex-shrink-0">
+                  {character.role}
+                </span>
+              </div>
+              <p className="text-sm text-gray-300 mt-1 line-clamp-2">{character.description}</p>
+            </>
+          )}
         </div>
 
         {/* 액션 버튼 */}
         <div className="flex-shrink-0">
-          {isCreated ? (
+          {isEditing ? (
+            // 편집 모드 버튼
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleSaveEdit}
+                className="p-1 text-green-400 hover:text-green-300 hover:bg-gray-600 rounded transition-colors"
+                title="저장"
+              >
+                <CheckIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                className="p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-colors"
+                title="취소"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+          ) : isCreated ? (
             <div className="flex items-center gap-1">
               <CheckCircleIcon className="w-5 h-5 text-green-500" />
+              {onEdit && (
+                <button
+                  onClick={handleStartEdit}
+                  className="p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-colors"
+                  title="편집"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                </button>
+              )}
               {createdThumbnail && (
                 <button
                   onClick={handleDownload}
@@ -157,6 +256,15 @@ export const SuggestedCharacterCard: React.FC<SuggestedCharacterCardProps> = ({
               >
                 생성
               </button>
+              {onEdit && (
+                <button
+                  onClick={handleStartEdit}
+                  className="p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-colors"
+                  title="편집"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                </button>
+              )}
               {onUpload && (
                 <>
                   <input

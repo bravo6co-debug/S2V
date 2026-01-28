@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ai, MODELS, Part, sanitizePrompt, setCorsHeaders, getStylePrompt } from './lib/gemini.js';
-import type { GenerateImagesRequest, ImageData, ApiErrorResponse, ImageStyle } from './lib/types.js';
+import type { GenerateImagesRequest, ImageData, ApiErrorResponse, ImageStyle, NamedCharacterImage } from './lib/types.js';
 
 /**
  * Generates a single scene image with character/prop/background references
@@ -8,6 +8,7 @@ import type { GenerateImagesRequest, ImageData, ApiErrorResponse, ImageStyle } f
 const generateOneImage = async (
     prompt: string,
     characterImages: ImageData[],
+    namedCharacters: NamedCharacterImage[] | undefined,
     propImages: ImageData[],
     backgroundImage: ImageData | null,
     addVariation: boolean,
@@ -15,16 +16,31 @@ const generateOneImage = async (
     imageStyle?: ImageStyle
 ): Promise<ImageData> => {
     const parts: Part[] = [];
+    const characterNames: string[] = [];
+    const effectiveCharacterCount = namedCharacters?.length || characterImages.length;
 
-    // Add character images for the model to reference visually
-    characterImages.forEach(img => {
-        parts.push({
-            inlineData: {
-                mimeType: img.mimeType,
-                data: img.data
-            }
+    // 새로운 형식: 이름이 포함된 캐릭터 이미지 사용 (캐릭터 일관성을 위해 필수)
+    if (namedCharacters && namedCharacters.length > 0) {
+        namedCharacters.forEach(char => {
+            characterNames.push(char.name);
+            parts.push({
+                inlineData: {
+                    mimeType: char.image.mimeType,
+                    data: char.image.data
+                }
+            });
         });
-    });
+    } else {
+        // 기존 형식: 이름 없는 캐릭터 이미지 (하위 호환성)
+        characterImages.forEach(img => {
+            parts.push({
+                inlineData: {
+                    mimeType: img.mimeType,
+                    data: img.data
+                }
+            });
+        });
+    }
 
     // Add prop images for the model to reference
     propImages.forEach(img => {
@@ -63,7 +79,7 @@ ${isPhotorealistic ? '**ABSOLUTE RESTRICTIONS:** Avoid any and all artistic styl
     const propReferenceSection = propImages.length > 0 ? `
 ---
 **2. PRODUCT/PROP REFERENCE - HIGH FIDELITY REQUIRED**
-**Reference Images ${characterImages.length + 1} to ${characterImages.length + propImages.length} are PRODUCT PHOTOS**
+**Reference Images ${effectiveCharacterCount + 1} to ${effectiveCharacterCount + propImages.length} are PRODUCT PHOTOS**
 
 **ABSOLUTE REQUIREMENT - THIS IS THE MOST CRITICAL INSTRUCTION FOR PROPS:**
 You MUST include these EXACT products in the generated image with HIGH FIDELITY:
@@ -86,19 +102,45 @@ You MUST include these EXACT products in the generated image with HIGH FIDELITY:
 Use this background image as reference for the scene setting. Match the location, lighting atmosphere, and environmental details.
 ` : '';
 
+    // 캐릭터 레퍼런스 섹션 생성 (이름이 있는 경우 각 캐릭터 명시)
+    let characterReferenceSection = '';
+    if (characterNames.length > 0) {
+        // 이름이 포함된 캐릭터 레퍼런스 (캐릭터 일관성 향상)
+        const characterDescriptions = characterNames.map((name, idx) =>
+            `  - **Image ${idx + 1}**: Character "${name}" - This is the reference photo for the character named "${name}"`
+        ).join('\n');
+
+        characterReferenceSection = `
+---
+**1. CHARACTER REFERENCE - CRITICAL FOR CONSISTENCY**
+**The following ${characterNames.length} image(s) are character reference photos:**
+${characterDescriptions}
+
+**ABSOLUTE REQUIREMENT:**
+- Each character MUST appear EXACTLY as shown in their respective reference photo
+- Match facial features, age, hair style, skin tone, and body type with EXTREME PRECISION
+- When the user prompt mentions a character by name (e.g., "${characterNames[0]}"), use THAT specific character's reference image
+- If multiple characters appear in the scene, ensure EACH character matches their own reference photo - DO NOT mix features between characters
+- **CRITICAL ETHNICITY MANDATE:** All characters in the reference images are ethnically Korean. Your generated image MUST maintain Korean ethnicity for each character.
+- The generated persons must be undeniably the SAME PERSONS as in their respective reference photos.`;
+    } else if (effectiveCharacterCount > 0) {
+        // 이름 없는 캐릭터 레퍼런스 (하위 호환성)
+        characterReferenceSection = `
+---
+**1. CHARACTER REFERENCE (First ${effectiveCharacterCount} image${effectiveCharacterCount > 1 ? 's' : ''})**
+**ACTION:** This is your highest priority. Analyze the provided reference image(s) to understand the character's exact appearance. You MUST replicate their facial features, age, hair style and color, and overall look with extreme precision.
+**CRITICAL ETHNICITY MANDATE:** The character in the reference images is ethnically Korean. Your generated image MUST maintain this Korean ethnicity. This is a strict, non-negotiable rule. The generated person must be undeniably the SAME PERSON as in the reference photos.`;
+    }
+
     const finalPrompt = `
 **AI Model Instructions: Character, Prop & Scene Consistency**
 
 Your primary, non-negotiable goals are:
-1.  **Character Consistency:** Perfectly replicate the person from the character reference images.
+1.  **Character Consistency:** Perfectly replicate EACH person from their corresponding character reference image. Each named character must look exactly like their reference.
 2.  **Prop Consistency:** Props/objects in the scene MUST match the provided prop reference images EXACTLY.
 3.  **Photorealism:** Generate an image that is indistinguishable from a real photograph.
 4.  **Aspect Ratio:** The final image MUST have a ${aspectRatio === '16:9' ? 'wide, horizontal 16:9' : 'tall, vertical 9:16'} aspect ratio.
-
----
-**1. CHARACTER REFERENCE (First ${characterImages.length} image${characterImages.length > 1 ? 's' : ''})**
-**ACTION:** This is your highest priority. Analyze the provided reference image(s) to understand the character's exact appearance. You MUST replicate their facial features, age, hair style and color, and overall look with extreme precision.
-**CRITICAL ETHNICITY MANDATE:** The character in the reference images is ethnically Korean. Your generated image MUST maintain this Korean ethnicity. This is a strict, non-negotiable rule. The generated person must be undeniably the SAME PERSON as in the reference photos.
+${characterReferenceSection}
 ${propReferenceSection}${backgroundReferenceSection}${styleReferencePromptPart}
 ---
 **3. SCENE DESCRIPTION (Source: User's Text Prompt)**
@@ -156,7 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { prompt, characterImages, propImages, backgroundImage, numberOfImages, aspectRatio, imageStyle } = req.body as GenerateImagesRequest;
+        const { prompt, characterImages, namedCharacters, propImages, backgroundImage, numberOfImages, aspectRatio, imageStyle } = req.body as GenerateImagesRequest;
 
         if (!prompt) {
             return res.status(400).json({ error: 'prompt is required' } as ApiErrorResponse);
@@ -171,6 +213,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             generationPromises.push(generateOneImage(
                 sanitizedPrompt,
                 characterImages || [],
+                namedCharacters,  // 이름이 포함된 캐릭터 이미지 전달
                 propImages || [],
                 backgroundImage || null,
                 i > 0,

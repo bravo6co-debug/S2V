@@ -303,6 +303,7 @@ export interface Scene {
   cameraAngle: CameraAngle;
   mood: string;
   imagePrompt: string;
+  characters?: string[];          // 이 씬에 등장하는 캐릭터 이름 목록
   generatedImage?: ImageData;
   customImage?: ImageData;        // 사용자가 교체한 이미지
   imageSource?: 'ai' | 'custom';   // 이미지 소스 구분

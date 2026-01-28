@@ -350,6 +350,7 @@ ${hookExamples.map(ex => `- ${ex}`).join('\n')}
 - **narration**: 내레이션 텍스트 (위 나레이션 작성 핵심 참고)
 - **cameraAngle**: "Close-up", "Extreme Close-up", "Medium shot", "Wide shot", "POV", "Over-the-shoulder", "Low angle", "High angle", "Bird's eye" 중 하나
 - **mood**: 장면의 감정/분위기 (한국어, 2-3단어)
+- **characters**: 이 씬에 등장하는 캐릭터 이름 목록 (suggestedCharacters의 name과 일치해야 함)
 - **imagePrompt**: 이미지 생성용 영어 프롬프트${durationConfig.chapters > 1 ? '\n- **chapterIndex**: 소속 챕터 번호 (0부터 시작)\n- **chapterTitle**: 챕터 제목' : ''}
 
 ### 5. 이미지 프롬프트 작성 규칙 (imagePrompt)
@@ -369,9 +370,14 @@ ${chapterGuidelines}`;
             narration: { type: Type.STRING, description: "내레이션 (한국어)" },
             cameraAngle: { type: Type.STRING, description: "카메라 앵글" },
             mood: { type: Type.STRING, description: "분위기" },
+            characters: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "이 씬에 등장하는 캐릭터 이름 목록"
+            },
             imagePrompt: { type: Type.STRING, description: "이미지 생성 프롬프트 (영어)" },
         };
-        const sceneRequired = ["sceneNumber", "duration", "storyBeat", "visualDescription", "narration", "cameraAngle", "mood", "imagePrompt"];
+        const sceneRequired = ["sceneNumber", "duration", "storyBeat", "visualDescription", "narration", "cameraAngle", "mood", "characters", "imagePrompt"];
 
         if (durationConfig.chapters > 1) {
             sceneProperties.chapterIndex = { type: Type.NUMBER, description: "소속 챕터 번호 (0부터 시작)" };
@@ -433,6 +439,7 @@ ${chapterGuidelines}`;
             narration: scene.narration,
             cameraAngle: scene.cameraAngle as CameraAngle,
             mood: scene.mood,
+            characters: scene.characters || [],
             imagePrompt: scene.imagePrompt,
         }));
 

@@ -46,6 +46,7 @@ export interface Scene {
     narration: string;
     cameraAngle: CameraAngle;
     mood: string;
+    characters?: string[];  // 이 씬에 등장하는 캐릭터 이름 목록
     imagePrompt: string;
     generatedImage?: ImageData;
 }
@@ -121,9 +122,16 @@ export interface GenerateBackgroundsRequest {
     imageStyle?: ImageStyle;
 }
 
+// 캐릭터 이미지와 이름을 함께 전달하기 위한 타입
+export interface NamedCharacterImage {
+    name: string;
+    image: ImageData;
+}
+
 export interface GenerateImagesRequest {
     prompt: string;
     characterImages: ImageData[];
+    namedCharacters?: NamedCharacterImage[];  // 이름이 포함된 캐릭터 이미지 (새로운 형식)
     propImages: ImageData[];
     backgroundImage: ImageData | null;
     numberOfImages: number;

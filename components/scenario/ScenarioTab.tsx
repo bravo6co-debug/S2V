@@ -707,6 +707,7 @@ export const ScenarioTab: React.FC = () => {
     loadScenarioFromFile,
     setScenario,
     clearError,
+    updateSuggestedCharacter,
   } = useScenario();
 
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
@@ -817,14 +818,16 @@ export const ScenarioTab: React.FC = () => {
   };
 
   const handleGenerateSceneImage = async (sceneId: string) => {
-    await generateSceneImage(sceneId, characterImages, propImages, backgroundImage);
+    // 캐릭터 일관성 향상을 위해 전체 캐릭터 목록도 전달
+    await generateSceneImage(sceneId, characterImages, propImages, backgroundImage, characters);
   };
 
   const handleGenerateAllImages = async () => {
+    // 캐릭터 일관성 향상을 위해 전체 캐릭터 목록도 전달
     await generateAllSceneImages(characterImages, propImages, backgroundImage, {
       includeTTS: true,
       ttsVoice: ttsVoice,
-    });
+    }, characters);  // 전체 캐릭터 목록 전달
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1129,6 +1132,7 @@ export const ScenarioTab: React.FC = () => {
                           createdThumbnail={getCreatedCharacterThumbnail(char.name)}
                           onQuickGenerate={() => quickGenerateCharacter(char)}
                           onUpload={(imageData) => handleUploadCharacterImage(char, imageData)}
+                          onEdit={(updates) => updateSuggestedCharacter(char.name, updates)}
                         />
                       ))}
                     </div>

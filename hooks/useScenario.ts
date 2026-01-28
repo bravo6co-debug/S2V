@@ -7,13 +7,14 @@ import {
   ImageData,
   SceneAssetPlacement,
   CharacterAsset,
+  SuggestedCharacter,
 } from '../types';
 import {
   generateScenario as apiGenerateScenario,
   regenerateScene as apiRegenerateScene,
   generateSceneImage as apiGenerateSceneImage,
 } from '../services/geminiService';
-import { generateNarration, TTSVoice } from '../services/apiClient';
+import { generateNarration, TTSVoice, NamedCharacterImage } from '../services/apiClient';
 
 interface GenerateAllOptions {
   includeTTS?: boolean;
@@ -34,6 +35,7 @@ interface UseScenarioReturn {
   // 시나리오 관리
   setScenario: (scenario: Scenario | null) => void;
   generateScenario: (config: ScenarioConfig) => Promise<Scenario>;
+  updateSuggestedCharacter: (characterName: string, updates: Partial<SuggestedCharacter>) => void;
 
   // 씬 관리
   updateScene: (sceneId: string, updates: Partial<Scene>) => void;
@@ -45,18 +47,20 @@ interface UseScenarioReturn {
   // 씬 재생성
   regenerateScene: (sceneId: string, instruction?: string) => Promise<Scene>;
 
-  // 이미지 생성
+  // 이미지 생성 (캐릭터 일관성 향상을 위해 allCharacters 추가)
   generateSceneImage: (
     sceneId: string,
     characterImages: ImageData[],
     propImages: ImageData[],
-    backgroundImage: ImageData | null
+    backgroundImage: ImageData | null,
+    allCharacters?: CharacterAsset[]  // 전체 캐릭터 목록 (씬별 필터링용)
   ) => Promise<void>;
   generateAllSceneImages: (
     characterImages: ImageData[],
     propImages: ImageData[],
     backgroundImage: ImageData | null,
-    options?: GenerateAllOptions
+    options?: GenerateAllOptions,
+    allCharacters?: CharacterAsset[]  // 전체 캐릭터 목록 (씬별 필터링용)
   ) => Promise<void>;
 
   // 이미지 교체
@@ -120,6 +124,44 @@ export function useScenario(): UseScenarioReturn {
       setIsGenerating(false);
     }
   }, [contextSetScenario]);
+
+  // 제안된 캐릭터 수정 (이름, 설명 등)
+  const updateSuggestedCharacter = useCallback((
+    characterName: string,
+    updates: Partial<SuggestedCharacter>
+  ) => {
+    if (!scenario) return;
+
+    const updatedCharacters = scenario.suggestedCharacters.map(char => {
+      if (char.name === characterName) {
+        return { ...char, ...updates };
+      }
+      return char;
+    });
+
+    // 씬의 characters 배열에서도 이름 변경 반영
+    let updatedScenes = scenario.scenes;
+    if (updates.name && updates.name !== characterName) {
+      updatedScenes = scenario.scenes.map(scene => {
+        if (scene.characters && scene.characters.includes(characterName)) {
+          return {
+            ...scene,
+            characters: scene.characters.map(name =>
+              name === characterName ? updates.name! : name
+            ),
+          };
+        }
+        return scene;
+      });
+    }
+
+    contextSetScenario({
+      ...scenario,
+      suggestedCharacters: updatedCharacters,
+      scenes: updatedScenes,
+      updatedAt: Date.now(),
+    });
+  }, [scenario, contextSetScenario]);
 
   // =============================================
   // 씬 관리
@@ -193,11 +235,42 @@ export function useScenario(): UseScenarioReturn {
   // 이미지 생성
   // =============================================
 
+  // 씬에 등장하는 캐릭터만 필터링하여 namedCharacters 형태로 반환
+  const filterCharactersForScene = useCallback((
+    scene: Scene,
+    allCharacters: CharacterAsset[]
+  ): NamedCharacterImage[] => {
+    if (!scene.characters || scene.characters.length === 0) {
+      // 씬에 캐릭터 정보가 없으면 모든 캐릭터 전달 (하위 호환성)
+      return allCharacters.map(c => ({ name: c.name, image: c.image }));
+    }
+
+    // 씬에 등장하는 캐릭터만 필터링
+    const filteredCharacters: NamedCharacterImage[] = [];
+    for (const charName of scene.characters) {
+      // 이름으로 캐릭터 찾기 (대소문자 무시)
+      const character = allCharacters.find(
+        c => c.name.toLowerCase().trim() === charName.toLowerCase().trim()
+      );
+      if (character) {
+        filteredCharacters.push({ name: character.name, image: character.image });
+      }
+    }
+
+    // 매칭된 캐릭터가 없으면 모든 캐릭터 전달
+    if (filteredCharacters.length === 0) {
+      return allCharacters.map(c => ({ name: c.name, image: c.image }));
+    }
+
+    return filteredCharacters;
+  }, []);
+
   const generateSceneImage = useCallback(async (
     sceneId: string,
     characterImages: ImageData[],
     propImages: ImageData[],
-    backgroundImage: ImageData | null
+    backgroundImage: ImageData | null,
+    allCharacters?: CharacterAsset[]  // 전체 캐릭터 목록 (씬별 필터링용)
   ): Promise<void> => {
     if (!scenario) throw new Error('시나리오가 없습니다.');
 
@@ -208,6 +281,11 @@ export function useScenario(): UseScenarioReturn {
     setError(null);
 
     try {
+      // 씬에 등장하는 캐릭터만 필터링 (캐릭터 일관성 향상)
+      const namedCharacters = allCharacters && allCharacters.length > 0
+        ? filterCharactersForScene(scene, allCharacters)
+        : undefined;
+
       // 시나리오의 imageStyle을 전달
       const imageData = await apiGenerateSceneImage(
         scene,
@@ -215,7 +293,8 @@ export function useScenario(): UseScenarioReturn {
         propImages,
         backgroundImage,
         aspectRatio,
-        scenario.imageStyle
+        scenario.imageStyle,
+        namedCharacters  // 이름이 포함된 캐릭터 전달
       );
       contextUpdateScene(sceneId, {
         generatedImage: imageData,
@@ -228,13 +307,14 @@ export function useScenario(): UseScenarioReturn {
     } finally {
       setGeneratingImageSceneId(null);
     }
-  }, [scenario, aspectRatio, contextUpdateScene]);
+  }, [scenario, aspectRatio, contextUpdateScene, filterCharactersForScene]);
 
   const generateAllSceneImages = useCallback(async (
     characterImages: ImageData[],
     propImages: ImageData[],
     backgroundImage: ImageData | null,
-    options?: GenerateAllOptions
+    options?: GenerateAllOptions,
+    allCharacters?: CharacterAsset[]  // 전체 캐릭터 목록 (씬별 필터링용)
   ): Promise<void> => {
     if (!scenario) throw new Error('시나리오가 없습니다.');
 
@@ -255,13 +335,19 @@ export function useScenario(): UseScenarioReturn {
       for (const scene of scenesWithoutImages) {
         setGeneratingImageSceneId(scene.id);
         try {
+          // 씬에 등장하는 캐릭터만 필터링 (캐릭터 일관성 향상)
+          const namedCharacters = allCharacters && allCharacters.length > 0
+            ? filterCharactersForScene(scene, allCharacters)
+            : undefined;
+
           const imageData = await apiGenerateSceneImage(
             scene,
             characterImages,
             propImages,
             backgroundImage,
             aspectRatio,
-            scenario.imageStyle
+            scenario.imageStyle,
+            namedCharacters  // 이름이 포함된 캐릭터 전달
           );
           contextUpdateScene(scene.id, {
             generatedImage: imageData,
@@ -306,7 +392,7 @@ export function useScenario(): UseScenarioReturn {
         setTtsProgress({ current: 0, total: 0 });
       }
     }
-  }, [scenario, aspectRatio, contextUpdateScene]);
+  }, [scenario, aspectRatio, contextUpdateScene, filterCharactersForScene]);
 
   // =============================================
   // 이미지 교체
@@ -447,6 +533,7 @@ export function useScenario(): UseScenarioReturn {
     // 시나리오 관리
     setScenario,
     generateScenario,
+    updateSuggestedCharacter,
 
     // 씬 관리
     updateScene,

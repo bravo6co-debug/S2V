@@ -164,6 +164,12 @@ export const generateBackgroundImages = async (
     return response.images;
 };
 
+// 이름이 포함된 캐릭터 이미지 타입
+export interface NamedCharacterImage {
+    name: string;
+    image: ImageData;
+}
+
 export const generateImages = async (
     prompt: string,
     characterImages: ImageData[],
@@ -171,11 +177,13 @@ export const generateImages = async (
     backgroundImage: ImageData | null,
     numberOfImages: number,
     aspectRatio: AspectRatio,
-    imageStyle?: ImageStyle
+    imageStyle?: ImageStyle,
+    namedCharacters?: NamedCharacterImage[]  // 씬별 캐릭터 이름+이미지 (일관성 향상)
 ): Promise<ImageData[]> => {
     const response = await post<GenerateImagesResponse>('/api/generate-images', {
         prompt,
         characterImages,
+        namedCharacters,  // 이름이 포함된 캐릭터 전달
         propImages,
         backgroundImage,
         numberOfImages,
@@ -240,8 +248,14 @@ export const generateSceneImage = async (
     propImages: ImageData[],
     backgroundImage: ImageData | null,
     aspectRatio: AspectRatio,
-    imageStyle?: ImageStyle
+    imageStyle?: ImageStyle,
+    namedCharacters?: NamedCharacterImage[]  // 씬에 등장하는 캐릭터들 (이름+이미지)
 ): Promise<ImageData> => {
+    // 씬에 등장하는 캐릭터 이름을 프롬프트에 포함
+    const charactersInScene = scene.characters && scene.characters.length > 0
+        ? `**Characters in this scene:** ${scene.characters.join(', ')}`
+        : '';
+
     // Use the generate-images endpoint with the scene's imagePrompt
     const enhancedPrompt = `
 **Scene from a Korean short-form video:**
@@ -249,16 +263,19 @@ ${scene.imagePrompt}
 
 **Camera Angle:** ${scene.cameraAngle}
 **Mood:** ${scene.mood}
+${charactersInScene}
 
 **Style Requirements:**
 - Cinematic, photorealistic quality
 - Korean characters if people are depicted
 - Emotional storytelling through visuals
+- IMPORTANT: Each character must look EXACTLY like their reference photo
 `;
 
     const response = await post<GenerateImagesResponse>('/api/generate-images', {
         prompt: enhancedPrompt,
         characterImages,
+        namedCharacters,  // 이름이 포함된 캐릭터 전달
         propImages,
         backgroundImage,
         numberOfImages: 1,
