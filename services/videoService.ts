@@ -183,6 +183,39 @@ async function preloadSceneImages(
 }
 
 /**
+ * 프레임 번호로부터 해당 씬 인덱스와 씬 내 프레임 위치를 계산
+ * Remotion의 Sequence와 동일한 로직으로 정확한 씬 전환 보장
+ */
+function getSceneAtFrame(
+  remotionScenes: RemotionSceneData[],
+  frame: number,
+  fps: number
+): { sceneIndex: number; frameInScene: number; sceneDurationFrames: number } {
+  let accumulatedFrames = 0;
+
+  for (let i = 0; i < remotionScenes.length; i++) {
+    const sceneDurationFrames = Math.round(remotionScenes[i].duration * fps);
+    if (frame < accumulatedFrames + sceneDurationFrames) {
+      return {
+        sceneIndex: i,
+        frameInScene: frame - accumulatedFrames,
+        sceneDurationFrames,
+      };
+    }
+    accumulatedFrames += sceneDurationFrames;
+  }
+
+  // 마지막 씬 (프레임이 범위를 초과한 경우)
+  const lastIndex = remotionScenes.length - 1;
+  const lastSceneDuration = Math.round(remotionScenes[lastIndex].duration * fps);
+  return {
+    sceneIndex: lastIndex,
+    frameInScene: lastSceneDuration - 1,
+    sceneDurationFrames: lastSceneDuration,
+  };
+}
+
+/**
  * 총 비디오 길이 계산 (초)
  */
 export function calculateTotalDuration(scenes: Scene[]): number {
@@ -389,10 +422,6 @@ export async function renderVideo(
         });
       };
 
-      // 렌더링 시작 시간 및 최대 렌더링 시간 설정
-      const renderStartTime = performance.now();
-      const maxRenderTime = totalDuration * 1000; // ms 단위로 변환
-
       // 오디오 재생 시작 (있는 경우)
       if (audioSource) {
         audioSource.start(0);
@@ -407,24 +436,25 @@ export async function renderVideo(
         currentFrame: 0,
       });
 
-      // 프레임 렌더링 (프리로딩된 이미지 사용으로 비동기 대기 제거)
+      // 프레임 렌더링 - 프레임 번호 기반 동기화 (Remotion Sequence와 동일한 로직)
       let currentFrame = 0;
-      let sceneIndex = 0;
-      let frameInScene = 0;
+      const frameInterval = 1000 / fps; // ms 단위 프레임 간격
 
       const renderFrame = () => {
-        const elapsed = performance.now() - renderStartTime;
-
-        // 총 duration이 지나면 강제 종료 (핵심 수정: 시간 기반 종료)
-        if (elapsed >= maxRenderTime || currentFrame >= totalFrames || sceneIndex >= remotionScenes.length) {
+        // 종료 조건: 프레임 번호 기반 (정확한 프레임 수만큼 렌더링)
+        if (currentFrame >= totalFrames) {
           mediaRecorder.stop();
           return;
         }
 
-        const scene = remotionScenes[sceneIndex];
-        const sceneDurationFrames = Math.round(scene.duration * fps);
+        // 현재 프레임에 해당하는 씬 계산 (Remotion Sequence와 동일한 로직)
+        const { sceneIndex, frameInScene, sceneDurationFrames } = getSceneAtFrame(
+          remotionScenes,
+          currentFrame,
+          fps
+        );
 
-        // 프리로딩된 이미지 사용 (비동기 로딩 제거)
+        const scene = remotionScenes[sceneIndex];
         const img = imageMap.get(scene.id);
 
         if (img) {
@@ -432,7 +462,7 @@ export async function renderVideo(
           ctx.fillStyle = '#000';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          // Ken Burns 효과 계산
+          // Ken Burns 효과 계산 (씬 내 진행률 기반)
           const progress = frameInScene / sceneDurationFrames;
           const scale = 1 + progress * 0.1; // 10% 확대
           const offsetX = progress * 20; // 약간의 이동
@@ -480,16 +510,10 @@ export async function renderVideo(
           }
         }
 
-        frameInScene++;
         currentFrame++;
 
-        if (frameInScene >= sceneDurationFrames) {
-          sceneIndex++;
-          frameInScene = 0;
-        }
-
-        // 진행률 업데이트 (시간 기반)
-        const progressPercent = 20 + (elapsed / maxRenderTime) * 70;
+        // 진행률 업데이트 (프레임 번호 기반)
+        const progressPercent = 20 + (currentFrame / totalFrames) * 70;
         onProgress?.({
           status: 'rendering',
           progress: Math.min(progressPercent, 90),
@@ -497,11 +521,12 @@ export async function renderVideo(
           totalFrames,
         });
 
-        // 다음 프레임 요청 (requestAnimationFrame 사용)
-        requestAnimationFrame(renderFrame);
+        // 고정 간격으로 다음 프레임 호출 (setTimeout 사용으로 프레임 타이밍 보장)
+        setTimeout(renderFrame, frameInterval);
       };
 
-      requestAnimationFrame(renderFrame);
+      // 렌더링 시작
+      renderFrame();
     });
   } catch (error) {
     onProgress?.({
