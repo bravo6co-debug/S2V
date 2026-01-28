@@ -121,7 +121,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 10,
             chapters: 1,
             storyStructure: 'Hook → Resolution (간소화된 구조, 임팩트 있는 시작과 끝)',
-            narrationMaxLength: 38,  // 10초 씬 → 최대 38자
+            narrationMaxLength: 50,  // 10초 씬 → 최대 50자
         };
     }
     if (duration <= 90) {
@@ -132,7 +132,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 10,
             chapters: 1,
             storyStructure: 'Hook → Setup → Development → Climax → Resolution (표준 5단계 구조)',
-            narrationMaxLength: 38,  // 10초 씬 → 최대 38자
+            narrationMaxLength: 50,  // 10초 씬 → 최대 50자
         };
     }
     if (duration <= 180) {
@@ -143,7 +143,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 10,
             chapters: 2,
             storyStructure: '2개 챕터로 구성. 각 챕터별로 미니 기승전결 구조.',
-            narrationMaxLength: 38,  // 10초 씬 → 최대 38자
+            narrationMaxLength: 50,  // 10초 씬 → 최대 50자
         };
     }
     if (duration <= 300) {
@@ -154,7 +154,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
             perSceneMax: 10,
             chapters: 3,
             storyStructure: '3개 챕터로 구성. 시작-발전-결말의 대단락 구조.',
-            narrationMaxLength: 38,  // 10초 씬 → 최대 38자
+            narrationMaxLength: 50,  // 10초 씬 → 최대 50자
         };
     }
     // 5분 이상 (최대 10분)
@@ -165,7 +165,7 @@ const getDurationConfig = (duration: number): DurationConfig => {
         perSceneMax: 10,
         chapters: 6,
         storyStructure: '4-6개 챕터로 구성. 에피소드형 구조로 각 챕터가 독립적인 미니 스토리.',
-        narrationMaxLength: 38,  // 10초 씬 → 최대 38자
+        narrationMaxLength: 50,  // 10초 씬 → 최대 50자
     };
 };
 
@@ -365,13 +365,13 @@ ${hookExamples.map(ex => `- ${ex}`).join('\n')}
 - 마지막 문장은 **여운을 남기거나 행동을 유도**
 
 ### 3-1. TTS 최적화 규칙 (필수! 반드시 준수!)
-- **[핵심] 나레이션은 반드시 30~38자 사이로 작성!** (10초 씬 기준)
-- **[절대 금지] 38자 초과 절대 금지!** 초과 시 TTS가 씬 시간을 넘어감
-- **[절대 금지] 40자 이상 작성하면 영상이 망가짐!**
-- **[계산법]** 한국어 기준 1초 = 약 3.8글자, 10초 씬 = 최대 38자
-- 30자 미만도 금지 (너무 짧으면 침묵 구간 발생)
+- **[핵심] 나레이션은 반드시 40~50자 사이로 작성!** (10초 씬 기준)
+- **[절대 금지] 50자 초과 절대 금지!** 초과 시 TTS가 씬 시간을 넘어감
+- **[절대 금지] 55자 이상 작성하면 영상이 망가짐!**
+- **[계산법]** 한국어 기준 1초 = 약 5글자, 10초 씬 = 최대 50자
+- 35자 미만도 금지 (너무 짧으면 침묵 구간 발생)
 - 핵심 메시지만 간결하게, 불필요한 수식어/부사 제거
-- 예시 (38자): "회장님, 아니 아가씨. 경영 수업은 이제 끝났습니다."
+- 예시 (50자): "회장님, 아니 아가씨. 경영 수업은 이제 끝났습니다. 새로운 시작을 축하드립니다."
 
 ### 4. 각 씬 작성 시 포함할 내용
 - **sceneNumber**: 씬 번호 (1부터 시작)
