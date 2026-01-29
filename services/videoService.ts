@@ -436,16 +436,26 @@ export async function renderVideo(
         currentFrame: 0,
       });
 
-      // 프레임 렌더링 - 프레임 번호 기반 동기화 (Remotion Sequence와 동일한 로직)
+      // 프레임 렌더링 - 시간 기반 동기화
+      // MediaRecorder는 captureStream(fps)를 통해 fps에 맞춰 캡처함
+      // 따라서 렌더링은 실제 경과 시간을 기준으로 해야 정확한 길이의 영상 생성
       let currentFrame = 0;
       const frameInterval = 1000 / fps; // ms 단위 프레임 간격
+      const renderStartTime = performance.now();
 
       const renderFrame = () => {
-        // 종료 조건: 프레임 번호 기반 (정확한 프레임 수만큼 렌더링)
-        if (currentFrame >= totalFrames) {
+        // 실제 경과 시간 기반으로 현재 프레임 계산
+        const elapsed = performance.now() - renderStartTime;
+        const expectedFrame = Math.floor(elapsed / frameInterval);
+
+        // 종료 조건: 총 재생 시간 도달
+        if (elapsed >= totalDuration * 1000 || currentFrame >= totalFrames) {
           mediaRecorder.stop();
           return;
         }
+
+        // 현재 프레임 업데이트 (시간 기반)
+        currentFrame = Math.min(expectedFrame, totalFrames - 1);
 
         // 현재 프레임에 해당하는 씬 계산 (Remotion Sequence와 동일한 로직)
         const { sceneIndex, frameInScene, sceneDurationFrames } = getSceneAtFrame(
@@ -510,10 +520,8 @@ export async function renderVideo(
           }
         }
 
-        currentFrame++;
-
-        // 진행률 업데이트 (프레임 번호 기반)
-        const progressPercent = 20 + (currentFrame / totalFrames) * 70;
+        // 진행률 업데이트 (시간 기반)
+        const progressPercent = 20 + (elapsed / (totalDuration * 1000)) * 70;
         onProgress?.({
           status: 'rendering',
           progress: Math.min(progressPercent, 90),
@@ -521,12 +529,12 @@ export async function renderVideo(
           totalFrames,
         });
 
-        // 고정 간격으로 다음 프레임 호출 (setTimeout 사용으로 프레임 타이밍 보장)
-        setTimeout(renderFrame, frameInterval);
+        // requestAnimationFrame 사용 (브라우저 최적화, 실시간 렌더링)
+        requestAnimationFrame(renderFrame);
       };
 
       // 렌더링 시작
-      renderFrame();
+      requestAnimationFrame(renderFrame);
     });
   } catch (error) {
     onProgress?.({
