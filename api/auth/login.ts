@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders } from '../lib/gemini.js';
 import { generateToken } from '../lib/auth.js';
-import { findUserByEmail, verifyUserPassword } from '../lib/mongodb.js';
+import { findUserByEmail, verifyUserPassword, updateUserLogin } from '../lib/mongodb.js';
 
 /**
  * POST /api/auth/login
@@ -55,6 +55,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 토큰 생성
         const token = generateToken(user._id.toString());
+
+        // 로그인 시간 업데이트
+        await updateUserLogin(user._id.toString());
 
         return res.status(200).json({
             success: true,

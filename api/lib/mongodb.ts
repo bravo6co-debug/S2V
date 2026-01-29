@@ -49,6 +49,11 @@ export interface User {
     isAdmin?: boolean; // 어드민 계정 (환경변수 API 키 사용 가능)
     createdAt: Date;
     updatedAt: Date;
+    // 사용 통계
+    lastLoginAt?: Date; // 마지막 로그인 시간
+    lastActiveAt?: Date; // 마지막 활동 시간
+    totalUsageMinutes?: number; // 총 사용 시간 (분)
+    sessionStartedAt?: Date; // 현재 세션 시작 시간
     // 사용자별 설정
     settings: UserSettings;
 }
@@ -211,6 +216,120 @@ export async function saveUserSettings(userId: string, settings: Partial<UserSet
         return true;
     } catch (error) {
         console.error('Failed to save user settings:', error);
+        return false;
+    }
+}
+
+// ============================================
+// ADMIN FUNCTIONS (관리자 전용)
+// ============================================
+
+/**
+ * 모든 사용자 목록 조회 (관리자 전용)
+ */
+export interface UserListItem {
+    id: string;
+    email: string;
+    isAdmin: boolean;
+    createdAt: Date;
+    lastLoginAt?: Date;
+    lastActiveAt?: Date;
+    totalUsageMinutes: number;
+    hasApiKey: boolean;
+}
+
+export async function getAllUsers(): Promise<UserListItem[]> {
+    const db = await getDatabase();
+    if (!db) return [];
+
+    try {
+        const users = await db.collection<User>('users')
+            .find({})
+            .sort({ createdAt: -1 })
+            .toArray();
+
+        return users.map(user => ({
+            id: user._id.toString(),
+            email: user.email,
+            isAdmin: user.isAdmin || false,
+            createdAt: user.createdAt,
+            lastLoginAt: user.lastLoginAt,
+            lastActiveAt: user.lastActiveAt,
+            totalUsageMinutes: user.totalUsageMinutes || 0,
+            hasApiKey: !!user.settings?.geminiApiKey,
+        }));
+    } catch (error) {
+        console.error('Failed to get all users:', error);
+        return [];
+    }
+}
+
+/**
+ * 로그인 시간 업데이트
+ */
+export async function updateUserLogin(userId: string): Promise<boolean> {
+    const db = await getDatabase();
+    if (!db) return false;
+
+    try {
+        await db.collection<User>('users').updateOne(
+            { _id: new ObjectId(userId) },
+            {
+                $set: {
+                    lastLoginAt: new Date(),
+                    lastActiveAt: new Date(),
+                    sessionStartedAt: new Date(),
+                }
+            }
+        );
+        return true;
+    } catch (error) {
+        console.error('Failed to update user login:', error);
+        return false;
+    }
+}
+
+/**
+ * 사용자 활동 시간 업데이트 (API 호출 시)
+ */
+export async function updateUserActivity(userId: string): Promise<boolean> {
+    const db = await getDatabase();
+    if (!db) return false;
+
+    try {
+        const user = await findUserById(userId);
+        if (!user) return false;
+
+        const now = new Date();
+        let additionalMinutes = 0;
+
+        // 세션 시작 시간이 있고, 30분 이내의 활동이면 사용 시간 누적
+        if (user.sessionStartedAt) {
+            const sessionStart = new Date(user.sessionStartedAt);
+            const lastActive = user.lastActiveAt ? new Date(user.lastActiveAt) : sessionStart;
+            const timeSinceLastActive = (now.getTime() - lastActive.getTime()) / (1000 * 60);
+
+            // 마지막 활동으로부터 30분 이내면 그 시간을 누적
+            if (timeSinceLastActive <= 30) {
+                additionalMinutes = timeSinceLastActive;
+            }
+        }
+
+        await db.collection<User>('users').updateOne(
+            { _id: new ObjectId(userId) },
+            {
+                $set: {
+                    lastActiveAt: now,
+                },
+                $inc: {
+                    totalUsageMinutes: additionalMinutes,
+                }
+            }
+        );
+
+        return true;
+    } catch (error) {
+        console.error('Failed to update user activity:', error);
         return false;
     }
 }
