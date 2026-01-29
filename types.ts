@@ -210,7 +210,7 @@ export interface AnimationConfig {
 export type AspectRatio = '16:9' | '9:16';
 
 // 이미지 스타일 타입
-export type ImageStyle = 'photorealistic' | 'animation' | 'illustration' | 'cinematic' | 'watercolor' | '3d_render';
+export type ImageStyle = 'photorealistic' | 'animation' | 'illustration' | 'cinematic' | 'watercolor' | '3d_render' | 'low_poly' | 'pixel_art' | 'stop_motion' | 'sketch' | 'comic_book' | 'art_movement' | 'motion_graphics';
 
 // 이미지 스타일 옵션
 export const IMAGE_STYLE_OPTIONS: { value: ImageStyle; label: string; emoji: string }[] = [
@@ -220,6 +220,13 @@ export const IMAGE_STYLE_OPTIONS: { value: ImageStyle; label: string; emoji: str
   { value: 'cinematic', label: '시네마틱', emoji: '🎬' },
   { value: 'watercolor', label: '수채화', emoji: '💧' },
   { value: '3d_render', label: '3D 렌더링', emoji: '🎮' },
+  { value: 'low_poly', label: '로우 폴리', emoji: '🔷' },
+  { value: 'pixel_art', label: '픽셀 아트', emoji: '👾' },
+  { value: 'stop_motion', label: '스톱모션', emoji: '🧸' },
+  { value: 'sketch', label: '스케치/드로잉', emoji: '✏️' },
+  { value: 'comic_book', label: '만화책/코믹스', emoji: '💥' },
+  { value: 'art_movement', label: '예술 사조', emoji: '🖼️' },
+  { value: 'motion_graphics', label: '모션 그래픽', emoji: '⚡' },
 ];
 
 export type GeneratedItem = {
