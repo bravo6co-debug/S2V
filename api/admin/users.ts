@@ -20,16 +20,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         // 인증 확인
-        const userId = requireAuth(req);
-        if (!userId) {
+        const auth = requireAuth(req);
+        if (!auth.authenticated || !auth.userId) {
             return res.status(401).json({
                 success: false,
-                error: '인증이 필요합니다.',
+                error: auth.error || '인증이 필요합니다.',
             });
         }
 
         // 관리자 권한 확인
-        const currentUser = await findUserById(userId);
+        const currentUser = await findUserById(auth.userId);
         if (!currentUser?.isAdmin) {
             return res.status(403).json({
                 success: false,

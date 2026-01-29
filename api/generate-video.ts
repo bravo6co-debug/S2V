@@ -19,11 +19,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 인증 체크
-    const userId = requireAuth(req);
-    if (!userId) {
+    const auth = requireAuth(req);
+    if (!auth.authenticated || !auth.userId) {
         return res.status(401).json({
             success: false,
-            error: '로그인이 필요합니다.'
+            error: auth.error || '로그인이 필요합니다.'
         });
     }
 
