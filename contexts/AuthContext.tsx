@@ -8,6 +8,7 @@ interface User {
   id: string;
   email: string;
   hasApiKey: boolean;
+  isAdmin: boolean;
 }
 
 interface AuthContextType {
@@ -17,6 +18,8 @@ interface AuthContextType {
   user: User | null;
   settings: GeminiModelConfig | null;
   hasApiKey: boolean;
+  isAdmin: boolean;
+  canUseApi: boolean; // 어드민이거나 본인 API 키가 있으면 true
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
@@ -50,6 +53,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const isAuthenticated = !!token && !!user;
+  const isAdmin = user?.isAdmin || false;
+  const canUseApi = isAdmin || hasApiKey; // 어드민이거나 본인 API 키가 있으면 사용 가능
 
   // 모달 제어
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
@@ -76,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: data.user.id,
           email: data.user.email,
           hasApiKey: false,
+          isAdmin: data.user.isAdmin || false,
         };
         setToken(data.token);
         setUser(newUser);
@@ -112,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: data.user.id,
           email: data.user.email,
           hasApiKey: data.user.hasApiKey || false,
+          isAdmin: data.user.isAdmin || false,
         };
         setToken(data.token);
         setUser(newUser);
@@ -256,6 +263,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         settings,
         hasApiKey,
+        isAdmin,
+        canUseApi,
         login,
         register,
         logout,

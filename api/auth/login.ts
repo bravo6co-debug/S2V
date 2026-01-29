@@ -63,6 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 id: user._id.toString(),
                 email: user.email,
                 hasApiKey: !!user.settings?.geminiApiKey,
+                isAdmin: user.isAdmin || false,
             },
         });
     } catch (error) {

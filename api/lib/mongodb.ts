@@ -46,6 +46,7 @@ export interface User {
     email: string;
     passwordHash: string;
     salt: string;
+    isAdmin?: boolean; // 어드민 계정 (환경변수 API 키 사용 가능)
     createdAt: Date;
     updatedAt: Date;
     // 사용자별 설정

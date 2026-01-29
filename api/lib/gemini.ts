@@ -4,7 +4,7 @@
  */
 
 import { GoogleGenAI, Modality, Part, Type } from "@google/genai";
-import { getSettings as getSettingsFromDB, type UserSettings } from './mongodb.js';
+import { getSettings as getSettingsFromDB, findUserById, type UserSettings } from './mongodb.js';
 
 // Default API key from environment
 const defaultApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
@@ -55,6 +55,61 @@ export async function getAIClient(): Promise<GoogleGenAI> {
         throw new Error('GEMINI_API_KEY not configured. Please set API key in settings or environment.');
     }
     return new GoogleGenAI({ apiKey });
+}
+
+/**
+ * 사용자별 AI 클라이언트 생성
+ * - 어드민: 환경변수 API 키 사용
+ * - 일반 사용자: 본인의 API 키 사용
+ */
+export async function getAIClientForUser(userId: string): Promise<GoogleGenAI> {
+    const user = await findUserById(userId);
+
+    if (!user) {
+        throw new Error('사용자를 찾을 수 없습니다.');
+    }
+
+    // 어드민은 환경변수 API 키 사용
+    if (user.isAdmin) {
+        if (!defaultApiKey) {
+            throw new Error('서버 API 키가 설정되지 않았습니다.');
+        }
+        return new GoogleGenAI({ apiKey: defaultApiKey });
+    }
+
+    // 일반 사용자는 본인의 API 키 사용
+    const userApiKey = user.settings?.geminiApiKey;
+    if (!userApiKey) {
+        throw new Error('API 키가 설정되지 않았습니다. 설정에서 Gemini API 키를 입력해 주세요.');
+    }
+
+    return new GoogleGenAI({ apiKey: userApiKey });
+}
+
+/**
+ * 사용자가 API를 사용할 수 있는지 확인
+ */
+export async function canUserUseApi(userId: string): Promise<{ canUse: boolean; reason?: string }> {
+    const user = await findUserById(userId);
+
+    if (!user) {
+        return { canUse: false, reason: '사용자를 찾을 수 없습니다.' };
+    }
+
+    // 어드민은 환경변수 API 키가 있으면 사용 가능
+    if (user.isAdmin) {
+        if (defaultApiKey) {
+            return { canUse: true };
+        }
+        return { canUse: false, reason: '서버 API 키가 설정되지 않았습니다.' };
+    }
+
+    // 일반 사용자는 본인 API 키 필요
+    if (user.settings?.geminiApiKey) {
+        return { canUse: true };
+    }
+
+    return { canUse: false, reason: 'API 키가 설정되지 않았습니다. 설정에서 Gemini API 키를 입력해 주세요.' };
 }
 
 /**

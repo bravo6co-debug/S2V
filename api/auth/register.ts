@@ -73,6 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             user: {
                 id: result.userId,
                 email: email.toLowerCase(),
+                isAdmin: false,
             },
         });
     } catch (error) {

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useProject } from '../../contexts/ProjectContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useScenario } from '../../hooks/useScenario';
 import { useQuickCharacterGeneration } from '../../hooks/useQuickCharacterGeneration';
 import { TTSVoice } from '../../services/apiClient';
@@ -20,6 +21,7 @@ import {
 } from '../../types';
 import { SuggestedCharacterCard } from './SuggestedCharacterCard';
 import { AssetManagementSection } from './AssetManagementSection';
+import ApiKeyRequiredModal from '../ApiKeyRequiredModal';
 
 // TTS 음성 옵션
 const TTS_VOICE_OPTIONS: { value: TTSVoice; label: string }[] = [
@@ -701,6 +703,9 @@ export const ScenarioTab: React.FC = () => {
     setImageStyle: setProjectImageStyle,
   } = useProject();
 
+  // 인증 상태 확인
+  const { isAuthenticated, canUseApi } = useAuth();
+
   // Quick character generation hook
   const {
     isGenerating: isQuickGenerating,
@@ -738,7 +743,17 @@ export const ScenarioTab: React.FC = () => {
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
   const [ttsVoice, setTtsVoice] = useState<TTSVoice>('Kore');
   const [isCharacterSectionCollapsed, setIsCharacterSectionCollapsed] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 시나리오 생성 버튼 클릭 핸들러 (인증 체크)
+  const handleOpenGenerator = () => {
+    if (!isAuthenticated || !canUseApi) {
+      setShowApiKeyModal(true);
+      return;
+    }
+    setIsGeneratorOpen(true);
+  };
 
   // 제안된 캐릭터가 이미 생성되었는지 확인
   const isCharacterCreated = (characterName: string): boolean => {
@@ -842,11 +857,21 @@ export const ScenarioTab: React.FC = () => {
   };
 
   const handleGenerateSceneImage = async (sceneId: string) => {
+    // 인증 체크
+    if (!isAuthenticated || !canUseApi) {
+      setShowApiKeyModal(true);
+      return;
+    }
     // 캐릭터 일관성 향상을 위해 전체 캐릭터 목록도 전달
     await generateSceneImage(sceneId, characterImages, propImages, backgroundImage, characters);
   };
 
   const handleGenerateAllImages = async () => {
+    // 인증 체크
+    if (!isAuthenticated || !canUseApi) {
+      setShowApiKeyModal(true);
+      return;
+    }
     // 캐릭터 일관성 향상을 위해 전체 캐릭터 목록도 전달
     await generateAllSceneImages(characterImages, propImages, backgroundImage, {
       includeTTS: true,
@@ -891,7 +916,7 @@ export const ScenarioTab: React.FC = () => {
             </p>
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => setIsGeneratorOpen(true)}
+                onClick={handleOpenGenerator}
                 className="w-full px-6 py-3 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg hover:from-purple-500 hover:to-indigo-500"
               >
                 <SparklesIcon className="w-4 h-4 inline mr-2" />
@@ -1149,7 +1174,7 @@ export const ScenarioTab: React.FC = () => {
                 <span className="hidden sm:inline">저장</span>
               </button>
               <button
-                onClick={() => setIsGeneratorOpen(true)}
+                onClick={handleOpenGenerator}
                 className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600"
               >
                 <SparklesIcon className="w-4 h-4" />
@@ -1265,6 +1290,13 @@ export const ScenarioTab: React.FC = () => {
         onGenerate={handleGenerateScenario}
         isLoading={isGenerating}
         defaultImageStyle={projectImageStyle}
+      />
+
+      {/* API 키 필요 모달 */}
+      <ApiKeyRequiredModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        featureName="시나리오 생성"
       />
     </div>
   );
