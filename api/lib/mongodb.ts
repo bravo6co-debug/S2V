@@ -1,4 +1,5 @@
-import { MongoClient, Db } from 'mongodb';
+import { MongoClient, Db, ObjectId } from 'mongodb';
+import crypto from 'crypto';
 
 const uri = process.env.MONGODB_URI;
 
@@ -36,24 +37,34 @@ export async function getDatabase(): Promise<Db | null> {
     }
 }
 
-/**
- * 사용자 설정 스키마
- */
+// ============================================
+// USER SCHEMA (다중 사용자 지원)
+// ============================================
+
+export interface User {
+    _id: ObjectId;
+    email: string;
+    passwordHash: string;
+    salt: string;
+    createdAt: Date;
+    updatedAt: Date;
+    // 사용자별 설정
+    settings: UserSettings;
+}
+
 export interface UserSettings {
-    _id: string;  // 'admin' 고정
     geminiApiKey?: string;
     textModel: string;
     imageModel: string;
     videoModel: string;
     ttsModel: string;
     ttsVoice: string;
-    updatedAt: Date;
 }
 
 /**
  * 기본 설정값
  */
-export const DEFAULT_SETTINGS: Omit<UserSettings, '_id' | 'updatedAt'> = {
+export const DEFAULT_SETTINGS: UserSettings = {
     geminiApiKey: undefined,
     textModel: 'gemini-2.5-flash',
     imageModel: 'gemini-2.5-flash-image',
@@ -62,72 +73,158 @@ export const DEFAULT_SETTINGS: Omit<UserSettings, '_id' | 'updatedAt'> = {
     ttsVoice: 'Kore',
 };
 
-/**
- * 설정 조회 (없으면 기본값 반환)
- */
-export async function getSettings(): Promise<UserSettings> {
-    const db = await getDatabase();
+// ============================================
+// PASSWORD HASHING
+// ============================================
 
-    if (!db) {
-        return {
-            _id: 'admin',
-            ...DEFAULT_SETTINGS,
-            updatedAt: new Date(),
-        };
-    }
+function hashPassword(password: string, salt: string): string {
+    return crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+}
+
+function generateSalt(): string {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+export function verifyUserPassword(password: string, hash: string, salt: string): boolean {
+    const inputHash = hashPassword(password, salt);
+    return inputHash === hash;
+}
+
+// ============================================
+// USER CRUD
+// ============================================
+
+/**
+ * 이메일로 사용자 조회
+ */
+export async function findUserByEmail(email: string): Promise<User | null> {
+    const db = await getDatabase();
+    if (!db) return null;
 
     try {
-        const settings = await db.collection<UserSettings>('settings').findOne({ _id: 'admin' });
-
-        if (settings) {
-            return settings;
-        }
-
-        // 설정이 없으면 기본값 반환
-        return {
-            _id: 'admin',
-            ...DEFAULT_SETTINGS,
-            updatedAt: new Date(),
-        };
+        return await db.collection<User>('users').findOne({ email: email.toLowerCase() });
     } catch (error) {
-        console.error('Failed to get settings:', error);
-        return {
-            _id: 'admin',
-            ...DEFAULT_SETTINGS,
-            updatedAt: new Date(),
-        };
+        console.error('Failed to find user:', error);
+        return null;
     }
 }
 
 /**
- * 설정 저장
+ * ID로 사용자 조회
  */
-export async function saveSettings(settings: Partial<Omit<UserSettings, '_id' | 'updatedAt'>>): Promise<boolean> {
+export async function findUserById(userId: string): Promise<User | null> {
     const db = await getDatabase();
+    if (!db) return null;
 
+    try {
+        return await db.collection<User>('users').findOne({ _id: new ObjectId(userId) });
+    } catch (error) {
+        console.error('Failed to find user:', error);
+        return null;
+    }
+}
+
+/**
+ * 사용자 생성 (회원가입)
+ */
+export async function createUser(email: string, password: string): Promise<{ success: boolean; userId?: string; error?: string }> {
+    const db = await getDatabase();
     if (!db) {
-        console.error('Database not available');
-        return false;
+        return { success: false, error: '데이터베이스에 연결할 수 없습니다.' };
     }
 
     try {
-        await db.collection<UserSettings>('settings').updateOne(
-            { _id: 'admin' },
-            {
-                $set: {
-                    ...settings,
-                    updatedAt: new Date(),
-                },
-                $setOnInsert: {
-                    _id: 'admin',
-                },
-            },
-            { upsert: true }
+        // 이메일 중복 체크
+        const existingUser = await findUserByEmail(email);
+        if (existingUser) {
+            return { success: false, error: '이미 사용 중인 이메일입니다.' };
+        }
+
+        const salt = generateSalt();
+        const passwordHash = hashPassword(password, salt);
+
+        const result = await db.collection<User>('users').insertOne({
+            _id: new ObjectId(),
+            email: email.toLowerCase(),
+            passwordHash,
+            salt,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            settings: { ...DEFAULT_SETTINGS },
+        });
+
+        return { success: true, userId: result.insertedId.toString() };
+    } catch (error) {
+        console.error('Failed to create user:', error);
+        return { success: false, error: '회원가입 처리 중 오류가 발생했습니다.' };
+    }
+}
+
+/**
+ * 사용자 설정 조회
+ */
+export async function getUserSettings(userId: string): Promise<UserSettings> {
+    const user = await findUserById(userId);
+    if (user?.settings) {
+        return user.settings;
+    }
+    return { ...DEFAULT_SETTINGS };
+}
+
+/**
+ * 사용자 설정 저장
+ */
+export async function saveUserSettings(userId: string, settings: Partial<UserSettings>): Promise<boolean> {
+    const db = await getDatabase();
+    if (!db) return false;
+
+    try {
+        const updateFields: Record<string, unknown> = {};
+
+        if (settings.geminiApiKey !== undefined) {
+            updateFields['settings.geminiApiKey'] = settings.geminiApiKey || undefined;
+        }
+        if (settings.textModel) {
+            updateFields['settings.textModel'] = settings.textModel;
+        }
+        if (settings.imageModel) {
+            updateFields['settings.imageModel'] = settings.imageModel;
+        }
+        if (settings.videoModel) {
+            updateFields['settings.videoModel'] = settings.videoModel;
+        }
+        if (settings.ttsModel) {
+            updateFields['settings.ttsModel'] = settings.ttsModel;
+        }
+        if (settings.ttsVoice) {
+            updateFields['settings.ttsVoice'] = settings.ttsVoice;
+        }
+
+        updateFields['updatedAt'] = new Date();
+
+        await db.collection<User>('users').updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: updateFields }
         );
 
         return true;
     } catch (error) {
-        console.error('Failed to save settings:', error);
+        console.error('Failed to save user settings:', error);
         return false;
     }
+}
+
+// ============================================
+// LEGACY FUNCTIONS (하위 호환성)
+// ============================================
+
+/**
+ * @deprecated Use getUserSettings instead
+ */
+export async function getSettings(): Promise<UserSettings & { _id: string; updatedAt: Date }> {
+    return {
+        _id: 'default',
+        ...DEFAULT_SETTINGS,
+        updatedAt: new Date(),
+    };
 }

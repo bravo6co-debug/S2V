@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders } from '../lib/gemini';
+import { createUser } from '../lib/mongodb';
 import { generateToken } from '../lib/auth';
-import { findUserByEmail, verifyUserPassword } from '../lib/mongodb';
 
 /**
- * POST /api/auth/login
- * 이메일/비밀번호로 로그인하고 JWT 토큰 반환
+ * POST /api/auth/register
+ * 회원가입
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCorsHeaders(res, req.headers.origin as string);
@@ -21,6 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         const { email, password } = req.body;
 
+        // 유효성 검사
         if (!email || typeof email !== 'string') {
             return res.status(400).json({
                 success: false,
@@ -35,41 +36,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
-        // 사용자 조회
-        const user = await findUserByEmail(email);
-
-        if (!user) {
-            return res.status(401).json({
+        // 이메일 형식 검사
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
                 success: false,
-                error: '이메일 또는 비밀번호가 올바르지 않습니다.',
+                error: '올바른 이메일 형식이 아닙니다.',
             });
         }
 
-        // 비밀번호 확인
-        if (!verifyUserPassword(password, user.passwordHash, user.salt)) {
-            return res.status(401).json({
+        // 비밀번호 길이 검사
+        if (password.length < 6) {
+            return res.status(400).json({
                 success: false,
-                error: '이메일 또는 비밀번호가 올바르지 않습니다.',
+                error: '비밀번호는 6자 이상이어야 합니다.',
             });
         }
 
-        // 토큰 생성
-        const token = generateToken(user._id.toString());
+        // 사용자 생성
+        const result = await createUser(email, password);
 
-        return res.status(200).json({
+        if (!result.success) {
+            return res.status(400).json({
+                success: false,
+                error: result.error,
+            });
+        }
+
+        // 자동 로그인을 위한 토큰 생성
+        const token = generateToken(result.userId!);
+
+        return res.status(201).json({
             success: true,
+            message: '회원가입이 완료되었습니다.',
             token,
             user: {
-                id: user._id.toString(),
-                email: user.email,
-                hasApiKey: !!user.settings?.geminiApiKey,
+                id: result.userId,
+                email: email.toLowerCase(),
             },
         });
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('Register error:', error);
         return res.status(500).json({
             success: false,
-            error: '로그인 처리 중 오류가 발생했습니다.',
+            error: '회원가입 처리 중 오류가 발생했습니다.',
         });
     }
 }

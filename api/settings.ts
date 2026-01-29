@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders } from './lib/gemini';
 import { requireAuth } from './lib/auth';
-import { getSettings, saveSettings, DEFAULT_SETTINGS } from './lib/mongodb';
+import { getUserSettings, saveUserSettings, DEFAULT_SETTINGS } from './lib/mongodb';
 
 /**
- * GET /api/settings - 현재 설정 조회 (인증 필요)
- * PUT /api/settings - 설정 저장 (인증 필요)
+ * GET /api/settings - 사용자 설정 조회 (인증 필요)
+ * PUT /api/settings - 사용자 설정 저장 (인증 필요)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCorsHeaders(res, req.headers.origin as string);
@@ -16,14 +16,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 인증 확인
     const auth = requireAuth(req);
-    if (!auth.authenticated) {
+    if (!auth.authenticated || !auth.userId) {
         return res.status(401).json({ error: auth.error });
     }
 
+    const userId = auth.userId;
+
     try {
         if (req.method === 'GET') {
-            // 설정 조회
-            const settings = await getSettings();
+            // 사용자 설정 조회
+            const settings = await getUserSettings(userId);
 
             // API 키는 마스킹해서 반환 (보안)
             const maskedSettings = {
@@ -63,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             // API 키 (빈 문자열이면 기존 값 유지, null이면 삭제)
             if (geminiApiKey !== undefined) {
-                if (geminiApiKey === null) {
+                if (geminiApiKey === null || geminiApiKey === '') {
                     updates.geminiApiKey = undefined;
                 } else if (typeof geminiApiKey === 'string' && geminiApiKey.trim()) {
                     updates.geminiApiKey = geminiApiKey.trim();
@@ -98,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
             }
 
-            const success = await saveSettings(updates);
+            const success = await saveUserSettings(userId, updates);
 
             if (!success) {
                 return res.status(500).json({
@@ -108,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             // 업데이트된 설정 반환
-            const newSettings = await getSettings();
+            const newSettings = await getUserSettings(userId);
             const maskedSettings = {
                 ...newSettings,
                 geminiApiKey: newSettings.geminiApiKey

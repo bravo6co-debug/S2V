@@ -4,34 +4,97 @@ import { DEFAULT_MODEL_CONFIG } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+interface User {
+  id: string;
+  email: string;
+  hasApiKey: boolean;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   token: string | null;
+  user: User | null;
   settings: GeminiModelConfig | null;
   hasApiKey: boolean;
-  login: (password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   loadSettings: () => Promise<void>;
   saveSettings: (settings: Partial<GeminiModelConfig & { geminiApiKey?: string }>) => Promise<{ success: boolean; error?: string }>;
+  openLoginModal: () => void;
+  openSettingsModal: () => void;
+  isLoginModalOpen: boolean;
+  isSettingsModalOpen: boolean;
+  closeLoginModal: () => void;
+  closeSettingsModal: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 's2v_auth_token';
+const USER_KEY = 's2v_user';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem(TOKEN_KEY);
   });
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem(USER_KEY);
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [settings, setSettings] = useState<GeminiModelConfig | null>(null);
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  const isAuthenticated = !!token;
+  const isAuthenticated = !!token && !!user;
+
+  // 모달 제어
+  const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
+  const closeLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
+  const openSettingsModal = useCallback(() => setIsSettingsModalOpen(true), []);
+  const closeSettingsModal = useCallback(() => setIsSettingsModalOpen(false), []);
+
+  // 회원가입
+  const register = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.token) {
+        const newUser: User = {
+          id: data.user.id,
+          email: data.user.email,
+          hasApiKey: false,
+        };
+        setToken(data.token);
+        setUser(newUser);
+        localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+        return { success: true };
+      }
+
+      return { success: false, error: data.error || '회원가입에 실패했습니다.' };
+    } catch (error) {
+      console.error('Register error:', error);
+      return { success: false, error: '서버 연결에 실패했습니다.' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // 로그인
-  const login = useCallback(async (password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -39,14 +102,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await response.json();
 
       if (data.success && data.token) {
+        const newUser: User = {
+          id: data.user.id,
+          email: data.user.email,
+          hasApiKey: data.user.hasApiKey || false,
+        };
         setToken(data.token);
+        setUser(newUser);
+        setHasApiKey(newUser.hasApiKey);
         localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(newUser));
         return { success: true };
       }
 
@@ -62,9 +133,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 로그아웃
   const logout = useCallback(() => {
     setToken(null);
+    setUser(null);
     setSettings(null);
     setHasApiKey(false);
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
   }, []);
 
   // 설정 불러오기
@@ -97,13 +170,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ttsVoice: data.settings.ttsVoice || DEFAULT_MODEL_CONFIG.ttsVoice,
         });
         setHasApiKey(data.settings.hasApiKey || false);
+
+        // user 상태도 업데이트
+        if (user) {
+          const updatedUser = { ...user, hasApiKey: data.settings.hasApiKey || false };
+          setUser(updatedUser);
+          localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+        }
       }
     } catch (error) {
       console.error('Load settings error:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [token, logout]);
+  }, [token, logout, user]);
 
   // 설정 저장
   const saveSettings = useCallback(async (
@@ -140,6 +220,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ttsVoice: data.settings.ttsVoice || DEFAULT_MODEL_CONFIG.ttsVoice,
         });
         setHasApiKey(data.settings.hasApiKey || false);
+
+        // user 상태도 업데이트
+        if (user) {
+          const updatedUser = { ...user, hasApiKey: data.settings.hasApiKey || false };
+          setUser(updatedUser);
+          localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+        }
+
         return { success: true };
       }
 
@@ -150,14 +238,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [token, logout]);
+  }, [token, logout, user]);
 
   // 토큰이 있으면 설정 불러오기
   useEffect(() => {
     if (token) {
       loadSettings();
     }
-  }, [token, loadSettings]);
+  }, [token]); // loadSettings 의존성 제거 (무한 루프 방지)
 
   return (
     <AuthContext.Provider
@@ -165,12 +253,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated,
         isLoading,
         token,
+        user,
         settings,
         hasApiKey,
         login,
+        register,
         logout,
         loadSettings,
         saveSettings,
+        openLoginModal,
+        openSettingsModal,
+        isLoginModalOpen,
+        isSettingsModalOpen,
+        closeLoginModal,
+        closeSettingsModal,
       }}
     >
       {children}
