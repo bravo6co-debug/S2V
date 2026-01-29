@@ -229,7 +229,14 @@ export const STYLE_PROMPTS: Record<ImageStyle, string> = {
     illustration: "Professional digital illustration art style. Clean vector-like artwork with bold colors, stylized proportions, and artistic shading. Modern character design with appealing aesthetics.",
     cinematic: "Cinematic film still from a Hollywood blockbuster. Dramatic lighting with strong contrast, anamorphic lens flare, shallow depth of field. Color graded with teal and orange tones, epic composition.",
     watercolor: "Beautiful traditional watercolor painting style. Soft blended edges, transparent color washes, visible paper texture. Delicate brushstrokes with organic color bleeding and artistic imperfections.",
-    '3d_render': "High-quality 3D rendered character. Pixar/Disney animation style with subsurface scattering on skin, detailed textures, professional studio lighting. Clean, polished CGI look with appealing stylization."
+    '3d_render': "High-quality 3D rendered character. Pixar/Disney animation style with subsurface scattering on skin, detailed textures, professional studio lighting. Clean, polished CGI look with appealing stylization.",
+    low_poly: "Low poly 3D art style with minimal geometric polygons and flat shading. Angular faceted surfaces with simplified color palette, retro minimalist 3D aesthetic. Clean geometric shapes with distinct polygon edges visible.",
+    pixel_art: "Pixel art style with individually placed pixels, 16-bit retro game aesthetic. Limited color palette with crisp pixel-perfect details, sprite art style. Nostalgic 8-bit/16-bit video game look with clean pixel boundaries.",
+    stop_motion: "Stop-motion animation style with handcrafted claymation texture. Visible fingerprints and imperfections on clay-like surfaces, puppet animation feel. Paper cut-out aesthetic with tangible physical material quality and warm lighting.",
+    sketch: "Hand-drawn pencil sketch style with visible pencil strokes and cross-hatching. Raw charcoal drawing aesthetic with rough draft quality, ink illustration linework. Organic line art with artistic imperfections and paper texture.",
+    comic_book: "Bold comic book art style with thick black outlines and vibrant pop art colors. Halftone dot shading, dramatic action poses, graphic novel aesthetic. Dynamic panel-style composition with strong contrast and expressive linework.",
+    art_movement: "Impressionist painting style with visible brushstrokes and vibrant color mixing. Dreamlike surrealist aesthetic blended with post-impressionist techniques. Rich oil painting texture with artistic interpretation, reminiscent of fine art masterworks.",
+    motion_graphics: "Clean modern motion graphics style with flat design elements and vector aesthetics. Material design inspired with geometric shapes, bold typography-friendly composition. Minimalist digital art with smooth gradients and contemporary graphic design feel."
 };
 
 export const getStylePrompt = (style?: ImageStyle): string => {
