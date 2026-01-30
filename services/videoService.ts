@@ -556,7 +556,10 @@ export async function renderVideo(
         });
       };
 
-      // 오디오 재생 시작 (있는 경우)
+      // 오디오 재생 시작 및 시간 기준점 기록
+      // AudioContext.currentTime을 마스터 클럭으로 사용하여
+      // 비디오 프레임이 오디오와 항상 동기화되도록 함
+      const renderStartTime = audioContext ? audioContext.currentTime : performance.now() / 1000;
       if (audioSource) {
         audioSource.start(0);
       }
@@ -570,20 +573,40 @@ export async function renderVideo(
         currentFrame: 0,
       });
 
-      // 프레임 렌더링 - 순차적 프레임 기반
-      // 이전 방식(requestAnimationFrame + 시간 기반)의 문제:
-      // - 탭 비활성화 시 rAF가 ~1fps로 스로틀링 → 캔버스 갱신 정지
-      // - captureStream이 같은 프레임을 반복 캡처 → 정지된 영상 출력
-      // 수정: setTimeout + 순차 프레임 + captureStream(0)/requestFrame()
-      let currentFrame = 0;
-      const frameInterval = 1000 / fps; // ms 단위 프레임 간격
+      // 프레임 렌더링 - 오디오 동기화 기반
+      // 핵심: AudioContext.currentTime을 마스터 클럭으로 사용
+      // 이전 문제: 오디오는 실시간 재생, 비디오는 setTimeout으로 느리게 렌더링
+      //   → 오디오가 비디오보다 앞서가며, 2번째 이후 나레이션이 해당 씬 표시 전에 끝남
+      // 해결: 경과 시간 기준으로 프레임을 계산하여 오디오-비디오 동기화
+      let lastRenderedFrame = -1;
+
+      // 경과 시간 계산 (오디오 동기화 또는 wall clock)
+      const getElapsed = (): number => {
+        if (audioContext && audioContext.state !== 'closed') {
+          return audioContext.currentTime - renderStartTime;
+        }
+        return (performance.now() / 1000) - renderStartTime;
+      };
 
       const renderFrame = () => {
-        // 종료 조건: 모든 프레임 렌더링 완료
-        if (currentFrame >= totalFrames) {
+        const elapsed = getElapsed();
+        const currentFrame = Math.min(Math.floor(elapsed * fps), totalFrames - 1);
+
+        // 종료 조건: 전체 재생 시간 도달
+        if (elapsed >= totalDuration) {
           mediaRecorder.stop();
           return;
         }
+
+        // 이미 렌더링한 프레임이면 다음 프레임 시점까지 대기
+        if (currentFrame <= lastRenderedFrame) {
+          const nextFrameTime = (lastRenderedFrame + 1) / fps;
+          const delay = Math.max(1, (nextFrameTime - elapsed) * 1000);
+          setTimeout(renderFrame, delay);
+          return;
+        }
+
+        lastRenderedFrame = currentFrame;
 
         // 현재 프레임에 해당하는 씬 계산 (Remotion Sequence와 동일한 로직)
         const { sceneIndex, frameInScene, sceneDurationFrames } = getSceneAtFrame(
@@ -700,21 +723,20 @@ export async function renderVideo(
           videoTrack.requestFrame();
         }
 
-        currentFrame++;
-
         // 진행률 업데이트
-        const progressPercent = 20 + (currentFrame / totalFrames) * 70;
+        const progressPercent = 20 + ((currentFrame + 1) / totalFrames) * 70;
         onProgress?.({
           status: 'rendering',
           progress: Math.min(progressPercent, 90),
-          currentFrame,
+          currentFrame: currentFrame + 1,
           totalFrames,
         });
 
-        // setTimeout 사용 (requestAnimationFrame 대신)
-        // rAF는 탭 비활성화 시 스로틀링되어 프레임이 누락됨
-        // setTimeout은 더 안정적으로 프레임 간격을 유지
-        setTimeout(renderFrame, frameInterval);
+        // 다음 프레임 시점에 맞춰 스케줄링 (오디오 동기화)
+        const nextElapsed = getElapsed();
+        const nextFrameTime = (currentFrame + 1) / fps;
+        const delay = Math.max(1, (nextFrameTime - nextElapsed) * 1000);
+        setTimeout(renderFrame, delay);
       };
 
       // 렌더링 시작
