@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useProject } from '../../contexts/ProjectContext';
 import { useVideo } from '../../hooks/useVideo';
-import { useScenario } from '../../hooks/useScenario';
 import { VideoClip, Scene, NarrationAudio } from '../../types';
 import { checkVeoApiAvailability } from '../../services/geminiService';
 import { generateNarration, type TTSVoice } from '../../services/apiClient';
@@ -15,6 +14,9 @@ import {
   ClearIcon,
   LayersIcon,
 } from '../Icons';
+
+// 비디오 소스 타입 (어떤 시나리오를 사용하는지)
+type VideoSource = 'scenario' | 'ad';
 
 // 비디오 생성 모드
 type VideoMode = 'remotion' | 'veo';
@@ -527,8 +529,23 @@ const SceneImportModal: React.FC<SceneImportModalProps> = ({
 
 // 메인 VideoTab 컴포넌트
 export const VideoTab: React.FC = () => {
-  const { characters, activeCharacterIds, updateScene, aspectRatio } = useProject();
-  const { scenario } = useScenario();
+  const { characters, activeCharacterIds, updateScene, updateAdScene, aspectRatio, scenario, adScenario } = useProject();
+
+  // 비디오 소스 자동 결정 (어떤 시나리오를 사용하는지)
+  const [videoSource, setVideoSource] = useState<VideoSource>(() => {
+    const adHasImages = adScenario?.scenes.some(s => s.generatedImage || s.customImage);
+    const stdHasImages = scenario?.scenes.some(s => s.generatedImage || s.customImage);
+    if (adHasImages && !stdHasImages) return 'ad';
+    return 'scenario';
+  });
+
+  // 활성 시나리오 (videoSource에 따라 선택)
+  const activeScenario = videoSource === 'ad' ? adScenario : scenario;
+  const activeUpdateScene = videoSource === 'ad' ? updateAdScene : updateScene;
+
+  // 소스 변경 시 previewAudios 초기화 필요
+  const prevSourceRef = useRef(videoSource);
+
   const {
     timeline,
     isGenerating,
@@ -571,16 +588,24 @@ export const VideoTab: React.FC = () => {
   const [generatingPreviewSceneId, setGeneratingPreviewSceneId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // 소스 변경 시 previewAudios 초기화
+  useEffect(() => {
+    if (prevSourceRef.current !== videoSource) {
+      setPreviewAudios(new Map());
+      prevSourceRef.current = videoSource;
+    }
+  }, [videoSource]);
+
   // Remotion 비디오 내보내기
   const handleRemotionExport = useCallback(async (config: ExportConfig) => {
-    if (!scenario) return;
+    if (!activeScenario) return;
 
     setIsRendering(true);
     setRenderProgress(0);
 
     try {
       // previewAudios에 있는 오디오를 씬에 병합
-      const scenesWithAudio = scenario.scenes.map(scene => {
+      const scenesWithAudio = activeScenario.scenes.map(scene => {
         // 이미 씬에 오디오가 있으면 그대로 사용, 없으면 previewAudios에서 가져옴
         const previewAudio = previewAudios.get(scene.id);
         if (!scene.narrationAudio && previewAudio) {
@@ -598,7 +623,7 @@ export const VideoTab: React.FC = () => {
       );
 
       if (result.success && result.videoBlob) {
-        const filename = `${scenario.title || 'video'}_${Date.now()}.${config.format}`;
+        const filename = `${activeScenario.title || 'video'}_${Date.now()}.${config.format}`;
         downloadVideo(result.videoBlob, filename);
       } else {
         throw new Error(result.error || '렌더링 실패');
@@ -610,27 +635,27 @@ export const VideoTab: React.FC = () => {
       setIsRendering(false);
       setRenderProgress(0);
     }
-  }, [scenario, previewAudios]);
+  }, [activeScenario, previewAudios]);
 
   // 씬의 TTS 상태 확인
   const getTTSStatus = useCallback(() => {
-    if (!scenario) return { generated: 0, total: 0 };
-    const scenesWithNarration = scenario.scenes.filter(s => s.narration?.trim());
+    if (!activeScenario) return { generated: 0, total: 0 };
+    const scenesWithNarration = activeScenario.scenes.filter(s => s.narration?.trim());
     const scenesWithAudio = scenesWithNarration.filter(s => s.narrationAudio);
     return { generated: scenesWithAudio.length, total: scenesWithNarration.length };
-  }, [scenario]);
+  }, [activeScenario]);
 
   // 미리보기용 씬 데이터 (previewAudios 병합)
   const scenesForPreview = useMemo(() => {
-    if (!scenario?.scenes) return [];
-    return scenario.scenes.map(scene => {
+    if (!activeScenario?.scenes) return [];
+    return activeScenario.scenes.map(scene => {
       const previewAudio = previewAudios.get(scene.id);
       if (!scene.narrationAudio && previewAudio) {
         return { ...scene, narrationAudio: previewAudio };
       }
       return scene;
     });
-  }, [scenario?.scenes, previewAudios]);
+  }, [activeScenario?.scenes, previewAudios]);
 
   // 나레이션 미리듣기 생성
   const handleGeneratePreview = useCallback(async (sceneId: string, narrationText: string) => {
@@ -684,7 +709,7 @@ export const VideoTab: React.FC = () => {
     const audio = previewAudios.get(sceneId);
     if (!audio) return;
 
-    updateScene(sceneId, { narrationAudio: audio });
+    activeUpdateScene(sceneId, { narrationAudio: audio });
 
     // 적용 후 미리듣기에서 제거
     setPreviewAudios(prev => {
@@ -701,7 +726,7 @@ export const VideoTab: React.FC = () => {
       }
       setPreviewingSceneId(null);
     }
-  }, [previewAudios, previewingSceneId, updateScene]);
+  }, [previewAudios, previewingSceneId, activeUpdateScene]);
 
   // 컴포넌트 언마운트 시 오디오 정리
   useEffect(() => {
@@ -790,8 +815,8 @@ export const VideoTab: React.FC = () => {
   const completedClips = clips.filter(c => c.generatedVideo).length;
 
   const handleImportScenes = (sceneIds: string[]) => {
-    if (scenario) {
-      addClipsFromScenes(scenario.scenes.filter(s => sceneIds.includes(s.id)));
+    if (activeScenario) {
+      addClipsFromScenes(activeScenario.scenes.filter(s => sceneIds.includes(s.id)));
     }
   };
 
@@ -824,7 +849,7 @@ export const VideoTab: React.FC = () => {
             <h2 className="text-base sm:text-xl font-bold text-white">영상 제작</h2>
             <p className="text-xs sm:text-sm text-gray-400 mt-0.5 sm:mt-1 truncate">
               {videoMode === 'remotion'
-                ? `${scenario?.scenes.filter(s => s.generatedImage || s.customImage).length || 0}개 씬 · ${scenario?.scenes.reduce((acc, s) => acc + (s.generatedImage || s.customImage ? s.duration : 0), 0) || 0}초`
+                ? `${activeScenario?.scenes.filter(s => s.generatedImage || s.customImage).length || 0}개 씬 · ${activeScenario?.scenes.reduce((acc, s) => acc + (s.generatedImage || s.customImage ? s.duration : 0), 0) || 0}초`
                 : `${clips.length}개 클립 · ${totalDuration}초`}
             </p>
           </div>
@@ -832,7 +857,7 @@ export const VideoTab: React.FC = () => {
             {videoMode === 'remotion' ? (
               <button
                 onClick={() => setIsExportModalOpen(true)}
-                disabled={!scenario || scenario.scenes.every(s => !s.generatedImage && !s.customImage)}
+                disabled={!activeScenario || activeScenario.scenes.every(s => !s.generatedImage && !s.customImage)}
                 className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-500 hover:to-emerald-500 disabled:opacity-50 min-h-[44px]"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -843,7 +868,7 @@ export const VideoTab: React.FC = () => {
               </button>
             ) : (
               <>
-                {scenario && scenario.scenes.some(s => s.generatedImage || s.customImage) && (
+                {activeScenario && activeScenario.scenes.some(s => s.generatedImage || s.customImage) && (
                   <button
                     onClick={() => setIsImportModalOpen(true)}
                     className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 min-h-[44px]"
@@ -896,6 +921,47 @@ export const VideoTab: React.FC = () => {
             <span className="text-xs text-green-400">99% 비용 절감</span>
           )}
         </div>
+
+        {/* 시나리오 소스 선택 (두 시나리오 모두 존재할 때) */}
+        {scenario && adScenario && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">소스:</span>
+            <div className="flex bg-gray-900 rounded-lg p-1">
+              <button
+                onClick={() => setVideoSource('scenario')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
+                  videoSource === 'scenario'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                시나리오
+              </button>
+              <button
+                onClick={() => setVideoSource('ad')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
+                  videoSource === 'ad'
+                    ? 'bg-orange-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                광고 (30초)
+              </button>
+            </div>
+            {videoSource === 'ad' && (
+              <span className="text-xs text-orange-400">{adScenario.productName}</span>
+            )}
+          </div>
+        )}
+
+        {/* 광고 시나리오만 있을 때 표시 */}
+        {!scenario && adScenario && videoSource === 'ad' && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-600/20 text-orange-400 rounded">
+              광고 · {adScenario.productName}
+            </span>
+          </div>
+        )}
 
         {/* Veo API 상태 표시 (Veo 모드일 때만) */}
         {videoMode === 'veo' && (
@@ -950,7 +1016,7 @@ export const VideoTab: React.FC = () => {
         {videoMode === 'remotion' ? (
           /* Remotion 모드 */
           <div className="flex-grow flex flex-col items-center justify-center overflow-y-auto">
-            {scenario && scenario.scenes.some(s => s.generatedImage || s.customImage) ? (
+            {activeScenario && activeScenario.scenes.some(s => s.generatedImage || s.customImage) ? (
               <div className="w-full max-w-sm sm:max-w-md mx-auto px-2 sm:px-0">
                 <RemotionPlayer
                   scenes={scenesForPreview}
@@ -994,7 +1060,7 @@ export const VideoTab: React.FC = () => {
                   {/* 씬별 나레이션 리스트 */}
                   {getTTSStatus().total > 0 ? (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {scenario?.scenes.filter(s => s.narration?.trim()).map((scene) => {
+                      {activeScenario?.scenes.filter(s => s.narration?.trim()).map((scene) => {
                         const hasPreview = previewAudios.has(scene.id);
                         const hasApplied = !!scene.narrationAudio;
                         const isGenerating = generatingPreviewSceneId === scene.id;
@@ -1106,7 +1172,7 @@ export const VideoTab: React.FC = () => {
                 </p>
 
                 {/* TTS 나레이션 섹션 - 이미지 없이도 사용 가능 */}
-                {scenario && getTTSStatus().total > 0 && (
+                {activeScenario && getTTSStatus().total > 0 && (
                   <div className="mt-5 sm:mt-6 p-3 sm:p-4 bg-gray-800/50 rounded-lg border border-gray-700 text-left">
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <div className="flex items-center gap-2">
@@ -1138,7 +1204,7 @@ export const VideoTab: React.FC = () => {
 
                     {/* 씬별 나레이션 리스트 */}
                     <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {scenario.scenes.filter(s => s.narration?.trim()).map((scene) => {
+                      {activeScenario.scenes.filter(s => s.narration?.trim()).map((scene) => {
                         const hasPreview = previewAudios.has(scene.id);
                         const hasApplied = !!scene.narrationAudio;
                         const isGenerating = generatingPreviewSceneId === scene.id;
@@ -1206,7 +1272,7 @@ export const VideoTab: React.FC = () => {
               <p className="text-gray-400 text-xs sm:text-sm mb-6">
                 시나리오에서 이미지가 있는 씬을 가져와 AI 영상 클립을 생성합니다.
               </p>
-              {scenario && scenario.scenes.some(s => s.generatedImage || s.customImage) ? (
+              {activeScenario && activeScenario.scenes.some(s => s.generatedImage || s.customImage) ? (
                 <button
                   onClick={() => setIsImportModalOpen(true)}
                   className="px-5 sm:px-6 py-3 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-500 hover:to-indigo-500 min-h-[44px]"
@@ -1350,11 +1416,11 @@ export const VideoTab: React.FC = () => {
       </div>
 
       {/* Scene Import Modal */}
-      {scenario && (
+      {activeScenario && (
         <SceneImportModal
           isOpen={isImportModalOpen}
           onClose={() => setIsImportModalOpen(false)}
-          scenes={scenario.scenes}
+          scenes={activeScenario.scenes}
           onImport={handleImportScenes}
         />
       )}
@@ -1370,11 +1436,11 @@ export const VideoTab: React.FC = () => {
       )}
 
       {/* Remotion Export Modal */}
-      {scenario && (
+      {activeScenario && (
         <VideoExportModal
           isOpen={isExportModalOpen}
           onClose={() => setIsExportModalOpen(false)}
-          scenes={scenario.scenes}
+          scenes={activeScenario.scenes}
           onExport={handleRemotionExport}
         />
       )}
