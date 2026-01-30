@@ -24,6 +24,7 @@ export {
 
     // Scenario generation
     generateScenario,
+    generateAdScenario,
     regenerateScene,
     generateSceneImage,
 

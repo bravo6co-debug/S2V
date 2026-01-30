@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { TabNavigation, TabNavigationCompact } from './components/common/TabNavigation';
 import { ScenarioTab } from './components/scenario/ScenarioTab';
 import { VideoTab } from './components/video/VideoTab';
+import AdTab from './components/ad/AdTab';
 import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode, IMAGE_STYLE_OPTIONS, ImageStyle } from './types';
 import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
 import { ResultDisplay } from './components/ResultDisplay';
@@ -408,6 +409,8 @@ const AppContent: React.FC = () => {
         switch (currentTab) {
             case 'scenario':
                 return <ScenarioTab />;
+            case 'ad':
+                return <AdTab />;
             case 'video':
                 return <VideoTab />;
             default:

@@ -4,7 +4,7 @@
  * to keep API keys secure on the server side.
  */
 
-import { Character, ImageData, AspectRatio, ScenarioConfig, Scenario, Scene, ImageStyle, NarrationAudio } from '../types';
+import { Character, ImageData, AspectRatio, ScenarioConfig, AdScenarioConfig, Scenario, Scene, ImageStyle, NarrationAudio } from '../types';
 import {
     ApiError,
     QuotaExceededError,
@@ -239,6 +239,12 @@ interface GenerateScenarioResponse {
 
 export const generateScenario = async (config: ScenarioConfig): Promise<Scenario> => {
     const response = await post<GenerateScenarioResponse>('/api/generate-scenario', { config }, 'scenario');
+    return response.scenario;
+};
+
+// 광고 시나리오 생성
+export const generateAdScenario = async (config: AdScenarioConfig): Promise<Scenario> => {
+    const response = await post<GenerateScenarioResponse>('/api/generate-ad-scenario', { config }, 'scenario');
     return response.scenario;
 };
 

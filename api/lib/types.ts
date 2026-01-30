@@ -80,8 +80,21 @@ export interface Scenario {
     }>;
     scenes: Scene[];
     chapters?: ScenarioChapter[];
+    // 광고 시나리오 전용 필드
+    scenarioType?: 'standard' | 'ad';
+    productName?: string;
+    productFeatures?: string;
+    productImage?: ImageData;
     createdAt: number;
     updatedAt: number;
+}
+
+// 광고 시나리오 설정
+export interface AdScenarioConfig {
+    productName: string;
+    productFeatures: string;
+    tone?: ScenarioTone;
+    imageStyle?: ImageStyle;
 }
 
 export interface VideoGenerationResult {
@@ -151,6 +164,10 @@ export interface EditImageRequest {
 
 export interface GenerateScenarioRequest {
     config: ScenarioConfig;
+}
+
+export interface GenerateAdScenarioRequest {
+    config: AdScenarioConfig;
 }
 
 export interface RegenerateSceneRequest {

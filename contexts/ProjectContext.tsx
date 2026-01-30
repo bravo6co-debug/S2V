@@ -49,6 +49,11 @@ interface ProjectContextValue {
   removeScene: (sceneId: string) => void;
   reorderScenes: (sceneIds: string[]) => void;
 
+  // 광고 시나리오 (별도 상태)
+  adScenario: Scenario | null;
+  setAdScenario: (scenario: Scenario | null) => void;
+  updateAdScene: (sceneId: string, updates: Partial<Scene>) => void;
+
   // 타임라인
   timeline: VideoTimeline | null;
   setTimeline: (timeline: VideoTimeline | null) => void;
@@ -103,6 +108,9 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   // 시나리오 상태
   const [scenario, setScenarioState] = useState<Scenario | null>(null);
 
+  // 광고 시나리오 상태 (별도)
+  const [adScenario, setAdScenarioState] = useState<Scenario | null>(null);
+
   // 타임라인 상태
   const [timeline, setTimelineState] = useState<VideoTimeline | null>(null);
 
@@ -126,6 +134,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       props: [],
       backgrounds: [],
       scenario: null,
+      adScenario: null,
       videoTimeline: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -135,6 +144,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setProps([]);
     setBackgrounds([]);
     setScenarioState(null);
+    setAdScenarioState(null);
     setTimelineState(null);
     setActiveCharacterIds([]);
     setActivePropIds([]);
@@ -148,6 +158,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setProps(projectData.props);
     setBackgrounds(projectData.backgrounds);
     setScenarioState(projectData.scenario);
+    setAdScenarioState(projectData.adScenario ?? null);
     setTimelineState(projectData.videoTimeline);
     setIsDirty(false);
   }, []);
@@ -161,6 +172,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       props,
       backgrounds,
       scenario,
+      adScenario,
       videoTimeline: timeline,
       updatedAt: Date.now(),
     };
@@ -168,7 +180,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setProject(savedProject);
     setIsDirty(false);
     return savedProject;
-  }, [project, characters, props, backgrounds, scenario, timeline]);
+  }, [project, characters, props, backgrounds, scenario, adScenario, timeline]);
 
   // =============================================
   // 캐릭터 관리
@@ -326,6 +338,29 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   }, []);
 
   // =============================================
+  // 광고 시나리오 관리 (별도 상태)
+  // =============================================
+
+  const setAdScenario = useCallback((newScenario: Scenario | null) => {
+    setAdScenarioState(newScenario);
+    setIsDirty(true);
+  }, []);
+
+  const updateAdScene = useCallback((sceneId: string, updates: Partial<Scene>) => {
+    setAdScenarioState(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        scenes: prev.scenes.map(s =>
+          s.id === sceneId ? { ...s, ...updates } : s
+        ),
+        updatedAt: Date.now(),
+      };
+    });
+    setIsDirty(true);
+  }, []);
+
+  // =============================================
   // 타임라인 관리
   // =============================================
 
@@ -376,6 +411,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
         props,
         backgrounds,
         scenario,
+        adScenario,
         videoTimeline: timeline,
         updatedAt: Date.now(),
       };
@@ -388,7 +424,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     }, 2000); // 2초 디바운스
 
     return () => clearTimeout(timer);
-  }, [project, characters, props, backgrounds, scenario, timeline, isDirty]);
+  }, [project, characters, props, backgrounds, scenario, adScenario, timeline, isDirty]);
 
   // =============================================
   // Context Value
@@ -426,6 +462,11 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     addScene,
     removeScene,
     reorderScenes,
+
+    // 광고 시나리오 (별도)
+    adScenario,
+    setAdScenario,
+    updateAdScene,
 
     // 타임라인
     timeline,

@@ -122,8 +122,8 @@ export interface SceneAssets {
 // 앱 모드 (App Mode)
 // =============================================
 
-// 2탭 구조 앱 모드 (시나리오에 에셋 관리 통합)
-export type AppMode = 'scenario' | 'video';
+// 3탭 구조 앱 모드 (시나리오, 광고, 영상 제작)
+export type AppMode = 'scenario' | 'video' | 'ad';
 
 // =============================================
 // 프로젝트 상태 (Project State)
@@ -137,6 +137,7 @@ export interface Project {
   props: PropAsset[];
   backgrounds: BackgroundAsset[];
   scenario: Scenario | null;
+  adScenario: Scenario | null;
   videoTimeline: VideoTimeline | null;
   createdAt: number;
   updatedAt: number;
@@ -341,8 +342,21 @@ export interface Scenario {
   suggestedCharacters: SuggestedCharacter[];
   scenes: Scene[];
   chapters?: ScenarioChapter[];   // 장편용 챕터 구조 (3분+ 시나리오)
+  // 광고 시나리오 전용 필드
+  scenarioType?: 'standard' | 'ad';      // 시나리오 유형
+  productName?: string;                   // 상품명
+  productFeatures?: string;               // 상품 특징
+  productImage?: ImageData;               // 상품 이미지 (참조용)
   createdAt: number;
   updatedAt: number;
+}
+
+// 광고 시나리오 설정
+export interface AdScenarioConfig {
+  productName: string;
+  productFeatures: string;
+  tone?: ScenarioTone;
+  imageStyle?: ImageStyle;
 }
 
 // =============================================
