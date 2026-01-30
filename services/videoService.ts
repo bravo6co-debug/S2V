@@ -487,8 +487,13 @@ export async function renderVideo(
       totalFrames,
     });
 
-    // 비디오 스트림 생성
-    const videoStream = canvas.captureStream(fps);
+    // 비디오 스트림 생성 (수동 프레임 캡처 모드)
+    // captureStream(0)은 자동 캡처를 비활성화하고,
+    // requestFrame() 호출 시에만 프레임을 캡처합니다.
+    // 이는 requestAnimationFrame 스로틀링 문제를 방지합니다.
+    const videoStream = canvas.captureStream(0);
+    const videoTrack = videoStream.getVideoTracks()[0] as any;
+    const canRequestFrame = videoTrack && typeof videoTrack.requestFrame === 'function';
 
     // 오디오 트랙이 있으면 추가
     let combinedStream: MediaStream;
@@ -565,26 +570,20 @@ export async function renderVideo(
         currentFrame: 0,
       });
 
-      // 프레임 렌더링 - 시간 기반 동기화
-      // MediaRecorder는 captureStream(fps)를 통해 fps에 맞춰 캡처함
-      // 따라서 렌더링은 실제 경과 시간을 기준으로 해야 정확한 길이의 영상 생성
+      // 프레임 렌더링 - 순차적 프레임 기반
+      // 이전 방식(requestAnimationFrame + 시간 기반)의 문제:
+      // - 탭 비활성화 시 rAF가 ~1fps로 스로틀링 → 캔버스 갱신 정지
+      // - captureStream이 같은 프레임을 반복 캡처 → 정지된 영상 출력
+      // 수정: setTimeout + 순차 프레임 + captureStream(0)/requestFrame()
       let currentFrame = 0;
       const frameInterval = 1000 / fps; // ms 단위 프레임 간격
-      const renderStartTime = performance.now();
 
       const renderFrame = () => {
-        // 실제 경과 시간 기반으로 현재 프레임 계산
-        const elapsed = performance.now() - renderStartTime;
-        const expectedFrame = Math.floor(elapsed / frameInterval);
-
-        // 종료 조건: 총 재생 시간 도달
-        if (elapsed >= totalDuration * 1000 || currentFrame >= totalFrames) {
+        // 종료 조건: 모든 프레임 렌더링 완료
+        if (currentFrame >= totalFrames) {
           mediaRecorder.stop();
           return;
         }
-
-        // 현재 프레임 업데이트 (시간 기반)
-        currentFrame = Math.min(expectedFrame, totalFrames - 1);
 
         // 현재 프레임에 해당하는 씬 계산 (Remotion Sequence와 동일한 로직)
         const { sceneIndex, frameInScene, sceneDurationFrames } = getSceneAtFrame(
@@ -618,7 +617,6 @@ export async function renderVideo(
 
               renderTransitionFrame(ctx, canvas, config.transitionType, transitionProgress, img, nextImg);
             } else {
-              // 다음 씬 이미지 없으면 현재 씬만 표시 (Ken Burns 포함)
               const progress = frameInScene / sceneDurationFrames;
               const scale = 1 + progress * 0.1;
               const offsetX = progress * 20;
@@ -627,19 +625,17 @@ export async function renderVideo(
           } else {
             // 일반 씬 렌더링 (Ken Burns 효과)
             const progress = frameInScene / sceneDurationFrames;
-            const scale = 1 + progress * 0.1; // 10% 확대
-            const offsetX = progress * 20; // 약간의 이동
+            const scale = 1 + progress * 0.1;
+            const offsetX = progress * 20;
             drawImageCover(ctx, canvas, img, scale, offsetX);
           }
 
           // 자막 그리기 (선택적) - 큰 폰트, 자동 줄바꿈
           if (config.showSubtitles && scene.narration) {
-            // 폰트 크기: 화면 높이의 6% (2.5배 크기)
             const fontSize = Math.round(canvas.height * 0.06);
             ctx.font = `bold ${fontSize}px Pretendard, sans-serif`;
             ctx.textAlign = 'center';
 
-            // 최대 너비 기준 자동 줄바꿈
             const maxLineWidth = canvas.width * 0.9;
             const wrapText = (text: string): string[] => {
               const words = text.split('');
@@ -667,7 +663,6 @@ export async function renderVideo(
             const padding = 28;
             const textX = canvas.width / 2;
 
-            // 배경 박스 크기 계산
             let maxWidth = 0;
             lines.forEach(line => {
               const w = ctx.measureText(line).width;
@@ -677,7 +672,6 @@ export async function renderVideo(
             const boxHeight = lines.length * lineHeight + padding;
             const boxY = canvas.height * 0.92 - boxHeight;
 
-            // 배경 박스 그리기 (둥근 모서리)
             const boxX = textX - maxWidth / 2 - padding;
             const boxWidth = maxWidth + padding * 2;
             const radius = 16;
@@ -687,7 +681,6 @@ export async function renderVideo(
             ctx.roundRect(boxX, boxY, boxWidth, boxHeight, radius);
             ctx.fill();
 
-            // 텍스트 그리기
             ctx.fillStyle = '#fff';
             ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
             ctx.shadowBlur = 6;
@@ -702,8 +695,15 @@ export async function renderVideo(
           }
         }
 
-        // 진행률 업데이트 (시간 기반)
-        const progressPercent = 20 + (elapsed / (totalDuration * 1000)) * 70;
+        // 프레임 캡처 요청 (captureStream(0) 모드에서 명시적 캡처)
+        if (canRequestFrame) {
+          videoTrack.requestFrame();
+        }
+
+        currentFrame++;
+
+        // 진행률 업데이트
+        const progressPercent = 20 + (currentFrame / totalFrames) * 70;
         onProgress?.({
           status: 'rendering',
           progress: Math.min(progressPercent, 90),
@@ -711,12 +711,14 @@ export async function renderVideo(
           totalFrames,
         });
 
-        // requestAnimationFrame 사용 (브라우저 최적화, 실시간 렌더링)
-        requestAnimationFrame(renderFrame);
+        // setTimeout 사용 (requestAnimationFrame 대신)
+        // rAF는 탭 비활성화 시 스로틀링되어 프레임이 누락됨
+        // setTimeout은 더 안정적으로 프레임 간격을 유지
+        setTimeout(renderFrame, frameInterval);
       };
 
       // 렌더링 시작
-      requestAnimationFrame(renderFrame);
+      setTimeout(renderFrame, 0);
     });
   } catch (error) {
     onProgress?.({
