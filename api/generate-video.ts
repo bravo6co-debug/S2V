@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { put, del } from '@vercel/blob';
 import { sanitizePrompt, setCorsHeaders } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
 import { findUserById } from './lib/mongodb.js';
@@ -8,40 +9,6 @@ import type { GenerateVideoRequest, VideoGenerationResult, ApiErrorResponse } fr
 const HAILUO_API_URL = 'https://api.eachlabs.ai/v1/prediction';
 const HAILUO_MODEL = 'minimax-hailuo-v2-3-fast-standard-image-to-video';
 const HAILUO_VERSION = '0.0.1';
-
-/**
- * Upload base64 image to temporary hosting and return an HTTPS URL.
- * eachlabs.ai requires an HTTPS URL for image_url, not a data URL.
- */
-async function uploadImageToTempUrl(base64Data: string, mimeType: string): Promise<string> {
-    const buffer = Buffer.from(base64Data, 'base64');
-    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-
-    const formData = new FormData();
-    const blob = new Blob([buffer], { type: mimeType });
-    formData.append('file', blob, `video_image.${ext}`);
-
-    const uploadResponse = await fetch('https://tmpfiles.org/api/v1/upload', {
-        method: 'POST',
-        body: formData,
-    });
-
-    if (!uploadResponse.ok) {
-        throw new Error(`이미지 업로드 HTTP 오류: ${uploadResponse.status}`);
-    }
-
-    const uploadResult = await uploadResponse.json() as any;
-
-    if (uploadResult.status !== 'success' || !uploadResult.data?.url) {
-        throw new Error(`이미지 업로드 실패: ${JSON.stringify(uploadResult).substring(0, 200)}`);
-    }
-
-    // tmpfiles.org URL → direct download URL
-    const url = uploadResult.data.url as string;
-    const directUrl = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-
-    return directUrl;
-}
 
 /**
  * POST /api/generate-video
@@ -66,6 +33,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             error: auth.error || '로그인이 필요합니다.'
         });
     }
+
+    let blobUrl: string | null = null;
 
     try {
         const { sourceImage, motionPrompt, durationSeconds = 5 } = req.body as GenerateVideoRequest;
@@ -115,14 +84,21 @@ Technical Requirements:
 - No sudden jumps or artifacts
 `.trim();
 
-        // 이미지를 임시 URL로 업로드 (eachlabs.ai는 HTTPS URL 필요, data URL 불가)
+        // 이미지를 Vercel Blob에 업로드 (eachlabs.ai는 HTTPS URL 필요, data URL 불가)
         let imageUrl: string;
         try {
-            console.log('Uploading image to temporary hosting...');
-            imageUrl = await uploadImageToTempUrl(sourceImage.data, sourceImage.mimeType);
-            console.log('Image uploaded to:', imageUrl);
+            console.log('Uploading image to Vercel Blob...');
+            const buffer = Buffer.from(sourceImage.data, 'base64');
+            const ext = sourceImage.mimeType === 'image/png' ? 'png' : sourceImage.mimeType === 'image/webp' ? 'webp' : 'jpg';
+            const blob = await put(`video/${Date.now()}.${ext}`, buffer, {
+                access: 'public',
+                contentType: sourceImage.mimeType,
+            });
+            imageUrl = blob.url;
+            blobUrl = blob.url;
+            console.log('Image uploaded to Vercel Blob:', imageUrl);
         } catch (uploadError) {
-            console.error('Image upload failed:', uploadError);
+            console.error('Vercel Blob upload failed:', uploadError);
             const msg = uploadError instanceof Error ? uploadError.message : String(uploadError);
             return res.status(500).json({
                 error: `이미지 업로드 실패: ${msg}`,
@@ -210,6 +186,11 @@ Technical Requirements:
                     console.log('=== VIDEO GENERATION SUCCESS ===');
                     console.log('Output URL:', videoUrl);
 
+                    // Blob 정리
+                    if (blobUrl) {
+                        try { await del(blobUrl); } catch (delErr) { console.warn('Blob cleanup failed:', delErr); }
+                    }
+
                     const result: VideoGenerationResult = {
                         videoUrl: videoUrl,
                         thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
@@ -240,6 +221,11 @@ Technical Requirements:
     } catch (e) {
         console.error('=== VIDEO GENERATION ERROR ===');
         console.error('Error:', e);
+
+        // Blob 정리
+        if (blobUrl) {
+            try { await del(blobUrl); } catch (delErr) { console.warn('Blob cleanup failed:', delErr); }
+        }
 
         if (e instanceof Error) {
             const msg = e.message;

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { put, del } from '@vercel/blob';
 import { setCorsHeaders } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
 import { findUserById } from './lib/mongodb.js';
@@ -21,41 +22,6 @@ interface GenerateFoodVideoRequest {
 interface FoodVideoResult {
     videoUrl: string;
     duration: number;
-}
-
-/**
- * Upload base64 image to temporary hosting and return an HTTPS URL.
- * eachlabs.ai requires an HTTPS URL for image_url, not a data URL.
- */
-async function uploadImageToTempUrl(base64Data: string, mimeType: string): Promise<string> {
-    const buffer = Buffer.from(base64Data, 'base64');
-    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-
-    const formData = new FormData();
-    const blob = new Blob([buffer], { type: mimeType });
-    formData.append('file', blob, `food_image.${ext}`);
-
-    const uploadResponse = await fetch('https://tmpfiles.org/api/v1/upload', {
-        method: 'POST',
-        body: formData,
-    });
-
-    if (!uploadResponse.ok) {
-        throw new Error(`이미지 업로드 HTTP 오류: ${uploadResponse.status}`);
-    }
-
-    const uploadResult = await uploadResponse.json() as any;
-
-    if (uploadResult.status !== 'success' || !uploadResult.data?.url) {
-        throw new Error(`이미지 업로드 실패: ${JSON.stringify(uploadResult).substring(0, 200)}`);
-    }
-
-    // tmpfiles.org URL → direct download URL
-    // https://tmpfiles.org/12345/image.jpg → https://tmpfiles.org/dl/12345/image.jpg
-    const url = uploadResult.data.url as string;
-    const directUrl = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-
-    return directUrl;
 }
 
 /**
@@ -83,6 +49,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             error: auth.error || '로그인이 필요합니다.'
         });
     }
+
+    let blobUrl: string | null = null;
 
     try {
         const { foodImage, englishPrompt, durationSeconds = 6 } = req.body as GenerateFoodVideoRequest;
@@ -114,14 +82,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             } as ApiErrorResponse);
         }
 
-        // Step 1: 이미지를 임시 URL로 업로드 (eachlabs.ai는 HTTPS URL 필요)
+        // Step 1: 이미지를 Vercel Blob에 업로드 (eachlabs.ai는 HTTPS URL 필요)
         let imageUrl: string;
         try {
-            console.log('Uploading image to temporary hosting...');
-            imageUrl = await uploadImageToTempUrl(foodImage.data, foodImage.mimeType);
-            console.log('Image uploaded to:', imageUrl);
+            console.log('Uploading image to Vercel Blob...');
+            const buffer = Buffer.from(foodImage.data, 'base64');
+            const ext = foodImage.mimeType === 'image/png' ? 'png' : foodImage.mimeType === 'image/webp' ? 'webp' : 'jpg';
+            const blob = await put(`food-video/${Date.now()}.${ext}`, buffer, {
+                access: 'public',
+                contentType: foodImage.mimeType,
+            });
+            imageUrl = blob.url;
+            blobUrl = blob.url;
+            console.log('Image uploaded to Vercel Blob:', imageUrl);
         } catch (uploadError) {
-            console.error('Image upload failed:', uploadError);
+            console.error('Vercel Blob upload failed:', uploadError);
             const msg = uploadError instanceof Error ? uploadError.message : String(uploadError);
             return res.status(500).json({
                 error: `이미지 업로드 실패: ${msg}`,
@@ -239,6 +214,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     console.log('=== FOOD VIDEO GENERATION SUCCESS ===');
                     console.log('Output URL:', videoUrl);
 
+                    // Blob 정리
+                    if (blobUrl) {
+                        try { await del(blobUrl); } catch (delErr) { console.warn('Blob cleanup failed:', delErr); }
+                    }
+
                     const result: FoodVideoResult = {
                         videoUrl: videoUrl,
                         duration: durationSeconds,
@@ -266,6 +246,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (e) {
         console.error('=== FOOD VIDEO GENERATION ERROR ===');
         console.error('Error:', e);
+
+        // Blob 정리
+        if (blobUrl) {
+            try { await del(blobUrl); } catch (delErr) { console.warn('Blob cleanup failed:', delErr); }
+        }
 
         if (e instanceof Error) {
             const msg = e.message;
