@@ -1160,6 +1160,13 @@ export const VideoTab: React.FC = () => {
                   <p className="text-xs sm:text-sm text-gray-400 mb-3">
                     시나리오의 이미지를 기반으로 비디오를 미리볼 수 있습니다
                   </p>
+                  {/* 나레이션 누락 경고 */}
+                  {getTTSStatus().total > 0 && getTTSStatus().generated < getTTSStatus().total && (
+                    <div className="mb-3 p-2 bg-amber-900/40 border border-amber-700/50 rounded-lg text-xs text-amber-400">
+                      나레이션이 {getTTSStatus().total - getTTSStatus().generated}개 씬에 적용되지 않았습니다.
+                      내보내기 전에 모든 씬의 나레이션을 생성해 주세요.
+                    </div>
+                  )}
                   <button
                     onClick={() => setIsExportModalOpen(true)}
                     className="px-5 sm:px-6 py-3 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-500 hover:to-emerald-500 min-h-[44px]"

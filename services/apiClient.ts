@@ -479,27 +479,46 @@ export const generateNarration = async (
 
 /**
  * Generate narration audio for all scenes in a scenario
+ * Includes delay between calls to avoid rate limiting and retry on failure
  */
 export const generateAllNarrations = async (
     scenes: Scene[],
     voice: TTSVoice = 'Kore',
     onProgress?: (sceneId: string, index: number, total: number) => void
-): Promise<Map<string, NarrationAudio>> => {
+): Promise<{ results: Map<string, NarrationAudio>; failedSceneIds: string[] }> => {
     const results = new Map<string, NarrationAudio>();
+    const failedSceneIds: string[] = [];
 
     for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         if (!scene.narration?.trim()) continue;
 
-        try {
-            onProgress?.(scene.id, i, scenes.length);
-            const audio = await generateNarration(scene.narration, voice, scene.id);
-            results.set(scene.id, audio);
-        } catch (error) {
-            console.error(`Failed to generate narration for scene ${scene.id}:`, error);
-            // Continue with other scenes even if one fails
+        // 첫 번째 씬 이후에는 1초 딜레이 (API 속도 제한 방지)
+        if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        let success = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                onProgress?.(scene.id, i, scenes.length);
+                const audio = await generateNarration(scene.narration, voice, scene.id);
+                results.set(scene.id, audio);
+                success = true;
+                break;
+            } catch (error) {
+                console.error(`TTS attempt ${attempt + 1}/3 failed for scene ${scene.id}:`, error);
+                if (attempt < 2) {
+                    // 재시도 전 대기 (2초, 4초)
+                    await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
+                }
+            }
+        }
+
+        if (!success) {
+            failedSceneIds.push(scene.id);
         }
     }
 
-    return results;
+    return { results, failedSceneIds };
 };

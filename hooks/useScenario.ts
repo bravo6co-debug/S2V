@@ -382,26 +382,47 @@ export function useScenario(): UseScenarioReturn {
       if (scenesWithNarration.length > 0) {
         setIsGeneratingTTS(true);
         setTtsProgress({ current: 0, total: scenesWithNarration.length });
+        const failedScenes: number[] = [];
 
         for (let i = 0; i < scenesWithNarration.length; i++) {
           const scene = scenesWithNarration[i];
           setTtsProgress({ current: i + 1, total: scenesWithNarration.length });
 
-          try {
-            const audio = await generateNarration(
-              scene.narration,
-              options.ttsVoice || 'Kore',
-              scene.id
-            );
-            contextUpdateScene(scene.id, { narrationAudio: audio });
-          } catch (e) {
-            console.error(`TTS failed for scene ${scene.sceneNumber}:`, e);
-            // TTS 실패는 치명적이지 않으므로 계속 진행
+          // API 속도 제한 방지: 첫 번째 이후 1초 딜레이
+          if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+
+          let success = false;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const audio = await generateNarration(
+                scene.narration,
+                options.ttsVoice || 'Kore',
+                scene.id
+              );
+              contextUpdateScene(scene.id, { narrationAudio: audio });
+              success = true;
+              break;
+            } catch (e) {
+              console.error(`TTS attempt ${attempt + 1}/3 failed for scene ${scene.sceneNumber}:`, e);
+              if (attempt < 2) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
+              }
+            }
+          }
+
+          if (!success) {
+            failedScenes.push(scene.sceneNumber);
           }
         }
 
         setIsGeneratingTTS(false);
         setTtsProgress({ current: 0, total: 0 });
+
+        if (failedScenes.length > 0) {
+          console.warn(`TTS 생성 실패 씬: ${failedScenes.join(', ')}`);
+        }
       }
     }
   }, [scenario, aspectRatio, contextUpdateScene, filterCharactersForScene]);
