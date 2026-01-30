@@ -10,6 +10,40 @@ const HAILUO_MODEL = 'minimax-hailuo-v2-3-fast-standard-image-to-video';
 const HAILUO_VERSION = '0.0.1';
 
 /**
+ * Upload base64 image to temporary hosting and return an HTTPS URL.
+ * eachlabs.ai requires an HTTPS URL for image_url, not a data URL.
+ */
+async function uploadImageToTempUrl(base64Data: string, mimeType: string): Promise<string> {
+    const buffer = Buffer.from(base64Data, 'base64');
+    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: mimeType });
+    formData.append('file', blob, `video_image.${ext}`);
+
+    const uploadResponse = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+        throw new Error(`이미지 업로드 HTTP 오류: ${uploadResponse.status}`);
+    }
+
+    const uploadResult = await uploadResponse.json() as any;
+
+    if (uploadResult.status !== 'success' || !uploadResult.data?.url) {
+        throw new Error(`이미지 업로드 실패: ${JSON.stringify(uploadResult).substring(0, 200)}`);
+    }
+
+    // tmpfiles.org URL → direct download URL
+    const url = uploadResult.data.url as string;
+    const directUrl = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+
+    return directUrl;
+}
+
+/**
  * POST /api/generate-video
  * Generates a video from an image using Hailuo V2.3 (eachlabs.ai)
  */
@@ -81,8 +115,20 @@ Technical Requirements:
 - No sudden jumps or artifacts
 `.trim();
 
-        // 소스 이미지를 data URL로 변환 (eachlabs.ai image_url 파라미터용)
-        const imageDataUrl = `data:${sourceImage.mimeType};base64,${sourceImage.data}`;
+        // 이미지를 임시 URL로 업로드 (eachlabs.ai는 HTTPS URL 필요, data URL 불가)
+        let imageUrl: string;
+        try {
+            console.log('Uploading image to temporary hosting...');
+            imageUrl = await uploadImageToTempUrl(sourceImage.data, sourceImage.mimeType);
+            console.log('Image uploaded to:', imageUrl);
+        } catch (uploadError) {
+            console.error('Image upload failed:', uploadError);
+            const msg = uploadError instanceof Error ? uploadError.message : String(uploadError);
+            return res.status(500).json({
+                error: `이미지 업로드 실패: ${msg}`,
+                code: 'IMAGE_UPLOAD_FAILED'
+            } as ApiErrorResponse);
+        }
 
         // Hailuo API로 prediction 생성
         let predictionId: string;
@@ -97,10 +143,10 @@ Technical Requirements:
                     model: HAILUO_MODEL,
                     version: HAILUO_VERSION,
                     input: {
-                        prompt_optimizer: true,
-                        duration: String(durationSeconds <= 6 ? 6 : 10),
-                        image_url: imageDataUrl,
                         prompt: enhancedPrompt,
+                        prompt_optimizer: true,
+                        image_url: imageUrl,
+                        duration: String(durationSeconds <= 6 ? 6 : 10),
                     },
                     webhook_url: '',
                 }),

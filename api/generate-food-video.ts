@@ -24,6 +24,41 @@ interface FoodVideoResult {
 }
 
 /**
+ * Upload base64 image to temporary hosting and return an HTTPS URL.
+ * eachlabs.ai requires an HTTPS URL for image_url, not a data URL.
+ */
+async function uploadImageToTempUrl(base64Data: string, mimeType: string): Promise<string> {
+    const buffer = Buffer.from(base64Data, 'base64');
+    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: mimeType });
+    formData.append('file', blob, `food_image.${ext}`);
+
+    const uploadResponse = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+        throw new Error(`이미지 업로드 HTTP 오류: ${uploadResponse.status}`);
+    }
+
+    const uploadResult = await uploadResponse.json() as any;
+
+    if (uploadResult.status !== 'success' || !uploadResult.data?.url) {
+        throw new Error(`이미지 업로드 실패: ${JSON.stringify(uploadResult).substring(0, 200)}`);
+    }
+
+    // tmpfiles.org URL → direct download URL
+    // https://tmpfiles.org/12345/image.jpg → https://tmpfiles.org/dl/12345/image.jpg
+    const url = uploadResult.data.url as string;
+    const directUrl = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+
+    return directUrl;
+}
+
+/**
  * POST /api/generate-food-video
  * Generates a cinematic food video from a food image and an English video prompt.
  * Uses Hailuo V2.3 image-to-video (eachlabs.ai).
@@ -79,10 +114,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             } as ApiErrorResponse);
         }
 
-        // 소스 이미지를 data URL로 변환
-        const dataUrl = `data:${foodImage.mimeType};base64,${foodImage.data}`;
+        // Step 1: 이미지를 임시 URL로 업로드 (eachlabs.ai는 HTTPS URL 필요)
+        let imageUrl: string;
+        try {
+            console.log('Uploading image to temporary hosting...');
+            imageUrl = await uploadImageToTempUrl(foodImage.data, foodImage.mimeType);
+            console.log('Image uploaded to:', imageUrl);
+        } catch (uploadError) {
+            console.error('Image upload failed:', uploadError);
+            const msg = uploadError instanceof Error ? uploadError.message : String(uploadError);
+            return res.status(500).json({
+                error: `이미지 업로드 실패: ${msg}`,
+                code: 'IMAGE_UPLOAD_FAILED'
+            } as ApiErrorResponse);
+        }
 
-        // Hailuo API로 prediction 생성
+        // Step 2: Hailuo API로 prediction 생성
         let predictionId: string;
         try {
             const requestBody = {
@@ -91,16 +138,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 input: {
                     prompt: englishPrompt,
                     prompt_optimizer: true,
-                    image_url: dataUrl,
+                    image_url: imageUrl,
                     duration: '6',
                 },
                 webhook_url: '',
             };
 
-            console.log('Request body (without image):', JSON.stringify({
-                ...requestBody,
-                input: { ...requestBody.input, image_url: '[DATA_URL_OMITTED]' }
-            }));
+            console.log('Request body:', JSON.stringify(requestBody));
 
             const createResponse = await fetch(`${HAILUO_API_URL}/`, {
                 method: 'POST',
@@ -149,9 +193,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             throw new Error(`Hailuo API 호출 실패: ${errorMsg}`);
         }
 
+        // Step 3: 폴링으로 결과 확인 (최대 5분)
         console.log('Food video generation started, polling for completion...');
 
-        // Poll until video generation is complete (max 5 minutes timeout)
         const maxPollingTime = 300000; // 5 minutes
         const pollInterval = 5000; // 5초 간격
         const startTime = Date.now();
@@ -182,7 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     pollResult = JSON.parse(pollText);
                 } catch {
                     console.error(`Poll response is not JSON: ${pollText.substring(0, 200)}`);
-                    continue; // 다시 폴링
+                    continue;
                 }
 
                 console.log(`Poll #${pollCount} result status: ${pollResult.status}`);
