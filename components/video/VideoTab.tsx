@@ -588,11 +588,15 @@ export const VideoTab: React.FC = () => {
   const [generatingPreviewSceneId, setGeneratingPreviewSceneId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 소스 변경 시 previewAudios 초기화
+  // 소스 변경 시 previewAudios 초기화 + 시나리오면 Remotion 강제
   useEffect(() => {
     if (prevSourceRef.current !== videoSource) {
       setPreviewAudios(new Map());
       prevSourceRef.current = videoSource;
+    }
+    // 시나리오 소스일 때는 Remotion만 사용 (Hailuo 클립 길이가 맞지 않음)
+    if (videoSource === 'scenario') {
+      setVideoMode('remotion');
     }
   }, [videoSource]);
 
@@ -892,35 +896,42 @@ export const VideoTab: React.FC = () => {
           </div>
         </div>
 
-        {/* 모드 토글 */}
-        <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-500">생성 방식:</span>
-          <div className="flex bg-gray-900 rounded-lg p-1">
-            <button
-              onClick={() => setVideoMode('remotion')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
-                videoMode === 'remotion'
-                  ? 'bg-green-600 text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Remotion (무료)
-            </button>
-            <button
-              onClick={() => setVideoMode('hailuo')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
-                videoMode === 'hailuo'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Hailuo AI
-            </button>
+        {/* 모드 토글 - 광고 소스일 때만 표시 (시나리오는 씬 길이가 맞지 않아 Remotion만) */}
+        {videoSource === 'ad' ? (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">생성 방식:</span>
+            <div className="flex bg-gray-900 rounded-lg p-1">
+              <button
+                onClick={() => setVideoMode('remotion')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
+                  videoMode === 'remotion'
+                    ? 'bg-green-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Remotion (무료)
+              </button>
+              <button
+                onClick={() => setVideoMode('hailuo')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
+                  videoMode === 'hailuo'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Hailuo AI
+              </button>
+            </div>
+            {videoMode === 'remotion' && (
+              <span className="text-xs text-green-400">99% 비용 절감</span>
+            )}
           </div>
-          {videoMode === 'remotion' && (
-            <span className="text-xs text-green-400">99% 비용 절감</span>
-          )}
-        </div>
+        ) : (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs text-gray-500">생성 방식:</span>
+            <span className="text-xs text-green-400 font-medium">Remotion (무료)</span>
+          </div>
+        )}
 
         {/* 시나리오 소스 선택 (두 시나리오 모두 존재할 때) */}
         {scenario && adScenario && (
@@ -963,8 +974,8 @@ export const VideoTab: React.FC = () => {
           </div>
         )}
 
-        {/* Hailuo API 상태 표시 (Hailuo 모드일 때만) */}
-        {videoMode === 'hailuo' && (
+        {/* Hailuo API 상태 표시 (광고 소스 + Hailuo 모드일 때만) */}
+        {videoSource === 'ad' && videoMode === 'hailuo' && (
           <div className="mt-3 flex items-center justify-between bg-gray-900/50 rounded-lg px-3 py-2 flex-wrap gap-2">
             <ApiStatusIcon status={hailuoApiStatus} error={hailuoApiError} />
             <button
@@ -998,8 +1009,8 @@ export const VideoTab: React.FC = () => {
           </div>
         )}
 
-        {/* API 사용 불가 경고 */}
-        {hailuoApiStatus === 'unavailable' && !error && (
+        {/* API 사용 불가 경고 (광고 소스일 때만) */}
+        {videoSource === 'ad' && hailuoApiStatus === 'unavailable' && !error && (
           <div className="mt-3 p-2 sm:p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-xs sm:text-sm text-amber-300">
             <p className="font-medium mb-1 text-xs sm:text-sm">Hailuo API 사용 불가</p>
             <p className="text-xs text-amber-400">{hailuoApiError}</p>

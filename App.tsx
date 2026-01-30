@@ -5,6 +5,7 @@ import { TabNavigation, TabNavigationCompact } from './components/common/TabNavi
 import { ScenarioTab } from './components/scenario/ScenarioTab';
 import { VideoTab } from './components/video/VideoTab';
 import AdTab from './components/ad/AdTab';
+import { FoodVideoTab } from './components/foodvideo/FoodVideoTab';
 import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode, IMAGE_STYLE_OPTIONS, ImageStyle } from './types';
 import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
 import { ResultDisplay } from './components/ResultDisplay';
@@ -413,6 +414,8 @@ const AppContent: React.FC = () => {
                 return <AdTab />;
             case 'video':
                 return <VideoTab />;
+            case 'foodvideo':
+                return <FoodVideoTab />;
             default:
                 return <ScenarioTab />;
         }

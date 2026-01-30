@@ -33,6 +33,16 @@ const AdIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+const FoodVideoIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M18 8h1a4 4 0 010 8h-1" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" />
+    <line x1="6" y1="1" x2="6" y2="4" />
+    <line x1="10" y1="1" x2="10" y2="4" />
+    <line x1="14" y1="1" x2="14" y2="4" />
+  </svg>
+);
+
 const TABS: TabConfig[] = [
   {
     mode: 'scenario',
@@ -51,6 +61,12 @@ const TABS: TabConfig[] = [
     label: '영상 제작',
     icon: <VideoIcon className="w-5 h-5" />,
     activeColor: 'from-pink-600 to-purple-600',
+  },
+  {
+    mode: 'foodvideo',
+    label: '음식 영상',
+    icon: <FoodVideoIcon className="w-5 h-5" />,
+    activeColor: 'from-amber-500 to-orange-600',
   },
 ];
 

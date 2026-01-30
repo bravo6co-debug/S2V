@@ -122,8 +122,8 @@ export interface SceneAssets {
 // 앱 모드 (App Mode)
 // =============================================
 
-// 3탭 구조 앱 모드 (시나리오, 광고, 영상 제작)
-export type AppMode = 'scenario' | 'video' | 'ad';
+// 앱 모드 (시나리오, 광고, 영상 제작, 음식 영상)
+export type AppMode = 'scenario' | 'video' | 'ad' | 'foodvideo';
 
 // =============================================
 // 프로젝트 상태 (Project State)

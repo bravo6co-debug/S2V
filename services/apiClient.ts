@@ -394,6 +394,28 @@ export const checkVideoApiAvailability = async (): Promise<{ available: boolean;
 export const checkVeoApiAvailability = checkVideoApiAvailability;
 
 // ============================================
+// FOOD VIDEO GENERATION
+// ============================================
+
+export interface FoodVideoResult {
+    videoUrl: string;
+    translatedPrompt: string;
+    duration: number;
+}
+
+export const generateFoodVideo = async (
+    foodImage: ImageData,
+    prompt: string,
+    durationSeconds: number = 6
+): Promise<FoodVideoResult> => {
+    return post<FoodVideoResult>('/api/generate-food-video', {
+        foodImage,
+        prompt,
+        durationSeconds,
+    }, 'video');
+};
+
+// ============================================
 // TTS NARRATION GENERATION
 // ============================================
 
