@@ -85,26 +85,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Hailuo API로 prediction 생성
         let predictionId: string;
         try {
+            const requestBody = {
+                model: HAILUO_MODEL,
+                version: HAILUO_VERSION,
+                input: {
+                    prompt: englishPrompt,
+                    prompt_optimizer: true,
+                    image_url: dataUrl,
+                    duration: '6',
+                },
+                webhook_url: '',
+            };
+
+            console.log('Request body (without image):', JSON.stringify({
+                ...requestBody,
+                input: { ...requestBody.input, image_url: '[DATA_URL_OMITTED]' }
+            }));
+
             const createResponse = await fetch(`${HAILUO_API_URL}/`, {
                 method: 'POST',
                 headers: {
                     'X-API-Key': hailuoApiKey,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    model: HAILUO_MODEL,
-                    version: HAILUO_VERSION,
-                    input: {
-                        prompt_optimizer: true,
-                        duration: '6',
-                        image_url: dataUrl,
-                        prompt: englishPrompt,
-                    },
-                    webhook_url: '',
-                }),
+                body: JSON.stringify(requestBody),
             });
 
-            const createResult = await createResponse.json() as any;
+            // 응답 텍스트를 먼저 읽어서 디버깅
+            const responseText = await createResponse.text();
+            console.log('Hailuo API response status:', createResponse.status);
+            console.log('Hailuo API response:', responseText.substring(0, 500));
+
+            let createResult: any;
+            try {
+                createResult = JSON.parse(responseText);
+            } catch {
+                throw new Error(`API 응답이 올바른 형식이 아닙니다 (HTTP ${createResponse.status}): ${responseText.substring(0, 200)}`);
+            }
+
+            if (!createResponse.ok) {
+                const errMsg = createResult.error || createResult.message || createResult.detail || JSON.stringify(createResult);
+                throw new Error(`HTTP ${createResponse.status}: ${errMsg}`);
+            }
 
             if (createResult.status !== 'success' || !createResult.predictionID) {
                 const errMsg = createResult.error || createResult.message || JSON.stringify(createResult);
@@ -148,11 +170,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             try {
                 const pollResponse = await fetch(`${HAILUO_API_URL}/${predictionId}`, {
+                    method: 'GET',
                     headers: {
                         'X-API-Key': hailuoApiKey,
+                        'Content-Type': 'application/json',
                     },
                 });
-                const pollResult = await pollResponse.json() as any;
+                const pollText = await pollResponse.text();
+                let pollResult: any;
+                try {
+                    pollResult = JSON.parse(pollText);
+                } catch {
+                    console.error(`Poll response is not JSON: ${pollText.substring(0, 200)}`);
+                    continue; // 다시 폴링
+                }
+
+                console.log(`Poll #${pollCount} result status: ${pollResult.status}`);
 
                 if (pollResult.status === 'success' && pollResult.output) {
                     const totalTime = Math.round((Date.now() - startTime) / 1000);

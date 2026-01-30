@@ -211,7 +211,7 @@ export const FoodVideoTab: React.FC = () => {
           <div className="min-w-0">
             <h2 className="text-base sm:text-xl font-bold text-white">음식 영상 만들기</h2>
             <p className="text-xs sm:text-sm text-gray-400 truncate">
-              음식 사진과 한국어 설명으로 시네마틱 영상 생성
+              음식 사진과 한국어 설명으로 숏츠(9:16) 영상 생성
             </p>
           </div>
         </div>
@@ -434,13 +434,14 @@ export const FoodVideoTab: React.FC = () => {
                   생성된 영상
                 </h3>
 
-                <div className="rounded-xl overflow-hidden bg-black border border-gray-700">
+                <div className="rounded-xl overflow-hidden bg-black border border-gray-700 flex justify-center">
                   <video
                     src={result.videoUrl}
                     controls
                     autoPlay
                     loop
-                    className="w-full max-h-80 sm:max-h-96"
+                    className="max-h-[480px] sm:max-h-[560px]"
+                    style={{ aspectRatio: '9/16' }}
                   >
                     브라우저가 비디오 재생을 지원하지 않습니다.
                   </video>
