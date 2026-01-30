@@ -10,6 +10,45 @@ const HAILUO_API_URL = 'https://api.eachlabs.ai/v1/prediction';
 const HAILUO_MODEL = 'minimax-hailuo-v2-3-fast-standard-image-to-video';
 const HAILUO_VERSION = '0.0.1';
 
+/**
+ * Extract image dimensions from a Buffer (supports JPEG and PNG)
+ */
+function getImageDimensions(buffer: Buffer): { width: number; height: number } | null {
+    try {
+        // PNG: starts with 0x89 0x50 0x4E 0x47
+        if (buffer[0] === 0x89 && buffer[1] === 0x50) {
+            const width = buffer.readUInt32BE(16);
+            const height = buffer.readUInt32BE(20);
+            return { width, height };
+        }
+
+        // JPEG: starts with 0xFF 0xD8
+        if (buffer[0] === 0xFF && buffer[1] === 0xD8) {
+            let offset = 2;
+            while (offset < buffer.length - 1) {
+                if (buffer[offset] !== 0xFF) { offset++; continue; }
+                const marker = buffer[offset + 1];
+                // SOF0, SOF1, SOF2 markers
+                if (marker === 0xC0 || marker === 0xC1 || marker === 0xC2) {
+                    const height = buffer.readUInt16BE(offset + 5);
+                    const width = buffer.readUInt16BE(offset + 7);
+                    return { width, height };
+                }
+                // Skip to next marker
+                if (marker === 0xD8 || marker === 0xD9) {
+                    offset += 2;
+                } else {
+                    const segLen = buffer.readUInt16BE(offset + 2);
+                    offset += 2 + segLen;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to extract image dimensions:', e);
+    }
+    return null;
+}
+
 interface GenerateFoodVideoRequest {
     foodImage: {
         mimeType: string;
@@ -87,6 +126,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
             console.log('Uploading image to Vercel Blob...');
             const buffer = Buffer.from(foodImage.data, 'base64');
+            console.log(`Image buffer size: ${buffer.length} bytes (${(buffer.length / 1024).toFixed(1)} KB)`);
+
+            // 이미지 크기 확인
+            const dims = getImageDimensions(buffer);
+            if (dims) {
+                console.log(`Image dimensions: ${dims.width}x${dims.height}`);
+                if (dims.width < 300 || dims.height < 300) {
+                    return res.status(400).json({
+                        error: `이미지가 너무 작습니다 (${dims.width}x${dims.height}). 최소 300x300 이상의 이미지를 사용하세요.`,
+                        code: 'IMAGE_TOO_SMALL'
+                    } as ApiErrorResponse);
+                }
+            } else {
+                console.warn('Could not extract image dimensions from buffer');
+            }
+
             const ext = foodImage.mimeType === 'image/png' ? 'png' : foodImage.mimeType === 'image/webp' ? 'webp' : 'jpg';
             const blob = await put(`food-video/${Date.now()}.${ext}`, buffer, {
                 access: 'public',
@@ -95,6 +150,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             imageUrl = blob.url;
             blobUrl = blob.url;
             console.log('Image uploaded to Vercel Blob:', imageUrl);
+
+            // Blob URL 접근 가능 여부 검증
+            try {
+                const verifyResponse = await fetch(imageUrl, { method: 'HEAD' });
+                console.log(`Blob verification: status=${verifyResponse.status}, content-type=${verifyResponse.headers.get('content-type')}, content-length=${verifyResponse.headers.get('content-length')}`);
+                if (!verifyResponse.ok) {
+                    console.error(`Blob URL not accessible: HTTP ${verifyResponse.status}`);
+                }
+            } catch (verifyErr) {
+                console.error('Blob URL verification failed:', verifyErr);
+            }
         } catch (uploadError) {
             console.error('Vercel Blob upload failed:', uploadError);
             const msg = uploadError instanceof Error ? uploadError.message : String(uploadError);
