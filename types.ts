@@ -278,7 +278,12 @@ export type ScenarioTone =
   | 'comedic'
   | 'mysterious'
   | 'nostalgic'
-  | 'educational';
+  | 'educational'
+  | 'promotional'
+  | 'luxurious'
+  | 'trendy'
+  | 'trustworthy'
+  | 'energetic';
 
 export type StoryBeat = 'Hook' | 'Setup' | 'Development' | 'Climax' | 'Resolution';
 
@@ -411,15 +416,22 @@ export interface ScenarioConfig {
   includeCharacters?: boolean;   // 환경/풍경 모드에서 캐릭터 포함 여부 (조연으로)
 }
 
-export const TONE_OPTIONS: { value: ScenarioTone; label: string; description: string }[] = [
-  { value: 'emotional', label: '감성/힐링', description: '따뜻하고 여운 있는' },
-  { value: 'dramatic', label: '드라마틱', description: '긴장감과 반전' },
-  { value: 'inspirational', label: '동기부여', description: '도전과 성장' },
-  { value: 'romantic', label: '로맨틱', description: '사랑과 설렘' },
-  { value: 'comedic', label: '코믹', description: '유쾌하고 웃긴' },
-  { value: 'mysterious', label: '미스터리', description: '호기심 자극' },
-  { value: 'nostalgic', label: '향수/추억', description: '그리움과 회상' },
-  { value: 'educational', label: '정보/지식', description: '학습과 인사이트' },
+export const TONE_OPTIONS: { value: ScenarioTone; label: string; description: string; category?: 'story' | 'commercial' }[] = [
+  // 스토리 톤
+  { value: 'emotional', label: '감성/힐링', description: '따뜻하고 여운 있는', category: 'story' },
+  { value: 'dramatic', label: '드라마틱', description: '긴장감과 반전', category: 'story' },
+  { value: 'inspirational', label: '동기부여', description: '도전과 성장', category: 'story' },
+  { value: 'romantic', label: '로맨틱', description: '사랑과 설렘', category: 'story' },
+  { value: 'comedic', label: '코믹', description: '유쾌하고 웃긴', category: 'story' },
+  { value: 'mysterious', label: '미스터리', description: '호기심 자극', category: 'story' },
+  { value: 'nostalgic', label: '향수/추억', description: '그리움과 회상', category: 'story' },
+  { value: 'educational', label: '정보/지식', description: '학습과 인사이트', category: 'story' },
+  // 광고/홍보 톤
+  { value: 'promotional', label: '홍보/광고', description: '구매 욕구를 자극하는', category: 'commercial' },
+  { value: 'luxurious', label: '프리미엄/럭셔리', description: '고급스럽고 세련된', category: 'commercial' },
+  { value: 'trendy', label: '트렌디/MZ', description: '힙하고 감각적인', category: 'commercial' },
+  { value: 'trustworthy', label: '신뢰/전문가', description: '믿음직하고 권위 있는', category: 'commercial' },
+  { value: 'energetic', label: '활기/에너지', description: '역동적이고 활력 넘치는', category: 'commercial' },
 ];
 
 // =============================================
