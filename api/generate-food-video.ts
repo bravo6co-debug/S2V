@@ -105,14 +105,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log('=== FOOD VIDEO GENERATION START ===');
         console.log('English prompt:', englishPrompt);
 
-        // 사용자별 Hailuo API 키 조회 (어드민은 환경변수, 일반 사용자는 본인 키)
-        let hailuoApiKey: string | undefined;
+        // 사용자별 Hailuo API 키 조회 (개인 설정 키 우선, 환경변수 폴백)
         const user = await findUserById(auth.userId);
-        if (user?.isAdmin) {
-            hailuoApiKey = process.env.HAILUO_API_KEY;
-        } else {
-            hailuoApiKey = user?.settings?.hailuoApiKey || process.env.HAILUO_API_KEY;
-        }
+        const hailuoApiKey = user?.settings?.hailuoApiKey || process.env.HAILUO_API_KEY;
 
         if (!hailuoApiKey) {
             return res.status(400).json({
