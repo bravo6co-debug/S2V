@@ -255,9 +255,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             // 캐릭터 이름 정보를 프롬프트에 포함
             const charNames = namedCharacters?.map(c => c.name).join(', ') || '';
-            const charInfo = charNames ? `\nCharacters in scene: ${charNames}` : '';
+            const charInfo = charNames ? ` Characters: ${charNames}.` : '';
 
-            const fluxPrompt = `Generate a cinematic scene image.\n\nScene: ${sanitizedPrompt}${charInfo}\n\nRequirements:\n- Cinematic, photorealistic quality\n- Korean characters if people are depicted\n- Each character must look exactly like their reference photo\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio\n- No text, watermarks, or typography\n- Single full-bleed image, no borders or multi-panel layouts`;
+            // FLUX용 프롬프트 정제: 프론트엔드의 verbose 메타 지시문 제거
+            // FLUX Kontext는 텍스트 렌더링 능력이 뛰어나서 긴 지시문이 이미지에 텍스트로 나타남
+            const cleanedPrompt = sanitizedPrompt
+                .replace(/\*\*[^*]+\*\*/g, '')           // **markdown bold** 제거
+                .replace(/^Scene from a Korean short-form video:\s*/i, '') // 프론트엔드 래퍼 제거
+                .replace(/Camera Angle:\s*\S+/gi, '')     // Camera Angle 메타데이터 제거
+                .replace(/Mood:\s*[^\n]+/gi, '')          // Mood 메타데이터 제거
+                .replace(/Characters in this scene:[^\n]*/gi, '') // 중복 캐릭터 정보 제거
+                .replace(/Style Requirements:[\s\S]*$/i, '') // Style Requirements 섹션 이하 전부 제거
+                .replace(/Requirements:[\s\S]*$/i, '')     // Requirements 섹션 이하 전부 제거
+                .replace(/IMPORTANT:[^\n]*/gi, '')         // IMPORTANT 지시문 제거
+                .replace(/-\s*(Cinematic|Korean|Emotional|Each character|Horizontal|Vertical|No text|Single)[^\n]*/gi, '') // 불릿 지시문 제거
+                .replace(/\n{2,}/g, ' ')                   // 다중 줄바꿈 → 공백
+                .replace(/\s{2,}/g, ' ')                   // 다중 공백 정리
+                .trim();
+
+            const fluxPrompt = `Photorealistic cinematic scene, no text or watermarks.${charInfo} ${cleanedPrompt}`;
+
+            console.log(`[generate-images] FLUX prompt (${fluxPrompt.length} chars): ${fluxPrompt.substring(0, 200)}...`);
 
             const generationPromises: Promise<ImageData>[] = [];
             for (let i = 0; i < count; i++) {
