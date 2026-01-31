@@ -66,7 +66,7 @@ const generateOneBackgroundImage = async (
 **ABSOLUTELY FORBIDDEN:**
 -   NO humans, silhouettes, or any human figures (even distant ones)
 -   NO animals unless specifically mentioned
--   NO text, watermarks, or typography
+-   NO visible text, letters, numbers, watermarks, or typography in ANY language (Chinese, Korean, Japanese, English, or any other). Signs, billboards, and screens must appear blank, blurred, or show abstract content only
 `;
 
     // Use generateContent with user's selected image model
@@ -147,7 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const loc = locationType || 'exterior';
             const time = timeOfDay || 'day';
             const wthr = weather || 'clear';
-            const fluxPrompt = `Generate a background/environment photograph.\n\nScene: ${sanitizedPrompt}\nLocation: ${loc}\nTime of day: ${time}\nWeather: ${wthr}\n\nRequirements:\n- Pure landscape/environment shot, NO people or human figures\n- Wide establishing shot with depth and layers\n- Cinematic quality, natural lighting for ${time}\n- No text or watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
+            const fluxPrompt = `Generate a background/environment photograph.\n\nScene: ${sanitizedPrompt}\nLocation: ${loc}\nTime of day: ${time}\nWeather: ${wthr}\n\nRequirements:\n- Pure landscape/environment shot, NO people or human figures\n- Wide establishing shot with depth and layers\n- Cinematic quality, natural lighting for ${time}\n- Absolutely no visible text, letters, numbers, or writing in any language, signs and screens must be blank or blurred\n- No watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
 
             const generationPromises: Promise<ImageData>[] = [];
             for (let i = 0; i < count; i++) {

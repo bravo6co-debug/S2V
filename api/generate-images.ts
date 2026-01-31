@@ -161,7 +161,7 @@ ${variationPrompt}
     -   **Valid examples for 9:16:** 1080x1920 pixels, 720x1280 pixels.
     -   **STRICTLY FORBIDDEN:** Do NOT generate a square (1:1, 1024x1024), ${aspectRatio === '16:9' ? 'vertical' : 'horizontal'}, or any other aspect ratio. The output MUST be ${aspectRatio === '16:9' ? 'horizontal' : 'vertical'}. Failure to follow this rule will result in an incorrect output.
 -   **OUTPUT:** Generate ONE SINGLE, full-bleed image.
--   **CRITICAL RESTRICTION:** The generated image MUST NOT contain any text, letters, words, numbers, watermarks, or any form of typography. This is a strict rule.
+-   **CRITICAL RESTRICTION:** The generated image MUST NOT contain any visible text, letters, words, numbers, watermarks, or any form of typography in ANY language (Chinese, Korean, Japanese, English, or any other). This includes text on computer screens, monitors, phones, signs, labels, packaging, books, posters, or any surface. If screens or signs appear in the scene, they must show blank, blurred, or abstract content only. This is a strict rule.
 - DO NOT use white borders or create multi-panel layouts.
 `;
 
@@ -273,7 +273,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 .replace(/\s{2,}/g, ' ')                   // 다중 공백 정리
                 .trim();
 
-            const fluxPrompt = `Photorealistic cinematic scene, no text or watermarks.${charInfo} ${cleanedPrompt}`;
+            const fluxPrompt = `Photorealistic cinematic scene, absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, and labels, no watermarks.${charInfo} ${cleanedPrompt}`;
 
             console.log(`[generate-images] FLUX prompt (${fluxPrompt.length} chars): ${fluxPrompt.substring(0, 200)}...`);
 

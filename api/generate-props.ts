@@ -60,7 +60,7 @@ const generateOnePropImage = async (
 ---
 **ABSOLUTELY FORBIDDEN:**
 -   NO humans, hands, fingers, or any body parts
--   NO text, watermarks, labels, or typography
+-   NO visible text, letters, numbers, watermarks, labels, or typography in ANY language (Chinese, Korean, Japanese, English, or any other). Product labels and packaging must appear blank or with abstract patterns only
 -   NO busy or distracting backgrounds
 `;
 
@@ -139,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const apiKey = await getEachLabsApiKey(auth.userId);
             console.log(`[generate-props] Using FLUX model: ${imageModel}`);
 
-            const fluxPrompt = `Generate a product/prop photograph.\n\nObject: ${sanitizedPrompt}\n\nRequirements:\n- Clean product shot, object centered in frame\n- Simple, non-distracting background\n- 3/4 view or front view\n- Object fills 60-80% of frame\n- Sharp focus, professional quality\n- No people, hands, or body parts\n- No text or watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
+            const fluxPrompt = `Generate a product/prop photograph.\n\nObject: ${sanitizedPrompt}\n\nRequirements:\n- Clean product shot, object centered in frame\n- Simple, non-distracting background\n- 3/4 view or front view\n- Object fills 60-80% of frame\n- Sharp focus, professional quality\n- No people, hands, or body parts\n- Absolutely no visible text, letters, numbers, or writing in any language on any surface including labels and packaging\n- No watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
 
             const generationPromises: Promise<ImageData>[] = [];
             for (let i = 0; i < count; i++) {

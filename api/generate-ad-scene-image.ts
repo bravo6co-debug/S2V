@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // FLUX용 프롬프트 구성 (간결하고 명확하게)
         const moodPart = mood ? `, ${mood} mood` : '';
         const cameraPart = cameraAngle ? `, ${cameraAngle.toLowerCase()} shot` : '';
-        const fluxPrompt = `Photorealistic cinematic scene for advertisement, no text or watermarks${moodPart}${cameraPart}. ${imagePrompt}`;
+        const fluxPrompt = `Photorealistic cinematic scene for advertisement, absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, labels, and packaging, no watermarks${moodPart}${cameraPart}. ${imagePrompt}`;
 
         console.log(`[ad-scene-image] Step: ${pipelineStep}, Prompt (${fluxPrompt.length} chars): ${fluxPrompt.substring(0, 150)}...`);
 

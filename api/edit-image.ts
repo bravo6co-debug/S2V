@@ -79,7 +79,7 @@ Your primary task is to intelligently modify the provided base image according t
 ---
 **4. CRITICAL OUTPUT REQUIREMENTS**
 -   **Output:** A single, edited image that is clearly different from the original.
--   **Restriction:** The image must not contain any text, watermarks, or typography.
+-   **Restriction:** The image MUST NOT contain any visible text, letters, words, numbers, watermarks, or typography in ANY language (Chinese, Korean, Japanese, English, or any other). This includes text on screens, signs, labels, packaging, or any surface. If screens or signs appear, they must show blank, blurred, or abstract content only.
 `;
 
         parts.push({ text: finalPrompt });

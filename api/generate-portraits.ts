@@ -58,7 +58,7 @@ const generateOneCharacterPortrait = async (
 
 ---
 **FORBIDDEN ELEMENTS:**
--   The image MUST NOT contain any text, letters, words, numbers, watermarks, or typography.
+-   The image MUST NOT contain any visible text, letters, words, numbers, watermarks, or typography in ANY language (Chinese, Korean, Japanese, English, or any other). All surfaces, backgrounds, and objects must be free of any writing.
 
 Generate only the image, no text response needed.
 `;
@@ -138,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const apiKey = await getEachLabsApiKey(auth.userId);
             console.log(`[generate-portraits] Using FLUX model: ${imageModel}`);
 
-            const fluxPrompt = `Generate a character portrait photograph.\n\nCharacter: ${sanitizedPrompt}\n\nRequirements:\n- Bust shot (chest up), facing forward, looking at camera\n- Ethnically Korean character\n- Clean, simple background (solid light gray or off-white)\n- Neutral or gentle facial expression\n- No hands visible in frame\n- No text or watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
+            const fluxPrompt = `Generate a character portrait photograph.\n\nCharacter: ${sanitizedPrompt}\n\nRequirements:\n- Bust shot (chest up), facing forward, looking at camera\n- Ethnically Korean character\n- Clean, simple background (solid light gray or off-white)\n- Neutral or gentle facial expression\n- No hands visible in frame\n- Absolutely no visible text, letters, numbers, or writing in any language on any surface\n- No watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
 
             const generationPromises: Promise<ImageData>[] = [];
             for (let i = 0; i < count; i++) {
