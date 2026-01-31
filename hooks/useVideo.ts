@@ -210,16 +210,19 @@ export function useVideo(): UseVideoReturn {
     setIsGenerating(true);
     setError(null);
 
+    // 로컬 작업 복사본 사용 (stale closure 방지)
+    let currentTimeline = { ...timeline };
+
     try {
       // Update status to 'generating'
-      const generatingClips = timeline.clips.map(c =>
-        c.id === clipId ? { ...c, status: 'generating' as const } : c
-      );
-      contextSetTimeline({
-        ...timeline,
-        clips: generatingClips,
+      currentTimeline = {
+        ...currentTimeline,
+        clips: currentTimeline.clips.map(c =>
+          c.id === clipId ? { ...c, status: 'generating' as const } : c
+        ),
         updatedAt: Date.now(),
-      });
+      };
+      contextSetTimeline(currentTimeline);
 
       // Generate video using Hailuo API
       const result = await generateVideoFromImage(
@@ -228,39 +231,38 @@ export function useVideo(): UseVideoReturn {
         Math.min(clip.duration, 6) // Hailuo 클립 최대 6초
       );
 
-      // Update with generated video
-      const updatedClips = timeline.clips.map(c =>
-        c.id === clipId
-          ? {
-              ...c,
-              status: 'complete' as const,
-              generatedVideo: {
-                url: result.videoUrl,
-                thumbnailUrl: result.thumbnailUrl,
-                duration: result.duration,
-              },
-            }
-          : c
-      );
-
-      contextSetTimeline({
-        ...timeline,
-        clips: updatedClips,
+      // Update with generated video (로컬 복사본 기반 업데이트)
+      currentTimeline = {
+        ...currentTimeline,
+        clips: currentTimeline.clips.map(c =>
+          c.id === clipId
+            ? {
+                ...c,
+                status: 'complete' as const,
+                generatedVideo: {
+                  url: result.videoUrl,
+                  thumbnailUrl: result.thumbnailUrl,
+                  duration: result.duration,
+                },
+              }
+            : c
+        ),
         updatedAt: Date.now(),
-      });
+      };
+      contextSetTimeline(currentTimeline);
     } catch (e) {
       const message = e instanceof Error ? e.message : '영상 클립 생성에 실패했습니다.';
       setError(message);
 
-      // 에러 상태 업데이트
-      const updatedClips = timeline.clips.map(c =>
-        c.id === clipId ? { ...c, status: 'error' as const } : c
-      );
-      contextSetTimeline({
-        ...timeline,
-        clips: updatedClips,
+      // 에러 상태 업데이트 (로컬 복사본 기반)
+      currentTimeline = {
+        ...currentTimeline,
+        clips: currentTimeline.clips.map(c =>
+          c.id === clipId ? { ...c, status: 'error' as const, error: message } : c
+        ),
         updatedAt: Date.now(),
-      });
+      };
+      contextSetTimeline(currentTimeline);
     } finally {
       setGeneratingClipId(null);
       setIsGenerating(false);
@@ -281,17 +283,69 @@ export function useVideo(): UseVideoReturn {
     setIsGenerating(true);
     setError(null);
 
+    // 로컬 작업 복사본: 순차 실행 시 이전 결과를 누적 유지
+    let currentTimeline = { ...timeline };
+
     for (const clip of pendingClips) {
+      setGeneratingClipId(clip.id);
+
+      // Update status to 'generating'
+      currentTimeline = {
+        ...currentTimeline,
+        clips: currentTimeline.clips.map(c =>
+          c.id === clip.id ? { ...c, status: 'generating' as const } : c
+        ),
+        updatedAt: Date.now(),
+      };
+      contextSetTimeline(currentTimeline);
+
       try {
-        await generateClipVideo(clip.id, referenceImages);
+        const result = await generateVideoFromImage(
+          clip.sourceImage!,
+          clip.motionPrompt || 'Cinematic camera movement with subtle motion',
+          Math.min(clip.duration, 6)
+        );
+
+        // 성공: 로컬 복사본에 누적 (이전 클립 결과 유지)
+        currentTimeline = {
+          ...currentTimeline,
+          clips: currentTimeline.clips.map(c =>
+            c.id === clip.id
+              ? {
+                  ...c,
+                  status: 'complete' as const,
+                  generatedVideo: {
+                    url: result.videoUrl,
+                    thumbnailUrl: result.thumbnailUrl,
+                    duration: result.duration,
+                  },
+                }
+              : c
+          ),
+          updatedAt: Date.now(),
+        };
+        contextSetTimeline(currentTimeline);
       } catch (e) {
         console.error(`Failed to generate clip ${clip.id}:`, e);
-        // 다른 클립은 계속 진행
+        const message = e instanceof Error ? e.message : '영상 클립 생성에 실패했습니다.';
+        setError(message);
+
+        // 에러: 로컬 복사본에 에러 상태 누적
+        currentTimeline = {
+          ...currentTimeline,
+          clips: currentTimeline.clips.map(c =>
+            c.id === clip.id ? { ...c, status: 'error' as const, error: message } : c
+          ),
+          updatedAt: Date.now(),
+        };
+        contextSetTimeline(currentTimeline);
+        // 에러가 나도 다음 클립 계속 진행
       }
     }
 
+    setGeneratingClipId(null);
     setIsGenerating(false);
-  }, [timeline, generateClipVideo]);
+  }, [timeline, contextSetTimeline]);
 
   // =============================================
   // 재생 컨트롤
