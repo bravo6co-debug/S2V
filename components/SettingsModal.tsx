@@ -142,10 +142,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             </p>
           </div>
 
-          {/* Hailuo API 키 */}
+          {/* EachLabs API 키 (Hailuo + FLUX) */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Hailuo API 키 (동영상 생성)
+              EachLabs API 키 (FLUX 이미지 / 동영상)
               {hasHailuoApiKey && (
                 <span className="ml-2 text-xs text-green-400">(설정됨)</span>
               )}
@@ -155,7 +155,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 type={showHailuoApiKey ? 'text' : 'password'}
                 value={hailuoApiKey}
                 onChange={(e) => setHailuoApiKey(e.target.value)}
-                placeholder={hasHailuoApiKey ? '새 API 키로 변경하려면 입력' : 'Hailuo API 키 입력'}
+                placeholder={hasHailuoApiKey ? '새 API 키로 변경하려면 입력' : 'EachLabs API 키 입력'}
                 className="w-full px-3 py-2 pr-10 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <button
@@ -176,8 +176,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               </button>
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              eachlabs.ai에서 발급받은 API 키 (동영상 클립 생성에 필요)
+              FLUX 이미지 생성 및 Hailuo 동영상 생성에 사용됩니다
             </p>
+            <a
+              href="https://www.eachlabs.ai/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              eachlabs.ai에서 API 키 발급받기
+            </a>
           </div>
 
           <hr className="border-gray-700" />
@@ -210,15 +221,41 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               onChange={(e) => setImageModel(e.target.value)}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {AVAILABLE_IMAGE_MODELS.map((model) => (
-                <option key={model.value} value={model.value}>
-                  {model.label}
-                </option>
-              ))}
+              <optgroup label="Google Gemini / Imagen (Gemini API 키)">
+                {AVAILABLE_IMAGE_MODELS.filter(m => m.provider !== 'eachlabs').map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="FLUX Kontext (EachLabs API 키)">
+                {AVAILABLE_IMAGE_MODELS.filter(m => m.provider === 'eachlabs').map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}{model.price ? ` - ${model.price}` : ''}
+                  </option>
+                ))}
+              </optgroup>
             </select>
-            <p className="mt-1 text-xs text-gray-500">
-              Imagen 4.0은 더 높은 품질의 이미지를 생성합니다
-            </p>
+            {/* 선택된 모델에 따른 안내 메시지 */}
+            {AVAILABLE_IMAGE_MODELS.find(m => m.value === imageModel)?.provider === 'eachlabs' ? (
+              <div className="mt-2 p-2.5 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-xs text-blue-300">
+                  FLUX Kontext 모델은 EachLabs API 키가 필요합니다.
+                  {!hasHailuoApiKey && (
+                    <span className="text-yellow-400 font-medium"> (API 키 미설정)</span>
+                  )}
+                </p>
+                <div className="mt-1.5 text-xs text-gray-400 space-y-0.5">
+                  <p>FLUX Kontext Pro: $0.04/장 ($1로 약 25장)</p>
+                  <p>FLUX Kontext Max: $0.08/장 ($1로 약 12장, 최고품질)</p>
+                  <p className="text-gray-500 mt-1">참조 이미지 2장 이상 시 Multi-Image 모델 자동 사용</p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">
+                Gemini/Imagen 모델은 Gemini API 키를 사용합니다
+              </p>
+            )}
           </div>
 
           {/* TTS 음성 */}

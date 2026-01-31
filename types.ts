@@ -442,11 +442,15 @@ export const AVAILABLE_TEXT_MODELS: { value: string; label: string }[] = [
 ];
 
 // 사용 가능한 이미지 모델
-export const AVAILABLE_IMAGE_MODELS: { value: string; label: string }[] = [
-  { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image (최고품질, 4K)' },
-  { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (기본)' },
-  { value: 'imagen-4.0-generate-001', label: 'Imagen 4.0 (고품질)' },
-  { value: 'imagen-4.0-fast-generate-001', label: 'Imagen 4.0 Fast (빠름)' },
+export const AVAILABLE_IMAGE_MODELS: { value: string; label: string; price?: string; provider?: string }[] = [
+  // Google Gemini / Imagen 모델 (Gemini API 키 사용)
+  { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image (최고품질, 4K)', provider: 'gemini' },
+  { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (기본)', provider: 'gemini' },
+  { value: 'imagen-4.0-generate-001', label: 'Imagen 4.0 (고품질)', provider: 'gemini' },
+  { value: 'imagen-4.0-fast-generate-001', label: 'Imagen 4.0 Fast (빠름)', provider: 'gemini' },
+  // FLUX Kontext 모델 (EachLabs API 키 사용)
+  { value: 'flux-kontext-pro', label: 'FLUX Kontext Pro', price: '$0.04/장', provider: 'eachlabs' },
+  { value: 'flux-kontext-max', label: 'FLUX Kontext Max (최고품질)', price: '$0.08/장', provider: 'eachlabs' },
 ];
 
 // 사용 가능한 비디오 모델

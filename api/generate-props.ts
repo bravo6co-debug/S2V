@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from "@google/genai";
 import { sanitizePrompt, setCorsHeaders, getStylePrompt, getAIClientForUser, getUserImageModel, MODELS } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
+import { isFluxModel, getEachLabsApiKey, generateFluxImage } from './lib/eachlabs.js';
 import type { GeneratePropsRequest, ImageData, ApiErrorResponse, ImageStyle } from './lib/types.js';
 
 /**
@@ -133,7 +134,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const count = Math.min(Math.max(numberOfImages || 1, 1), 10);
         const ratio = aspectRatio === '9:16' ? '9:16' : '16:9';
 
-        // Generate images in parallel with specified style
+        // FLUX 모델인 경우 EachLabs API 사용
+        if (isFluxModel(imageModel)) {
+            const apiKey = await getEachLabsApiKey(auth.userId);
+            console.log(`[generate-props] Using FLUX model: ${imageModel}`);
+
+            const fluxPrompt = `Generate a product/prop photograph.\n\nObject: ${sanitizedPrompt}\n\nRequirements:\n- Clean product shot, object centered in frame\n- Simple, non-distracting background\n- 3/4 view or front view\n- Object fills 60-80% of frame\n- Sharp focus, professional quality\n- No people, hands, or body parts\n- No text or watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
+
+            const generationPromises: Promise<ImageData>[] = [];
+            for (let i = 0; i < count; i++) {
+                generationPromises.push(generateFluxImage({
+                    apiKey,
+                    model: imageModel,
+                    prompt: fluxPrompt,
+                    aspectRatio: ratio,
+                }));
+            }
+
+            const results = await Promise.all(generationPromises);
+            return res.status(200).json({ images: results });
+        }
+
+        // Gemini/Imagen 모델 사용
         const generationPromises: Promise<ImageData>[] = [];
         for (let i = 0; i < count; i++) {
             generationPromises.push(generateOnePropImage(aiClient, imageModel, sanitizedPrompt, ratio, imageStyle));

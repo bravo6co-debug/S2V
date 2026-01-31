@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from "@google/genai";
 import { Part, sanitizePrompt, setCorsHeaders, getStylePrompt, getAIClientForUser, getUserImageModel, MODELS } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
+import { isFluxModel, getEachLabsApiKey, generateFluxImage } from './lib/eachlabs.js';
 import type { GenerateImagesRequest, ImageData, ApiErrorResponse, ImageStyle, NamedCharacterImage } from './lib/types.js';
 
 /**
@@ -227,6 +228,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const count = Math.min(Math.max(numberOfImages || 1, 1), 10);
         const ratio = aspectRatio === '9:16' ? '9:16' : '16:9';
 
+        // FLUX 모델인 경우 EachLabs API 사용
+        if (isFluxModel(imageModel)) {
+            const apiKey = await getEachLabsApiKey(auth.userId);
+            console.log(`[generate-images] Using FLUX model: ${imageModel}`);
+
+            // 참조 이미지 수집 (캐릭터 → 소품 → 배경 순서, 최대 2장)
+            const refImages: ImageData[] = [];
+            if (namedCharacters && namedCharacters.length > 0) {
+                for (const char of namedCharacters) {
+                    if (refImages.length < 2) refImages.push(char.image);
+                }
+            } else if (characterImages && characterImages.length > 0) {
+                for (const img of characterImages) {
+                    if (refImages.length < 2) refImages.push(img);
+                }
+            }
+            if (refImages.length < 2 && propImages && propImages.length > 0) {
+                for (const img of propImages) {
+                    if (refImages.length < 2) refImages.push(img);
+                }
+            }
+            if (refImages.length < 2 && backgroundImage) {
+                refImages.push(backgroundImage);
+            }
+
+            // 캐릭터 이름 정보를 프롬프트에 포함
+            const charNames = namedCharacters?.map(c => c.name).join(', ') || '';
+            const charInfo = charNames ? `\nCharacters in scene: ${charNames}` : '';
+
+            const fluxPrompt = `Generate a cinematic scene image.\n\nScene: ${sanitizedPrompt}${charInfo}\n\nRequirements:\n- Cinematic, photorealistic quality\n- Korean characters if people are depicted\n- Each character must look exactly like their reference photo\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio\n- No text, watermarks, or typography\n- Single full-bleed image, no borders or multi-panel layouts`;
+
+            const generationPromises: Promise<ImageData>[] = [];
+            for (let i = 0; i < count; i++) {
+                generationPromises.push(generateFluxImage({
+                    apiKey,
+                    model: imageModel,
+                    prompt: fluxPrompt,
+                    aspectRatio: ratio,
+                    referenceImages: refImages.length > 0 ? refImages : undefined,
+                }));
+            }
+
+            const results = await Promise.all(generationPromises);
+            return res.status(200).json({ images: results });
+        }
+
+        // Gemini/Imagen 모델 사용
         const generationPromises: Promise<ImageData>[] = [];
         for (let i = 0; i < count; i++) {
             generationPromises.push(generateOneImage(

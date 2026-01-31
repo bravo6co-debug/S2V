@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             // 유효성 검사
             const validTextModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-            const validImageModels = ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image', 'imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001'];
+            const validImageModels = ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image', 'imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001', 'flux-kontext-pro', 'flux-kontext-max'];
             const validVideoModels = ['minimax-hailuo-v2-3-fast-standard-image-to-video'];
             const validTtsModels = ['gemini-2.5-flash-preview-tts'];
             const validTtsVoices = ['Kore', 'Aoede', 'Charon', 'Fenrir', 'Puck'];
