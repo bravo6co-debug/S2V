@@ -22,7 +22,7 @@ const PERSON_PROMPTS: Record<PersonType, string> = {
 // =============================================
 
 function buildMukbangPrompt(foodName: string): string {
-    return `Photorealistic cinematic scene of a person happily eating ${foodName}, sitting at a restaurant table, the ${foodName} is beautifully presented on the table in front of them, the person is holding chopsticks or utensils and taking a bite with a genuine expression of enjoyment, warm golden ambient lighting, food photography style, shallow depth of field, close-up to medium shot, absolutely no visible text letters numbers or writing in any language including on screens signs labels and packaging, no watermarks`;
+    return `Photorealistic food photography scene, the ${foodName} is the hero subject occupying the center and lower two-thirds of the frame in sharp focus with beautiful plating and garnish, a person sits behind the table slightly out of focus holding chopsticks or utensils reaching toward the ${foodName}, warm golden ambient lighting, overhead angle tilted slightly toward the food, shallow depth of field focused on the food, restaurant table setting, absolutely no visible text letters numbers or writing in any language including on screens signs labels and packaging, no watermarks`;
 }
 
 // =============================================
@@ -30,7 +30,7 @@ function buildMukbangPrompt(foodName: string): string {
 // =============================================
 
 function buildMukbangVideoPrompt(foodName: string): string {
-    return `Cinematic slow motion scene of a person eating ${foodName} with genuine enjoyment, natural chewing motion, picking up food with chopsticks, slight head tilt of satisfaction, steam rising gently from the hot food, warm golden lighting, shallow depth of field, food advertising quality, smooth camera, 4K cinematic`;
+    return `Cinematic scene starting with an extreme close-up of ${foodName} with steam rising and glistening texture in sharp focus, then the camera slowly pulls back and tilts up to gradually reveal a person sitting at the table picking up the ${foodName} with chopsticks and eating with genuine enjoyment, smooth dolly-out zoom-out camera movement, warm golden lighting, shallow depth of field keeping food in focus, food advertising quality, 4K cinematic`;
 }
 
 // =============================================
