@@ -18,6 +18,7 @@ import {
   TONE_OPTIONS,
   SCENARIO_MODE_OPTIONS,
   IMAGE_STYLE_OPTIONS,
+  AVAILABLE_IMAGE_MODELS,
 } from '../../types';
 import { SuggestedCharacterCard } from './SuggestedCharacterCard';
 import { AssetManagementSection } from './AssetManagementSection';
@@ -704,7 +705,7 @@ export const ScenarioTab: React.FC = () => {
   } = useProject();
 
   // 인증 상태 확인
-  const { isAuthenticated, canUseApi } = useAuth();
+  const { isAuthenticated, canUseApi, settings: authSettings } = useAuth();
 
   // Quick character generation hook
   const {
@@ -976,6 +977,15 @@ export const ScenarioTab: React.FC = () => {
                   <span className="px-2 py-1 bg-green-900/50 rounded text-green-300">
                     {totalGeneratedImages}/{scenario.scenes.length} 이미지
                   </span>
+                  {authSettings?.imageModel && (() => {
+                    const modelInfo = AVAILABLE_IMAGE_MODELS.find(m => m.value === authSettings.imageModel);
+                    const isFlux = authSettings.imageModel.startsWith('flux-kontext-');
+                    return (
+                      <span className={`px-2 py-1 rounded ${isFlux ? 'bg-orange-900/50 text-orange-300' : 'bg-blue-900/50 text-blue-300'}`}>
+                        {modelInfo?.label || authSettings.imageModel}
+                      </span>
+                    );
+                  })()}
                 </div>
                 {/* AI 추천 톤/분위기 */}
                 {scenario.recommendedTone && scenario.recommendedTone !== scenario.tone && (
