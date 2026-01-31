@@ -34,13 +34,8 @@ export function isFluxModel(model: string): boolean {
  */
 export async function getEachLabsApiKey(userId: string): Promise<string> {
     const user = await findUserById(userId);
-    let apiKey: string | undefined;
-
-    if (user?.isAdmin) {
-        apiKey = process.env.HAILUO_API_KEY;
-    } else {
-        apiKey = user?.settings?.hailuoApiKey || process.env.HAILUO_API_KEY;
-    }
+    // 개인 설정 키 우선, 환경변수 폴백 (admin/일반 사용자 동일)
+    const apiKey = user?.settings?.hailuoApiKey || process.env.HAILUO_API_KEY;
 
     if (!apiKey) {
         throw new Error('EachLabs API 키가 설정되지 않았습니다. 설정에서 EachLabs API 키를 입력해 주세요.');
