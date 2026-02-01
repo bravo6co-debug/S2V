@@ -151,6 +151,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             <p className="mt-1 text-xs text-gray-500">
               Google AI Studio에서 발급받은 API 키
             </p>
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Google AI Studio에서 API 키 발급받기
+            </a>
           </div>
 
           {/* EachLabs API 키 (Hailuo + FLUX) */}
@@ -205,7 +216,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           {/* OpenAI API 키 (TTS 나레이션) */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              OpenAI API 키 (TTS 나레이션)
+              OpenAI API 키 (텍스트 생성 / TTS 나레이션)
               {hasOpenaiApiKey && (
                 <span className="ml-2 text-xs text-green-400">(설정됨)</span>
               )}
@@ -236,7 +247,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               </button>
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              롱폼 비디오의 OpenAI TTS 나레이션 생성에 사용됩니다
+              OpenAI 모델 텍스트 생성 및 TTS 나레이션에 사용됩니다
             </p>
             <a
               href="https://platform.openai.com/api-keys"
@@ -263,12 +274,35 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               onChange={(e) => setTextModel(e.target.value)}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {AVAILABLE_TEXT_MODELS.map((model) => (
-                <option key={model.value} value={model.value}>
-                  {model.label}
-                </option>
-              ))}
+              <optgroup label="Google Gemini (Gemini API 키)">
+                {AVAILABLE_TEXT_MODELS.filter(m => m.provider !== 'openai').map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="OpenAI (OpenAI API 키)">
+                {AVAILABLE_TEXT_MODELS.filter(m => m.provider === 'openai').map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))}
+              </optgroup>
             </select>
+            {AVAILABLE_TEXT_MODELS.find(m => m.value === textModel)?.provider === 'openai' ? (
+              <div className="mt-2 p-2.5 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-xs text-blue-300">
+                  OpenAI 모델은 OpenAI API 키가 필요합니다.
+                  {!hasOpenaiApiKey && (
+                    <span className="text-yellow-400 font-medium"> (API 키 미설정)</span>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">
+                Gemini 모델은 Gemini API 키를 사용합니다
+              </p>
+            )}
           </div>
 
           {/* 이미지 모델 */}

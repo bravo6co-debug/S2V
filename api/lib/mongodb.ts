@@ -197,6 +197,9 @@ export async function saveUserSettings(userId: string, settings: Partial<UserSet
         if (settings.hailuoApiKey !== undefined) {
             updateFields['settings.hailuoApiKey'] = settings.hailuoApiKey || undefined;
         }
+        if (settings.openaiApiKey !== undefined) {
+            updateFields['settings.openaiApiKey'] = settings.openaiApiKey || undefined;
+        }
         if (settings.textModel) {
             updateFields['settings.textModel'] = settings.textModel;
         }

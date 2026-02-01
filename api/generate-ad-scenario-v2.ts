@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders, STYLE_PROMPTS, getThinkingConfig } from './lib/gemini.js';
+import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders, STYLE_PROMPTS, getThinkingConfig, getAIClientForUser, getUserTextModel } from './lib/gemini.js';
+import { getUserIdFromRequest } from './lib/auth.js';
+import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from './lib/openai.js';
 import type {
     GenerateAdScenarioV2Request, Scenario, Scene, ScenarioTone, ImageStyle,
     StoryBeat, CameraAngle, ApiErrorResponse, AdType, IndustryCategory, TargetAudience, AdDuration
@@ -204,6 +206,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' } as ApiErrorResponse);
     }
 
+    // 인증된 사용자가 있으면 사용자 모델 설정 사용
+    const userId = getUserIdFromRequest(req);
+
     try {
         const { config } = req.body as GenerateAdScenarioV2Request;
 
@@ -348,47 +353,63 @@ ${originStory ? `- **브랜드 탄생 배경**: ${sanitizePrompt(originStory, 30
 - 짧고 임팩트 있게, 광고 카피처럼 작성
 - Reason 씬: 강압적 CTA("지금 구매!") 대신 부드러운 추천 톤`;
 
-        const response = await ai.models.generateContent({
-            model: MODELS.TEXT,
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: {
-                            type: Type.STRING,
-                            description: "광고 시나리오 제목",
-                        },
-                        synopsis: {
-                            type: Type.STRING,
-                            description: "광고 콘셉트 한 줄 요약",
-                        },
-                        scenes: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    sceneNumber: { type: Type.NUMBER, description: "씬 번호 (1부터)" },
-                                    duration: { type: Type.NUMBER, description: `씬 길이 (${sceneDuration}초)` },
-                                    storyBeat: { type: Type.STRING, description: "HDSER 비트: Hook, Discovery, Story, Experience, Reason 중 하나" },
-                                    visualDescription: { type: Type.STRING, description: "화면에 보이는 것 (한국어, 구체적 시각 묘사)" },
-                                    narration: { type: Type.STRING, description: `나레이션 (한국어, ${Math.floor(sceneDuration * 4)}-${sceneDuration * 5}자, 광고 카피 스타일)` },
-                                    cameraAngle: { type: Type.STRING, description: "카메라 앵글" },
-                                    mood: { type: Type.STRING, description: "분위기 (한국어, 2-3단어)" },
-                                    imagePrompt: { type: Type.STRING, description: "이미지 생성용 영어 프롬프트 (신규 공식 적용)" },
+        // 사용자별 텍스트 모델 결정
+        const textModel = userId ? await getUserTextModel(userId) : MODELS.TEXT;
+        let parsed: any;
+
+        if (isOpenAIModel(textModel) && userId) {
+            // OpenAI 모델 사용
+            const openaiKey = await getOpenAIKeyForUser(userId);
+            const jsonPrompt = `${prompt}\n\nRespond in JSON format with this structure:\n{"title": "광고 시나리오 제목", "synopsis": "광고 콘셉트 한 줄 요약", "scenes": [{"sceneNumber": 1, "duration": ${sceneDuration}, "storyBeat": "Hook", "visualDescription": "화면 묘사 (한국어)", "narration": "나레이션 (한국어)", "cameraAngle": "카메라 앵글", "mood": "분위기", "imagePrompt": "영어 이미지 프롬프트"}]}`;
+            const resultText = await generateTextWithOpenAI(openaiKey, textModel, jsonPrompt, {
+                systemPrompt: 'You are a professional advertising scenario writer for Korean video ads. Always respond with valid JSON. Write narrations in Korean and image prompts in English.',
+                jsonMode: true,
+            });
+            parsed = JSON.parse(resultText);
+        } else {
+            // Gemini 모델 사용
+            const aiClient = userId ? await getAIClientForUser(userId) : ai;
+            const response = await aiClient!.models.generateContent({
+                model: textModel,
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            title: {
+                                type: Type.STRING,
+                                description: "광고 시나리오 제목",
+                            },
+                            synopsis: {
+                                type: Type.STRING,
+                                description: "광고 콘셉트 한 줄 요약",
+                            },
+                            scenes: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        sceneNumber: { type: Type.NUMBER, description: "씬 번호 (1부터)" },
+                                        duration: { type: Type.NUMBER, description: `씬 길이 (${sceneDuration}초)` },
+                                        storyBeat: { type: Type.STRING, description: "HDSER 비트: Hook, Discovery, Story, Experience, Reason 중 하나" },
+                                        visualDescription: { type: Type.STRING, description: "화면에 보이는 것 (한국어, 구체적 시각 묘사)" },
+                                        narration: { type: Type.STRING, description: `나레이션 (한국어, ${Math.floor(sceneDuration * 4)}-${sceneDuration * 5}자, 광고 카피 스타일)` },
+                                        cameraAngle: { type: Type.STRING, description: "카메라 앵글" },
+                                        mood: { type: Type.STRING, description: "분위기 (한국어, 2-3단어)" },
+                                        imagePrompt: { type: Type.STRING, description: "이미지 생성용 영어 프롬프트 (신규 공식 적용)" },
+                                    },
+                                    required: ["sceneNumber", "duration", "storyBeat", "visualDescription", "narration", "cameraAngle", "mood", "imagePrompt"],
                                 },
-                                required: ["sceneNumber", "duration", "storyBeat", "visualDescription", "narration", "cameraAngle", "mood", "imagePrompt"],
                             },
                         },
+                        required: ["title", "synopsis", "scenes"],
                     },
-                    required: ["title", "synopsis", "scenes"],
+                    ...getThinkingConfig(textModel),
                 },
-                ...getThinkingConfig(MODELS.TEXT),
-            },
-        });
-
-        const parsed = JSON.parse(response.text);
+            });
+            parsed = JSON.parse(response.text);
+        }
 
         // Transform scenes with IDs
         const scenes: Scene[] = parsed.scenes.map((scene: any, index: number) => ({

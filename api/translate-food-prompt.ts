@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sanitizePrompt, setCorsHeaders, getAIClientForUser, getUserTextModel, getThinkingConfig } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
+import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from './lib/openai.js';
 import type { ApiErrorResponse } from './lib/types.js';
 
 interface TranslateFoodPromptRequest {
@@ -49,20 +50,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log('=== FOOD PROMPT TRANSLATION START ===');
         console.log('Korean prompt:', sanitizedPrompt);
 
-        const aiClient = await getAIClientForUser(auth.userId);
         const textModel = await getUserTextModel(auth.userId);
 
-        const translationResponse = await aiClient.models.generateContent({
-            model: textModel,
-            config: {
-                ...getThinkingConfig(textModel),
-            },
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        {
-                            text: `You are a professional food cinematography director. I need TWO outputs from you.
+        const foodPromptText = `You are a professional food cinematography director. I need TWO outputs from you.
 
 **Input:** A Korean food description.
 **Output:** A JSON object with exactly two fields:
@@ -78,16 +68,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 **IMPORTANT:** Return ONLY the JSON object. No markdown, no code blocks, no explanation.
 
 **Korean food description:**
-${sanitizedPrompt}`
-                        }
-                    ]
-                }
-            ]
-        });
+${sanitizedPrompt}`;
 
-        const responseText = (translationResponse as any)?.candidates?.[0]?.content?.parts?.[0]?.text
-            || (translationResponse as any)?.text
-            || '';
+        let responseText: string;
+
+        if (isOpenAIModel(textModel)) {
+            const openaiKey = await getOpenAIKeyForUser(auth.userId);
+            responseText = await generateTextWithOpenAI(openaiKey, textModel, foodPromptText, {
+                systemPrompt: 'You are a professional food cinematography director. Always respond with valid JSON.',
+                jsonMode: true,
+            });
+        } else {
+            const aiClient = await getAIClientForUser(auth.userId);
+            const translationResponse = await aiClient.models.generateContent({
+                model: textModel,
+                config: {
+                    ...getThinkingConfig(textModel),
+                },
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [{ text: foodPromptText }]
+                    }
+                ]
+            });
+            responseText = (translationResponse as any)?.candidates?.[0]?.content?.parts?.[0]?.text
+                || (translationResponse as any)?.text
+                || '';
+        }
 
         console.log('Gemini raw response:', responseText);
 

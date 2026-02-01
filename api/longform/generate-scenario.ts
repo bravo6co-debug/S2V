@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, getUserTextModel, getThinkingConfig, sanitizePrompt, setCorsHeaders, Type } from '../lib/gemini.js';
+import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from '../lib/openai.js';
 
 interface GenerateLongformRequest {
   topic: string;
@@ -13,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const auth = await requireAuth(req);
+  const auth = requireAuth(req);
   if (!auth.authenticated || !auth.userId) {
     return res.status(401).json({ error: auth.error || '로그인이 필요합니다.' });
   }
@@ -27,7 +28,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const sanitizedTopic = sanitizePrompt(topic, 200);
     const totalScenes = duration - 1;
-    const aiClient = await getAIClientForUser(auth.userId);
     const textModel = await getUserTextModel(auth.userId);
 
     const prompt = `당신은 YouTube 롱폼 영상의 시나리오 작가입니다.
@@ -46,62 +46,96 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 ## 주제
 ${sanitizedTopic}
 
-## 출력 구조
-- hookScene: 후킹 장면 (10초짜리 동영상용)
-- scenes: 본편 ${totalScenes}개 씬 (각 1분)
-- metadata: 제목, 시놉시스, 총 씬 수, 예상 길이`;
+## 출력 구조 (JSON)
+{
+  "hookScene": {
+    "visualDescription": "후킹 이미지 프롬프트 (영어, 애니메이션 스타일)",
+    "motionPrompt": "10초 동영상 모션 설명 (영어)",
+    "hookText": "후킹 자막 텍스트 (한국어, 20자 이내)"
+  },
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "timeRange": "0:10~1:10",
+      "imagePrompt": "이미지 프롬프트 (영어, 애니메이션 스타일, 텍스트 없이)",
+      "narration": "나레이션 텍스트 (한국어, 280~300자)",
+      "narrationCharCount": 290,
+      "storyPhase": "도입/전개/심화/절정/마무리",
+      "mood": "분위기 (한국어, 2~3단어)"
+    }
+  ],
+  "metadata": {
+    "title": "영상 제목",
+    "synopsis": "3줄 요약",
+    "totalScenes": ${totalScenes},
+    "estimatedDuration": "${duration}분"
+  }
+}`;
 
-    const response = await aiClient.models.generateContent({
-      model: textModel,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            hookScene: {
-              type: Type.OBJECT,
-              properties: {
-                visualDescription: { type: Type.STRING, description: '후킹 이미지 프롬프트 (영어, 애니메이션 스타일)' },
-                motionPrompt: { type: Type.STRING, description: '10초 동영상 모션 설명 (영어)' },
-                hookText: { type: Type.STRING, description: '후킹 자막 텍스트 (한국어, 20자 이내)' },
-              },
-              required: ['visualDescription', 'motionPrompt', 'hookText'],
-            },
-            scenes: {
-              type: Type.ARRAY,
-              items: {
+    let parsed: any;
+
+    if (isOpenAIModel(textModel)) {
+      // OpenAI 모델 사용
+      const openaiKey = await getOpenAIKeyForUser(auth.userId);
+      const resultText = await generateTextWithOpenAI(openaiKey, textModel, prompt, {
+        systemPrompt: 'You are a professional YouTube video scenario writer. Always respond with valid JSON matching the requested structure. Write narrations in Korean and image prompts in English.',
+        jsonMode: true,
+      });
+      parsed = JSON.parse(resultText);
+    } else {
+      // Gemini 모델 사용
+      const aiClient = await getAIClientForUser(auth.userId);
+      const response = await aiClient.models.generateContent({
+        model: textModel,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              hookScene: {
                 type: Type.OBJECT,
                 properties: {
-                  sceneNumber: { type: Type.NUMBER, description: '씬 번호 (1부터)' },
-                  timeRange: { type: Type.STRING, description: '시간 범위 (예: 0:10~1:10)' },
-                  imagePrompt: { type: Type.STRING, description: '이미지 프롬프트 (영어, 애니메이션 스타일, 텍스트 없이)' },
-                  narration: { type: Type.STRING, description: '나레이션 텍스트 (한국어, 280~300자)' },
-                  narrationCharCount: { type: Type.NUMBER, description: '나레이션 글자 수' },
-                  storyPhase: { type: Type.STRING, description: '스토리 단계: 도입/전개/심화/절정/마무리' },
-                  mood: { type: Type.STRING, description: '분위기 (한국어, 2~3단어)' },
+                  visualDescription: { type: Type.STRING, description: '후킹 이미지 프롬프트 (영어, 애니메이션 스타일)' },
+                  motionPrompt: { type: Type.STRING, description: '10초 동영상 모션 설명 (영어)' },
+                  hookText: { type: Type.STRING, description: '후킹 자막 텍스트 (한국어, 20자 이내)' },
                 },
-                required: ['sceneNumber', 'timeRange', 'imagePrompt', 'narration', 'narrationCharCount', 'storyPhase', 'mood'],
+                required: ['visualDescription', 'motionPrompt', 'hookText'],
+              },
+              scenes: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    sceneNumber: { type: Type.NUMBER, description: '씬 번호 (1부터)' },
+                    timeRange: { type: Type.STRING, description: '시간 범위 (예: 0:10~1:10)' },
+                    imagePrompt: { type: Type.STRING, description: '이미지 프롬프트 (영어, 애니메이션 스타일, 텍스트 없이)' },
+                    narration: { type: Type.STRING, description: '나레이션 텍스트 (한국어, 280~300자)' },
+                    narrationCharCount: { type: Type.NUMBER, description: '나레이션 글자 수' },
+                    storyPhase: { type: Type.STRING, description: '스토리 단계: 도입/전개/심화/절정/마무리' },
+                    mood: { type: Type.STRING, description: '분위기 (한국어, 2~3단어)' },
+                  },
+                  required: ['sceneNumber', 'timeRange', 'imagePrompt', 'narration', 'narrationCharCount', 'storyPhase', 'mood'],
+                },
+              },
+              metadata: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING, description: '영상 제목' },
+                  synopsis: { type: Type.STRING, description: '3줄 요약' },
+                  totalScenes: { type: Type.NUMBER, description: '총 씬 수' },
+                  estimatedDuration: { type: Type.STRING, description: '예상 길이' },
+                },
+                required: ['title', 'synopsis', 'totalScenes', 'estimatedDuration'],
               },
             },
-            metadata: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING, description: '영상 제목' },
-                synopsis: { type: Type.STRING, description: '3줄 요약' },
-                totalScenes: { type: Type.NUMBER, description: '총 씬 수' },
-                estimatedDuration: { type: Type.STRING, description: '예상 길이' },
-              },
-              required: ['title', 'synopsis', 'totalScenes', 'estimatedDuration'],
-            },
+            required: ['hookScene', 'scenes', 'metadata'],
           },
-          required: ['hookScene', 'scenes', 'metadata'],
+          ...getThinkingConfig(textModel),
         },
-        ...getThinkingConfig(textModel),
-      },
-    });
-
-    const parsed = JSON.parse(response.text!);
+      });
+      parsed = JSON.parse(response.text!);
+    }
 
     // Build structured response
     const result = {

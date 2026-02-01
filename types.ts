@@ -601,11 +601,16 @@ export interface GeminiModelConfig {
 }
 
 // 사용 가능한 텍스트 모델
-export const AVAILABLE_TEXT_MODELS: { value: string; label: string }[] = [
-  { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (최고 추론 품질)' },
-  { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (빠르고 저렴)' },
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (안정)' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (고품질)' },
+export const AVAILABLE_TEXT_MODELS: { value: string; label: string; provider?: string }[] = [
+  // Google Gemini 모델
+  { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (최고 추론 품질)', provider: 'gemini' },
+  { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (빠르고 저렴)', provider: 'gemini' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (안정)', provider: 'gemini' },
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (고품질)', provider: 'gemini' },
+  // OpenAI 모델
+  { value: 'gpt-4o', label: 'GPT-4o (최고 품질)', provider: 'openai' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (빠르고 저렴)', provider: 'openai' },
+  { value: 'o3-mini', label: 'o3-mini (추론 특화)', provider: 'openai' },
 ];
 
 // 사용 가능한 이미지 모델

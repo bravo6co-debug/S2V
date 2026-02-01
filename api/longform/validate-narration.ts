@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, getUserTextModel, getThinkingConfig, setCorsHeaders } from '../lib/gemini.js';
+import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from '../lib/openai.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res, req.headers.origin as string);
@@ -31,7 +32,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const aiClient = await getAIClientForUser(auth.userId);
     const textModel = await getUserTextModel(auth.userId);
 
     const direction = charCount < targetMin ? '늘려' : '줄여';
@@ -44,15 +44,26 @@ ${narration}
 
 수정된 나레이션만 출력하세요. 다른 설명 없이 나레이션 텍스트만 반환합니다.`;
 
-    const response = await aiClient.models.generateContent({
-      model: textModel,
-      contents: prompt,
-      config: {
-        ...getThinkingConfig(textModel),
-      },
-    });
+    let adjusted: string;
 
-    const adjusted = response.text?.trim() || narration;
+    if (isOpenAIModel(textModel)) {
+      const openaiKey = await getOpenAIKeyForUser(auth.userId);
+      adjusted = await generateTextWithOpenAI(openaiKey, textModel, prompt, {
+        jsonMode: false,
+      });
+    } else {
+      const aiClient = await getAIClientForUser(auth.userId);
+      const response = await aiClient.models.generateContent({
+        model: textModel,
+        contents: prompt,
+        config: {
+          ...getThinkingConfig(textModel),
+        },
+      });
+      adjusted = response.text?.trim() || narration;
+    }
+
+    adjusted = adjusted.trim() || narration;
 
     return res.status(200).json({
       narration: adjusted,
