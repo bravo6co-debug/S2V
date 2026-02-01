@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import JSZip from 'jszip';
 import { useProject } from '../../contexts/ProjectContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdScenario } from '../../hooks/useAdScenario';
@@ -69,6 +70,12 @@ const TrashIcon: React.FC<{ className?: string }> = ({ className }) => (
 const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+  </svg>
+);
+
+const MusicNoteIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
   </svg>
 );
 
@@ -309,6 +316,29 @@ const AdTab: React.FC = () => {
     if (!isAuthenticated || !canUseApi) { setShowApiKeyModal(true); return; }
     await generateAllSceneImages({ includeTTS: true, ttsVoice: 'Kore', engine });
   }, [isAuthenticated, canUseApi, generateAllSceneImages, engine]);
+
+  const handleDownloadAllAudio = useCallback(async () => {
+    if (!adScenario) return;
+    const scenesWithAudio = adScenario.scenes.filter(s => s.narrationAudio?.data);
+    if (scenesWithAudio.length === 0) return;
+
+    const zip = new JSZip();
+    scenesWithAudio.forEach((scene) => {
+      const ext = scene.narrationAudio!.mimeType === 'audio/mp3' ? 'mp3' : 'wav';
+      const beatLabel = HDSER_BEAT_CONFIG[scene.storyBeat]?.label || scene.storyBeat;
+      const fileName = `${String(scene.sceneNumber).padStart(2, '0')}_${beatLabel}.${ext}`;
+      zip.file(fileName, scene.narrationAudio!.data, { base64: true });
+    });
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${adScenario.title || 'narration'}_audio.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  }, [adScenario]);
 
   const handleNewScenario = useCallback(() => {
     setAdScenario(null);
@@ -956,6 +986,16 @@ const AdTab: React.FC = () => {
                   <DownloadIcon className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">파일</span>
                 </button>
+                {adScenario.scenes.some(s => s.narrationAudio?.data) && (
+                  <button
+                    onClick={handleDownloadAllAudio}
+                    className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-500 flex items-center gap-1"
+                    title="나레이션 오디오 일괄 다운로드 (ZIP)"
+                  >
+                    <MusicNoteIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">오디오</span>
+                  </button>
+                )}
                 <button
                   onClick={() => scenarioFileInputRef.current?.click()}
                   className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 flex items-center gap-1"
@@ -1133,6 +1173,11 @@ const AdTab: React.FC = () => {
                             {beatConfig.label}
                           </span>
                           <span className="text-[10px] text-gray-500">{scene.duration}초</span>
+                          {scene.narrationAudio?.data && (
+                            <span className="px-1.5 py-0.5 bg-teal-900/50 rounded text-[10px] text-teal-400" title={`오디오 ${scene.narrationAudio.durationMs ? (scene.narrationAudio.durationMs / 1000).toFixed(1) + '초' : '생성됨'}`}>
+                              ♪
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs sm:text-sm text-gray-200 line-clamp-2 mb-1">
                           {scene.narration}
