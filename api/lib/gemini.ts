@@ -13,6 +13,49 @@ const defaultApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 export const ai = defaultApiKey ? new GoogleGenAI({ apiKey: defaultApiKey }) : null;
 
 // ============================================
+// API KEY VALIDATION CACHE
+// ============================================
+
+// Cache for API key validation results: key prefix -> { valid, timestamp }
+const keyValidationCache = new Map<string, { valid: boolean; timestamp: number }>();
+const KEY_VALIDATION_TTL = 5 * 60 * 1000; // 5 minutes cache for validation results
+
+/**
+ * Validate a Gemini API key by making a lightweight models.list call.
+ * Results are cached to avoid repeated validation overhead.
+ */
+async function validateApiKey(apiKey: string): Promise<boolean> {
+    const cacheKey = apiKey.substring(0, 10);
+    const now = Date.now();
+
+    // Check cache first
+    const cached = keyValidationCache.get(cacheKey);
+    if (cached && (now - cached.timestamp) < KEY_VALIDATION_TTL) {
+        return cached.valid;
+    }
+
+    try {
+        const testClient = new GoogleGenAI({ apiKey });
+        // Minimal API call - list models with a page size of 1
+        await testClient.models.list({ config: { pageSize: 1 } });
+        keyValidationCache.set(cacheKey, { valid: true, timestamp: now });
+        return true;
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // Only treat as invalid key if the error is specifically about the key
+        if (errorMessage.includes('API key not valid') || errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('API_KEY_INVALID')) {
+            console.warn(`[validateApiKey] Key starting with ${apiKey.substring(0, 6)}... is INVALID: ${errorMessage}`);
+            keyValidationCache.set(cacheKey, { valid: false, timestamp: now });
+            return false;
+        }
+        // For other errors (network, quota, etc.), assume the key is valid
+        // to avoid false negatives from transient issues
+        console.warn(`[validateApiKey] Non-key error during validation (treating key as valid): ${errorMessage}`);
+        return true;
+    }
+}
+
+// ============================================
 // DYNAMIC SETTINGS FROM MONGODB
 // ============================================
 
@@ -60,7 +103,7 @@ export async function getAIClient(): Promise<GoogleGenAI> {
 /**
  * 사용자별 AI 클라이언트 생성
  * - 어드민: 환경변수 API 키 사용
- * - 일반 사용자: 본인의 API 키 사용
+ * - 일반 사용자: 본인의 API 키 사용 (유효하지 않으면 환경변수 키로 폴백)
  */
 export async function getAIClientForUser(userId: string): Promise<GoogleGenAI> {
     const user = await findUserById(userId);
@@ -91,7 +134,19 @@ export async function getAIClientForUser(userId: string): Promise<GoogleGenAI> {
         throw new Error('API 키가 설정되지 않았습니다. 설정에서 Gemini API 키를 입력해 주세요.');
     }
 
-    console.log(`[getAIClientForUser] Using personal key, keyPrefix=${userApiKey.substring(0, 6)}...`);
+    // Validate the user's personal API key before using it
+    const isValid = await validateApiKey(userApiKey);
+    if (!isValid) {
+        console.warn(`[getAIClientForUser] User ${userId} personal key is invalid (keyPrefix=${userApiKey.substring(0, 6)}...).`);
+        if (defaultApiKey) {
+            console.log(`[getAIClientForUser] Falling back to env key due to invalid personal key, keyPrefix=${defaultApiKey.substring(0, 6)}...`);
+            return new GoogleGenAI({ apiKey: defaultApiKey });
+        }
+        // No fallback available - throw a descriptive error
+        throw new Error('설정된 API 키가 유효하지 않습니다. 설정에서 올바른 Gemini API 키를 입력해 주세요.');
+    }
+
+    console.log(`[getAIClientForUser] Using personal key (validated), keyPrefix=${userApiKey.substring(0, 6)}...`);
     return new GoogleGenAI({ apiKey: userApiKey });
 }
 
@@ -113,8 +168,21 @@ export async function canUserUseApi(userId: string): Promise<{ canUse: boolean; 
         return { canUse: false, reason: '서버 API 키가 설정되지 않았습니다.' };
     }
 
-    // 일반 사용자는 본인 API 키 필요
+    // 일반 사용자: 본인 키가 있으면 검증, 없으면 환경변수 키 폴백 확인
     if (user.settings?.geminiApiKey) {
+        const isValid = await validateApiKey(user.settings.geminiApiKey);
+        if (isValid) {
+            return { canUse: true };
+        }
+        // Personal key is invalid, but env key is available as fallback
+        if (defaultApiKey) {
+            return { canUse: true };
+        }
+        return { canUse: false, reason: '설정된 API 키가 유효하지 않습니다. 설정에서 올바른 Gemini API 키를 입력해 주세요.' };
+    }
+
+    // No personal key - check env fallback
+    if (defaultApiKey) {
         return { canUse: true };
     }
 
