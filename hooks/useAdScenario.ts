@@ -547,6 +547,7 @@ export function useAdScenario(): UseAdScenarioReturn {
     deleteFromCloud,
     fetchProjects,
 
+    updateAdScene,
     clearError,
   };
 }

@@ -250,7 +250,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             coreMessage,
             // 타겟 상세
             customTarget,
+            // 참조 이미지
+            referenceImages,
         } = config;
+
+        const hasProductImage = referenceImages && referenceImages.length > 0;
 
         const sanitizedName = sanitizePrompt(productName, 200);
         const toneDescription = TONE_DESCRIPTIONS[tone] || TONE_DESCRIPTIONS.inspirational;
@@ -332,11 +336,29 @@ ${originStory ? `- **브랜드 탄생 배경**: ${sanitizePrompt(originStory, 30
 "${stylePromptText.substring(0, 60)}, ${industryPreset.keywords.split(',').slice(0, 3).join(',')}, [씬 역할에 맞는 구체적 장면 묘사], Korean ${targetAudiences[0] === 'all' ? 'adult' : targetAudiences[0]} character"
 
 ### 중요 규칙
-- 상품이 자연스럽게 장면에 녹아들도록 묘사 (플레이스홀더 없이!)
-- 사용자 참조 이미지가 있으면 그 상품의 외관/분위기를 반영
+- imagePrompt는 반드시 영어로 작성
+- **절대 금지: 이미지에 텍스트/로고/글자가 나타나는 묘사 금지!**
+  - ❌ "monitor showing 'Smart Review Care' dashboard" (브랜드명 텍스트 포함)
+  - ❌ "screen showing successful automation message" (메시지 텍스트 포함)
+  - ❌ "sign with store name" (간판 텍스트 포함)
+  - ✅ "monitor showing clean modern dashboard interface with blue accents"
+  - ✅ "screen with abstract colorful UI elements and notification icons"
+  - ✅ "storefront with warm inviting lighting"
+- 브랜드명("${sanitizedName}"), 제품명, 메시지 텍스트를 imagePrompt/videoPrompt에 절대 포함하지 말 것
+- 화면/모니터/간판이 나오는 씬은 추상적 UI, 컬러, 아이콘, 빛으로 대체
 - 인물이 필요한 씬에는 "Korean [타겟 연령/성별] person/model" 포함
 - 배경, 조명, 소품을 업종에 맞게 구체적으로 묘사
-- imagePrompt는 반드시 영어로 작성
+
+### 상품 이미지 가이드
+${hasProductImage ? `**상품 참조 이미지가 있습니다.** imagePrompt 작성 시:
+- 상품이 자연스럽게 장면에 등장하도록 묘사 (인물이 들고/사용/옆에 놓는 등)
+- 상품의 외관(색상, 형태, 패키징)을 참조 이미지와 일치시키는 묘사 포함
+- Discovery/Experience 씬에서는 상품 클로즈업 또는 사용 장면 필수
+- 예: "Korean woman holding a sleek white tube product, applying cream on hand, soft studio lighting"` : `**상품 참조 이미지가 없습니다.** imagePrompt 작성 시:
+- 상품 자체 대신 분위기/라이프스타일/콘셉트 중심으로 묘사
+- 서비스/앱인 경우: 사용 상황의 감정과 환경을 묘사 (화면 내 텍스트 제외)
+- Discovery/Experience 씬은 사용 전후 감정 변화나 환경 변화로 표현
+- 예: "Korean business owner smiling at desk, relaxed atmosphere, bright modern office"`}
 
 ### 카메라 가이드
 - Hook: 와이드샷 또는 임팩트 있는 클로즈업
@@ -344,6 +366,34 @@ ${originStory ? `- **브랜드 탄생 배경**: ${sanitizePrompt(originStory, 30
 - Story: 라이프스타일 와이드샷, 미디엄샷
 - Experience: POV, 클로즈업, 디테일샷
 - Reason: 미디엄샷 또는 여유로운 와이드샷
+
+---
+
+## 영상 모션 프롬프트 (videoPrompt) 작성 규칙
+
+videoPrompt는 이미지를 영상으로 변환할 때 사용하는 **모션/카메라 지시문**입니다.
+imagePrompt(정적 비주얼)와 완전히 다른 목적이므로 imagePrompt 내용을 반복하지 마세요.
+
+### 비트별 모션 가이드
+- **Hook**: 빠른 줌인 또는 다이내믹한 카메라 이동으로 시선 집중
+  예: "Quick zoom in with slight camera shake, dramatic lighting shift"
+- **Discovery**: 부드러운 패닝으로 상품/서비스 공개
+  예: "Smooth pan from left to right revealing the product, gentle focus pull"
+- **Story**: 안정적 카메라로 라이프스타일 분위기 전달
+  예: "Slow dolly forward, character gently moves, warm ambient motion"
+- **Experience**: POV 느낌 또는 디테일 줌으로 체험감
+  예: "Extreme close-up with slow zoom, subtle hand movements, soft ambient glow"
+- **Reason**: 여유로운 줌아웃 또는 안정적 프레임
+  예: "Slow zoom out, character smiles, soft bokeh background animation"
+
+### 필수 포함 요소
+- 카메라 움직임 (zoom in/out, pan, dolly, tilt, static)
+- 장면 내 동작 (인물 움직임, 물체 움직임, 빛 변화 등)
+- 속도/분위기 (slow, fast, gentle, dramatic)
+
+### 금지 요소
+- imagePrompt 내용 반복 금지 (정적 비주얼 묘사 반복 금지)
+- 텍스트/자막/로고 언급 금지
 
 ---
 
@@ -360,9 +410,9 @@ ${originStory ? `- **브랜드 탄생 배경**: ${sanitizePrompt(originStory, 30
         if (isOpenAIModel(textModel) && userId) {
             // OpenAI 모델 사용
             const openaiKey = await getOpenAIKeyForUser(userId);
-            const jsonPrompt = `${prompt}\n\nRespond in JSON format with this structure:\n{"title": "광고 시나리오 제목", "synopsis": "광고 콘셉트 한 줄 요약", "scenes": [{"sceneNumber": 1, "duration": ${sceneDuration}, "storyBeat": "Hook", "visualDescription": "화면 묘사 (한국어)", "narration": "나레이션 (한국어)", "cameraAngle": "카메라 앵글", "mood": "분위기", "imagePrompt": "영어 이미지 프롬프트"}]}`;
+            const jsonPrompt = `${prompt}\n\nRespond in JSON format with this structure:\n{"title": "광고 시나리오 제목", "synopsis": "광고 콘셉트 한 줄 요약", "scenes": [{"sceneNumber": 1, "duration": ${sceneDuration}, "storyBeat": "Hook", "visualDescription": "화면 묘사 (한국어)", "narration": "나레이션 (한국어)", "cameraAngle": "카메라 앵글", "mood": "분위기", "imagePrompt": "영어 이미지 프롬프트 (텍스트/로고 묘사 금지)", "videoPrompt": "영상 모션 영어 프롬프트 (카메라 움직임, 장면 내 동작)"}]}`;
             const resultText = await generateTextWithOpenAI(openaiKey, textModel, jsonPrompt, {
-                systemPrompt: 'You are a professional advertising scenario writer for Korean video ads. Always respond with valid JSON. Write narrations in Korean and image prompts in English.',
+                systemPrompt: 'You are a professional advertising scenario writer for Korean video ads. Always respond with valid JSON. Write narrations in Korean, image prompts in English (no text/logo descriptions), and video prompts in English (camera movement and motion only).',
                 jsonMode: true,
             });
             parsed = JSON.parse(resultText);
@@ -397,9 +447,10 @@ ${originStory ? `- **브랜드 탄생 배경**: ${sanitizePrompt(originStory, 30
                                         narration: { type: Type.STRING, description: `나레이션 (한국어, ${Math.floor(sceneDuration * 4)}-${sceneDuration * 5}자, 광고 카피 스타일)` },
                                         cameraAngle: { type: Type.STRING, description: "카메라 앵글" },
                                         mood: { type: Type.STRING, description: "분위기 (한국어, 2-3단어)" },
-                                        imagePrompt: { type: Type.STRING, description: "이미지 생성용 영어 프롬프트 (신규 공식 적용)" },
+                                        imagePrompt: { type: Type.STRING, description: "이미지 생성용 영어 프롬프트 (신규 공식 적용, 텍스트/로고 묘사 금지)" },
+                                        videoPrompt: { type: Type.STRING, description: "영상 모션 프롬프트 (영어, 카메라 움직임과 장면 내 동작 묘사, imagePrompt 내용 반복 금지)" },
                                     },
-                                    required: ["sceneNumber", "duration", "storyBeat", "visualDescription", "narration", "cameraAngle", "mood", "imagePrompt"],
+                                    required: ["sceneNumber", "duration", "storyBeat", "visualDescription", "narration", "cameraAngle", "mood", "imagePrompt", "videoPrompt"],
                                 },
                             },
                         },
@@ -423,6 +474,7 @@ ${originStory ? `- **브랜드 탄생 배경**: ${sanitizePrompt(originStory, 30
             mood: scene.mood,
             characters: [],
             imagePrompt: scene.imagePrompt,
+            videoPrompt: scene.videoPrompt,
         }));
 
         // Build Scenario object (V2 필드 포함)

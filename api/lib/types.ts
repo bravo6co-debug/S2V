@@ -49,6 +49,7 @@ export interface Scene {
     mood: string;
     characters?: string[];  // 이 씬에 등장하는 캐릭터 이름 목록
     imagePrompt: string;
+    videoPrompt?: string;  // 영상 생성용 모션/카메라 프롬프트
     generatedImage?: ImageData;
 }
 

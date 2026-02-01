@@ -316,6 +316,7 @@ export interface Scene {
   cameraAngle: CameraAngle;
   mood: string;
   imagePrompt: string;
+  videoPrompt?: string;           // 영상 생성용 모션/카메라 프롬프트
   characters?: string[];          // 이 씬에 등장하는 캐릭터 이름 목록
   generatedImage?: ImageData;
   customImage?: ImageData;        // 사용자가 교체한 이미지

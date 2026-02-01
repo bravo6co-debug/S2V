@@ -22,7 +22,7 @@ import {
 } from '../../types';
 import { compressImageFile } from '../../services/imageCompression';
 import ApiKeyRequiredModal from '../ApiKeyRequiredModal';
-import { SparklesIcon, ClearIcon } from '../Icons';
+import { SparklesIcon, ClearIcon, PencilIcon } from '../Icons';
 
 // =============================================
 // HDSER 비트 색상/라벨
@@ -134,6 +134,7 @@ const AdTab: React.FC = () => {
     loadFromCloud,
     deleteFromCloud,
     fetchProjects,
+    updateAdScene,
     clearError,
   } = useAdScenario();
 
@@ -142,6 +143,7 @@ const AdTab: React.FC = () => {
   // =============================================
   const [wizardStep, setWizardStep] = useState<WizardStep>(1);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
 
   // Step 1: 광고 유형
   const [adType, setAdType] = useState<AdType>('product-intro');
@@ -1185,6 +1187,13 @@ const AdTab: React.FC = () => {
                         <p className="text-[10px] sm:text-xs text-gray-500 line-clamp-1">
                           {scene.visualDescription}
                         </p>
+                        <button
+                          onClick={() => setExpandedSceneId(expandedSceneId === scene.id ? null : scene.id)}
+                          className={`mt-1 flex items-center gap-1 text-[10px] ${expandedSceneId === scene.id ? 'text-blue-400' : 'text-gray-500 hover:text-gray-400'} transition-colors`}
+                        >
+                          <PencilIcon className="w-3 h-3" />
+                          {expandedSceneId === scene.id ? '프롬프트 접기' : '프롬프트 편집'}
+                        </button>
                       </div>
 
                       {/* Actions */}
@@ -1199,6 +1208,32 @@ const AdTab: React.FC = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* 프롬프트 편집 영역 (접이식) */}
+                    {expandedSceneId === scene.id && (
+                      <div className="px-3 pb-3 space-y-2 border-t border-gray-700/50 pt-2">
+                        <div>
+                          <label className="text-[10px] text-gray-400 mb-0.5 block">Image Prompt</label>
+                          <textarea
+                            value={scene.imagePrompt}
+                            onChange={(e) => updateAdScene(scene.id, { imagePrompt: e.target.value })}
+                            className="w-full bg-gray-800/70 text-xs text-gray-200 rounded p-2 resize-none border border-gray-700 focus:border-blue-500 focus:outline-none"
+                            rows={3}
+                            placeholder="이미지 생성용 영어 프롬프트..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-400 mb-0.5 block">Video Prompt</label>
+                          <textarea
+                            value={scene.videoPrompt || ''}
+                            onChange={(e) => updateAdScene(scene.id, { videoPrompt: e.target.value })}
+                            className="w-full bg-gray-800/70 text-xs text-gray-200 rounded p-2 resize-none border border-gray-700 focus:border-blue-500 focus:outline-none"
+                            rows={2}
+                            placeholder="영상 모션 프롬프트 (카메라 움직임, 장면 동작)..."
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

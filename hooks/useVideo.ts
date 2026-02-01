@@ -89,7 +89,7 @@ export function useVideo(): UseVideoReturn {
       order: timeline.clips.length,
       duration: scene.duration || 5,
       sourceImage,
-      motionPrompt: scene.imagePrompt,
+      motionPrompt: scene.videoPrompt || scene.imagePrompt,
       status: 'pending',
       createdAt: Date.now(),
     };
@@ -121,7 +121,7 @@ export function useVideo(): UseVideoReturn {
         order: order++,
         duration: scene.duration || 5,
         sourceImage,
-        motionPrompt: scene.imagePrompt,
+        motionPrompt: scene.videoPrompt || scene.imagePrompt,
         status: 'pending',
         createdAt: Date.now(),
       });
