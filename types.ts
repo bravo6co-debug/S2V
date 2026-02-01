@@ -481,6 +481,7 @@ export interface AdScenarioConfigV2 {
   industry: IndustryCategory;
   productName: string;
   targetAudiences: TargetAudience[];
+  customTarget?: string;           // 타겟 고객 상세 설명 (수동 입력)
   tone: ScenarioTone;
   imageStyle: ImageStyle;
   duration: AdDuration;

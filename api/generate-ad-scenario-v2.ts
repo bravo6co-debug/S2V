@@ -243,6 +243,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             brandPhilosophy,
             originStory,
             coreMessage,
+            // 타겟 상세
+            customTarget,
         } = config;
 
         const sanitizedName = sanitizePrompt(productName, 200);
@@ -285,7 +287,7 @@ ${sceneStructureText}
 
 - **업종**: ${industryLabel}
 - **상품/서비스명**: "${sanitizedName}"
-- **타겟 고객**: ${targetLabels}
+- **타겟 고객**: ${targetLabels}${customTarget ? `\n- **타겟 상세**: ${sanitizePrompt(customTarget, 500)}` : ''}
 - **톤/분위기**: ${tone} - ${toneDescription}
 - **이미지 스타일**: ${imageStyle}
 ${adType === 'product-intro' ? `- **핵심 특징 (USP)**: ${usps.length > 0 ? usps.map((u: string, i: number) => `${i + 1}. ${sanitizePrompt(u, 200)}`).join(' / ') : '(미입력)'}

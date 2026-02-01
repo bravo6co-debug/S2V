@@ -143,6 +143,7 @@ const AdTab: React.FC = () => {
   const [industry, setIndustry] = useState<IndustryCategory>('other');
   const [productName, setProductName] = useState('');
   const [selectedTargets, setSelectedTargets] = useState<TargetAudience[]>(['all']);
+  const [customTarget, setCustomTarget] = useState('');
 
   // Step 2: 제품 소개 (product-intro)
   const [usp1, setUsp1] = useState('');
@@ -220,6 +221,7 @@ const AdTab: React.FC = () => {
       industry,
       productName: productName.trim(),
       targetAudiences: selectedTargets,
+      customTarget: customTarget.trim() || undefined,
       tone,
       imageStyle,
       duration,
@@ -261,7 +263,7 @@ const AdTab: React.FC = () => {
     } catch {
       // error handled by hook
     }
-  }, [isAuthenticated, canUseApi, adType, industry, productName, selectedTargets, tone, imageStyle, duration,
+  }, [isAuthenticated, canUseApi, adType, industry, productName, selectedTargets, customTarget, tone, imageStyle, duration,
     usp1, usp2, launchReason, priceInfo,
     painPoint, solution, effectResult,
     brandMood, usageScene, stylingKeywords,
@@ -700,6 +702,14 @@ const AdTab: React.FC = () => {
                       </button>
                     ))}
                   </div>
+                  <input
+                    type="text"
+                    value={customTarget}
+                    onChange={(e) => setCustomTarget(e.target.value)}
+                    placeholder="타겟 상세 입력 (예: 서울 강남 거주 직장인, 피부 관리에 관심 많은)"
+                    className="w-full mt-2 p-2.5 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent focus:outline-none text-[16px] sm:text-sm"
+                    disabled={isGenerating}
+                  />
                 </div>
               </div>
             )}
