@@ -123,7 +123,7 @@ export interface SceneAssets {
 // =============================================
 
 // 앱 모드 (시나리오, 광고, 영상 제작, 음식 영상)
-export type AppMode = 'scenario' | 'video' | 'ad' | 'foodvideo' | 'longform';
+export type AppMode = 'scenario' | 'video' | 'ad' | 'foodvideo' | 'longform' | 'clip';
 
 // =============================================
 // 프로젝트 상태 (Project State)
@@ -138,6 +138,7 @@ export interface Project {
   backgrounds: BackgroundAsset[];
   scenario: Scenario | null;
   adScenario: Scenario | null;
+  clipScenario: Scenario | null;
   videoTimeline: VideoTimeline | null;
   createdAt: number;
   updatedAt: number;
@@ -349,7 +350,7 @@ export interface Scenario {
   scenes: Scene[];
   chapters?: ScenarioChapter[];   // 장편용 챕터 구조 (3분+ 시나리오)
   // 광고 시나리오 전용 필드
-  scenarioType?: 'standard' | 'ad';      // 시나리오 유형
+  scenarioType?: 'standard' | 'ad' | 'clip';  // 시나리오 유형
   productName?: string;                   // 상품명
   productFeatures?: string;               // 상품 특징
   productImage?: ImageData;               // 상품 이미지 (참조용)
@@ -363,6 +364,20 @@ export interface AdScenarioConfig {
   productFeatures: string;
   tone?: ScenarioTone;
   imageStyle?: ImageStyle;
+}
+
+// =============================================
+// 클립 시나리오 설정 (Hailuo AI 전용 6초 클립)
+// =============================================
+
+export type ClipDuration = 30 | 60 | 90 | 120;
+
+export interface ClipScenarioConfig {
+  topic: string;
+  duration: ClipDuration;
+  tone: ScenarioTone;
+  mode: ScenarioMode;
+  imageStyle: ImageStyle;
 }
 
 // =============================================

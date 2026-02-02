@@ -7,6 +7,7 @@ import { VideoTab } from './components/video/VideoTab';
 import AdTab from './components/ad/AdTab';
 import { FoodVideoTab } from './components/foodvideo/FoodVideoTab';
 import { LongformTab } from './components/longform/LongformTab';
+import ClipScenarioTab from './components/clip/ClipScenarioTab';
 import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode, IMAGE_STYLE_OPTIONS, ImageStyle } from './types';
 import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
 import { ResultDisplay } from './components/ResultDisplay';
@@ -413,6 +414,8 @@ const AppContent: React.FC = () => {
                 return <ScenarioTab />;
             case 'ad':
                 return <AdTab />;
+            case 'clip':
+                return <ClipScenarioTab />;
             case 'video':
                 return <VideoTab />;
             case 'foodvideo':

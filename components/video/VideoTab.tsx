@@ -16,7 +16,7 @@ import {
 } from '../Icons';
 
 // 비디오 소스 타입 (어떤 시나리오를 사용하는지)
-type VideoSource = 'scenario' | 'ad';
+type VideoSource = 'scenario' | 'ad' | 'clip';
 
 // 비디오 생성 모드
 type VideoMode = 'remotion' | 'hailuo';
@@ -529,19 +529,21 @@ const SceneImportModal: React.FC<SceneImportModalProps> = ({
 
 // 메인 VideoTab 컴포넌트
 export const VideoTab: React.FC = () => {
-  const { characters, activeCharacterIds, updateScene, updateAdScene, aspectRatio, scenario, adScenario } = useProject();
+  const { characters, activeCharacterIds, updateScene, updateAdScene, updateClipScene, aspectRatio, scenario, adScenario, clipScenario } = useProject();
 
   // 비디오 소스 자동 결정 (어떤 시나리오를 사용하는지)
   const [videoSource, setVideoSource] = useState<VideoSource>(() => {
+    const clipHasImages = clipScenario?.scenes.some(s => s.generatedImage || s.customImage);
     const adHasImages = adScenario?.scenes.some(s => s.generatedImage || s.customImage);
     const stdHasImages = scenario?.scenes.some(s => s.generatedImage || s.customImage);
+    if (clipHasImages && !adHasImages && !stdHasImages) return 'clip';
     if (adHasImages && !stdHasImages) return 'ad';
     return 'scenario';
   });
 
   // 활성 시나리오 (videoSource에 따라 선택)
-  const activeScenario = videoSource === 'ad' ? adScenario : scenario;
-  const activeUpdateScene = videoSource === 'ad' ? updateAdScene : updateScene;
+  const activeScenario = videoSource === 'clip' ? clipScenario : videoSource === 'ad' ? adScenario : scenario;
+  const activeUpdateScene = videoSource === 'clip' ? updateClipScene : videoSource === 'ad' ? updateAdScene : updateScene;
 
   // 소스 변경 시 previewAudios 초기화 필요
   const prevSourceRef = useRef(videoSource);
@@ -588,7 +590,7 @@ export const VideoTab: React.FC = () => {
   const [generatingPreviewSceneId, setGeneratingPreviewSceneId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 소스 변경 시 previewAudios 초기화 + 시나리오면 Remotion 강제
+  // 소스 변경 시 previewAudios 초기화 + 모드 강제
   useEffect(() => {
     if (prevSourceRef.current !== videoSource) {
       setPreviewAudios(new Map());
@@ -597,6 +599,10 @@ export const VideoTab: React.FC = () => {
     // 시나리오 소스일 때는 Remotion만 사용 (Hailuo 클립 길이가 맞지 않음)
     if (videoSource === 'scenario') {
       setVideoMode('remotion');
+    }
+    // 클립 소스일 때는 Hailuo만 사용 (6초 전용)
+    if (videoSource === 'clip') {
+      setVideoMode('hailuo');
     }
   }, [videoSource]);
 
@@ -896,8 +902,13 @@ export const VideoTab: React.FC = () => {
           </div>
         </div>
 
-        {/* 모드 토글 - 광고 소스일 때만 표시 (시나리오는 씬 길이가 맞지 않아 Remotion만) */}
-        {videoSource === 'ad' ? (
+        {/* 모드 토글 */}
+        {videoSource === 'clip' ? (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs text-gray-500">생성 방식:</span>
+            <span className="text-xs text-cyan-400 font-medium">Hailuo AI (클립 전용 · 6초)</span>
+          </div>
+        ) : videoSource === 'ad' ? (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-500">생성 방식:</span>
             <div className="flex bg-gray-900 rounded-lg p-1">
@@ -933,49 +944,79 @@ export const VideoTab: React.FC = () => {
           </div>
         )}
 
-        {/* 시나리오 소스 선택 (두 시나리오 모두 존재할 때) */}
-        {scenario && adScenario && (
+        {/* 시나리오 소스 선택 (여러 시나리오가 존재할 때) */}
+        {(scenario || adScenario || clipScenario) && [scenario, adScenario, clipScenario].filter(Boolean).length > 1 && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-500">소스:</span>
             <div className="flex bg-gray-900 rounded-lg p-1">
-              <button
-                onClick={() => setVideoSource('scenario')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
-                  videoSource === 'scenario'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                시나리오
-              </button>
-              <button
-                onClick={() => setVideoSource('ad')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
-                  videoSource === 'ad'
-                    ? 'bg-orange-600 text-white'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                광고 (30초)
-              </button>
+              {scenario && (
+                <button
+                  onClick={() => setVideoSource('scenario')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
+                    videoSource === 'scenario'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  시나리오
+                </button>
+              )}
+              {adScenario && (
+                <button
+                  onClick={() => setVideoSource('ad')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
+                    videoSource === 'ad'
+                      ? 'bg-orange-600 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  광고
+                </button>
+              )}
+              {clipScenario && (
+                <button
+                  onClick={() => setVideoSource('clip')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
+                    videoSource === 'clip'
+                      ? 'bg-cyan-600 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  클립
+                </button>
+              )}
             </div>
-            {videoSource === 'ad' && (
+            {videoSource === 'ad' && adScenario && (
               <span className="text-xs text-orange-400">{adScenario.productName}</span>
+            )}
+            {videoSource === 'clip' && clipScenario && (
+              <span className="text-xs text-cyan-400">{clipScenario.totalDuration}초 · {clipScenario.scenes.length}씬</span>
             )}
           </div>
         )}
 
-        {/* 광고 시나리오만 있을 때 표시 */}
-        {!scenario && adScenario && videoSource === 'ad' && (
-          <div className="mt-3 flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-600/20 text-orange-400 rounded">
-              광고 · {adScenario.productName}
-            </span>
-          </div>
+        {/* 단일 소스 표시 (소스 선택 버튼이 없는 경우) */}
+        {[scenario, adScenario, clipScenario].filter(Boolean).length === 1 && (
+          <>
+            {videoSource === 'ad' && adScenario && (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-600/20 text-orange-400 rounded">
+                  광고 · {adScenario.productName}
+                </span>
+              </div>
+            )}
+            {videoSource === 'clip' && clipScenario && (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-cyan-600/20 text-cyan-400 rounded">
+                  클립 · {clipScenario.totalDuration}초 · {clipScenario.scenes.length}씬
+                </span>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Hailuo API 상태 표시 (광고 소스 + Hailuo 모드일 때만) */}
-        {videoSource === 'ad' && videoMode === 'hailuo' && (
+        {/* Hailuo API 상태 표시 (Hailuo 모드일 때) */}
+        {(videoSource === 'clip' || (videoSource === 'ad' && videoMode === 'hailuo')) && (
           <div className="mt-3 flex items-center justify-between bg-gray-900/50 rounded-lg px-3 py-2 flex-wrap gap-2">
             <ApiStatusIcon status={hailuoApiStatus} error={hailuoApiError} />
             <button
@@ -1009,8 +1050,8 @@ export const VideoTab: React.FC = () => {
           </div>
         )}
 
-        {/* API 사용 불가 경고 (광고 소스일 때만) */}
-        {videoSource === 'ad' && hailuoApiStatus === 'unavailable' && !error && (
+        {/* API 사용 불가 경고 */}
+        {(videoSource === 'clip' || videoSource === 'ad') && hailuoApiStatus === 'unavailable' && !error && (
           <div className="mt-3 p-2 sm:p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-xs sm:text-sm text-amber-300">
             <p className="font-medium mb-1 text-xs sm:text-sm">Hailuo API 사용 불가</p>
             <p className="text-xs text-amber-400">{hailuoApiError}</p>

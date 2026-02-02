@@ -82,7 +82,7 @@ export interface Scenario {
     scenes: Scene[];
     chapters?: ScenarioChapter[];
     // 광고 시나리오 전용 필드
-    scenarioType?: 'standard' | 'ad';
+    scenarioType?: 'standard' | 'ad' | 'clip';
     productName?: string;
     productFeatures?: string;
     productImage?: ImageData;
@@ -123,6 +123,21 @@ export interface AdScenarioConfigV2 {
 
 export interface GenerateAdScenarioV2Request {
     config: AdScenarioConfigV2;
+}
+
+// 클립 시나리오 설정 (Hailuo AI 전용 6초 클립)
+export type ClipDuration = 30 | 60 | 90 | 120;
+
+export interface ClipScenarioConfig {
+    topic: string;
+    duration: ClipDuration;
+    tone: ScenarioTone;
+    mode: ScenarioMode;
+    imageStyle: ImageStyle;
+}
+
+export interface GenerateClipScenarioRequest {
+    config: ClipScenarioConfig;
 }
 
 // 광고 이미지 생성 엔진

@@ -50,6 +50,13 @@ const LongformIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+const ClipIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <rect x="2" y="3" width="20" height="18" rx="2" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v18M17 3v18M2 9h20M2 15h20" />
+  </svg>
+);
+
 const TABS: TabConfig[] = [
   {
     mode: 'scenario',
@@ -62,6 +69,12 @@ const TABS: TabConfig[] = [
     label: '광고',
     icon: <AdIcon className="w-5 h-5" />,
     activeColor: 'from-orange-500 to-red-600',
+  },
+  {
+    mode: 'clip',
+    label: '클립',
+    icon: <ClipIcon className="w-5 h-5" />,
+    activeColor: 'from-cyan-500 to-blue-600',
   },
   {
     mode: 'video',

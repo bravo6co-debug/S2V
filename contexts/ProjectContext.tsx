@@ -54,6 +54,11 @@ interface ProjectContextValue {
   setAdScenario: (scenario: Scenario | null) => void;
   updateAdScene: (sceneId: string, updates: Partial<Scene>) => void;
 
+  // 클립 시나리오 (별도 상태)
+  clipScenario: Scenario | null;
+  setClipScenario: (scenario: Scenario | null) => void;
+  updateClipScene: (sceneId: string, updates: Partial<Scene>) => void;
+
   // 타임라인
   timeline: VideoTimeline | null;
   setTimeline: (timeline: VideoTimeline | null) => void;
@@ -111,6 +116,9 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   // 광고 시나리오 상태 (별도)
   const [adScenario, setAdScenarioState] = useState<Scenario | null>(null);
 
+  // 클립 시나리오 상태 (별도)
+  const [clipScenario, setClipScenarioState] = useState<Scenario | null>(null);
+
   // 타임라인 상태
   const [timeline, setTimelineState] = useState<VideoTimeline | null>(null);
 
@@ -135,6 +143,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       backgrounds: [],
       scenario: null,
       adScenario: null,
+      clipScenario: null,
       videoTimeline: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -145,6 +154,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setBackgrounds([]);
     setScenarioState(null);
     setAdScenarioState(null);
+    setClipScenarioState(null);
     setTimelineState(null);
     setActiveCharacterIds([]);
     setActivePropIds([]);
@@ -159,6 +169,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setBackgrounds(projectData.backgrounds);
     setScenarioState(projectData.scenario);
     setAdScenarioState(projectData.adScenario ?? null);
+    setClipScenarioState(projectData.clipScenario ?? null);
     setTimelineState(projectData.videoTimeline);
     setIsDirty(false);
   }, []);
@@ -173,6 +184,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       backgrounds,
       scenario,
       adScenario,
+      clipScenario,
       videoTimeline: timeline,
       updatedAt: Date.now(),
     };
@@ -180,7 +192,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setProject(savedProject);
     setIsDirty(false);
     return savedProject;
-  }, [project, characters, props, backgrounds, scenario, adScenario, timeline]);
+  }, [project, characters, props, backgrounds, scenario, adScenario, clipScenario, timeline]);
 
   // =============================================
   // 캐릭터 관리
@@ -361,6 +373,29 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   }, []);
 
   // =============================================
+  // 클립 시나리오 관리 (별도 상태)
+  // =============================================
+
+  const setClipScenario = useCallback((newScenario: Scenario | null) => {
+    setClipScenarioState(newScenario);
+    setIsDirty(true);
+  }, []);
+
+  const updateClipScene = useCallback((sceneId: string, updates: Partial<Scene>) => {
+    setClipScenarioState(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        scenes: prev.scenes.map(s =>
+          s.id === sceneId ? { ...s, ...updates } : s
+        ),
+        updatedAt: Date.now(),
+      };
+    });
+    setIsDirty(true);
+  }, []);
+
+  // =============================================
   // 타임라인 관리
   // =============================================
 
@@ -412,6 +447,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
         backgrounds,
         scenario,
         adScenario,
+        clipScenario,
         videoTimeline: timeline,
         updatedAt: Date.now(),
       };
@@ -424,7 +460,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     }, 2000); // 2초 디바운스
 
     return () => clearTimeout(timer);
-  }, [project, characters, props, backgrounds, scenario, adScenario, timeline, isDirty]);
+  }, [project, characters, props, backgrounds, scenario, adScenario, clipScenario, timeline, isDirty]);
 
   // =============================================
   // Context Value
@@ -467,6 +503,11 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     adScenario,
     setAdScenario,
     updateAdScene,
+
+    // 클립 시나리오 (별도)
+    clipScenario,
+    setClipScenario,
+    updateClipScene,
 
     // 타임라인
     timeline,

@@ -4,7 +4,7 @@
  * to keep API keys secure on the server side.
  */
 
-import { Character, ImageData, AspectRatio, ScenarioConfig, AdScenarioConfig, AdScenarioConfigV2, Scenario, Scene, ImageStyle, NarrationAudio, StoryBeat } from '../types';
+import { Character, ImageData, AspectRatio, ScenarioConfig, AdScenarioConfig, AdScenarioConfigV2, ClipScenarioConfig, Scenario, Scene, ImageStyle, NarrationAudio, StoryBeat } from '../types';
 
 // ============================================
 // CLOUD PROJECT TYPES
@@ -331,6 +331,12 @@ export const generateAdScenario = async (config: AdScenarioConfig): Promise<Scen
 // 광고 시나리오 생성 V2 (HDSER 프레임워크)
 export const generateAdScenarioV2 = async (config: AdScenarioConfigV2): Promise<Scenario> => {
     const response = await post<GenerateScenarioResponse>('/api/generate-ad-scenario-v2', { config }, 'scenario');
+    return response.scenario;
+};
+
+// 클립 시나리오 생성 (6초 단위, Hailuo AI 전용)
+export const generateClipScenario = async (config: ClipScenarioConfig): Promise<Scenario> => {
+    const response = await post<GenerateScenarioResponse>('/api/generate-clip-scenario', { config }, 'clip scenario');
     return response.scenario;
 };
 
