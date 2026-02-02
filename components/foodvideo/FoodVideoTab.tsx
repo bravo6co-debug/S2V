@@ -203,6 +203,7 @@ export const FoodVideoTab: React.FC = () => {
   const [personGenMode, setPersonGenMode] = useState<'preset' | 'custom'>('preset');
   const [personType, setPersonType] = useState<MukbangPersonType>('young-woman');
   const [customPersonDesc, setCustomPersonDesc] = useState('');
+  const [customScenePrompt, setCustomScenePrompt] = useState('');
   const [isGeneratingMukbangImage, setIsGeneratingMukbangImage] = useState(false);
   const [mukbangComposite, setMukbangComposite] = useState<ImageData | null>(null);
   const [mukbangCompositeUrl, setMukbangCompositeUrl] = useState<string | null>(null);
@@ -330,6 +331,7 @@ export const FoodVideoTab: React.FC = () => {
           generatePerson: personSource === 'generate',
           personType: personSource === 'generate' && personGenMode === 'preset' ? personType : undefined,
           customPersonPrompt: personSource === 'generate' && personGenMode === 'custom' ? customPersonDesc.trim() : undefined,
+          customScenePrompt: customScenePrompt.trim() || undefined,
         }
       );
 
@@ -341,7 +343,7 @@ export const FoodVideoTab: React.FC = () => {
     } finally {
       setIsGeneratingMukbangImage(false);
     }
-  }, [mukFoodUpload.image, foodName, personSource, mukPersonUpload.image, personType, checkAuth]);
+  }, [mukFoodUpload.image, foodName, personSource, mukPersonUpload.image, personType, personGenMode, customPersonDesc, customScenePrompt, checkAuth]);
 
   // Step 2: 먹방 영상 생성 (Hailuo)
   const handleGenerateMukbangVideo = useCallback(async () => {
@@ -735,13 +737,42 @@ export const FoodVideoTab: React.FC = () => {
                   <span className="text-xs text-gray-500">FLUX AI로 합성 장면 생성</span>
                 </div>
 
+                {/* 씬 프롬프트 (선택) */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-400">씬 프롬프트 (선택)</label>
+                    {customScenePrompt.trim() && (
+                      <button
+                        onClick={() => setCustomScenePrompt('')}
+                        className="text-[10px] text-gray-500 hover:text-gray-400 transition-colors"
+                      >
+                        초기화
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={customScenePrompt}
+                    onChange={(e) => setCustomScenePrompt(e.target.value)}
+                    placeholder="비워두면 기본 프롬프트가 자동 적용됩니다. 원하는 장면을 한국어로 입력하면 AI가 영어로 변환합니다.&#10;예: 따뜻한 조명 아래 여성이 젓가락으로 라면을 들어올리며 행복하게 웃는 장면"
+                    className="w-full bg-gray-800/70 text-xs text-gray-200 rounded-lg p-2.5 resize-none border border-gray-700 focus:border-pink-500 focus:outline-none placeholder-gray-600"
+                    rows={3}
+                    maxLength={500}
+                  />
+                  <div className="flex justify-between">
+                    <p className="text-[10px] text-gray-500">
+                      {customScenePrompt.trim() ? '한국어 설명 → AI가 영어 프롬프트로 변환하여 이미지 생성' : '기본 먹방 프롬프트가 자동으로 적용됩니다'}
+                    </p>
+                    <span className="text-[10px] text-gray-500">{customScenePrompt.length}/500</span>
+                  </div>
+                </div>
+
                 <button
                   onClick={handleGenerateMukbangImage}
                   disabled={isGeneratingMukbangImage || !mukFoodUpload.image || !foodName.trim() || (personSource === 'upload' && !mukPersonUpload.image)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-white bg-gradient-to-r from-pink-500 to-rose-600 rounded-lg hover:from-pink-400 hover:to-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[48px]"
                 >
                   {isGeneratingMukbangImage ? (
-                    <><Spinner className="w-5 h-5" /> 먹방 이미지 생성 중...</>
+                    <><Spinner className="w-5 h-5" /> {customScenePrompt.trim() ? '프롬프트 변환 + 이미지 생성 중...' : '먹방 이미지 생성 중...'}</>
                   ) : (
                     <>
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -754,8 +785,10 @@ export const FoodVideoTab: React.FC = () => {
 
                 <div className="p-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg">
                   <p className="text-[10px] text-gray-500 leading-relaxed">
-                    FLUX 2 Turbo Edit 모델이 음식과 인물을 합성하여 자연스러운 먹방 장면을 생성합니다.
-                    프롬프트는 자동 생성되므로 별도 입력이 필요 없습니다. (~$0.01/장)
+                    {customScenePrompt.trim()
+                      ? '한국어 씬 설명을 AI가 영어로 변환한 후, FLUX 2 Turbo Edit로 합성 이미지를 생성합니다. (~$0.01/장)'
+                      : 'FLUX 2 Turbo Edit 모델이 음식과 인물을 합성하여 자연스러운 먹방 장면을 생성합니다. 프롬프트는 자동 생성됩니다. (~$0.01/장)'
+                    }
                   </p>
                 </div>
               </div>

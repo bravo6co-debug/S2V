@@ -44,6 +44,7 @@ interface GenerateMukbangImageRequest {
     generatePerson?: boolean;
     personType?: PersonType;
     customPersonPrompt?: string;  // 사용자 한국어 인물 설명 (직접 입력)
+    customScenePrompt?: string;   // 사용자 한국어 씬 설명 (직접 입력)
 }
 
 // =============================================
@@ -76,6 +77,72 @@ Output format (English only, no Korean):
         return translated;
     }
     return `${translated}, ${suffix}`;
+}
+
+// =============================================
+// 한국어 씬 설명 → 영어 먹방 프롬프트 변환
+// =============================================
+
+async function translateSceneDescription(koreanDesc: string, foodName: string, userId: string): Promise<string> {
+    const aiClient = await getAIClientForUser(userId);
+    const client = aiClient || ai;
+
+    const response = await client.models.generateContent({
+        model: MODELS.TEXT,
+        contents: `Convert the following Korean food scene description into an English photorealistic food photography prompt.
+The food is "${foodName}". Keep it concise (2-3 sentences).
+Focus on: composition, lighting, camera angle, person interaction with food, atmosphere.
+MUST include these constraints: no visible text/letters/numbers/writing, no watermarks, photorealistic quality.
+
+Korean description: "${sanitizePrompt(koreanDesc, 500)}"
+
+Output format (English only, no Korean):
+"Photorealistic food photography scene, [scene description], [lighting], [camera angle], absolutely no visible text letters numbers or writing, no watermarks"`,
+        config: {
+            temperature: 0.3,
+        },
+    });
+
+    const translated = (response.text || '').replace(/^["']|["']$/g, '').trim();
+
+    // 필수 접미사 보장: 텍스트 금지
+    const noTextSuffix = 'absolutely no visible text letters numbers or writing in any language, no watermarks';
+    if (translated.toLowerCase().includes('no visible text')) {
+        return translated;
+    }
+    return `${translated}, ${noTextSuffix}`;
+}
+
+// =============================================
+// 한국어 씬 설명 → 영어 비디오 모션 프롬프트 변환
+// =============================================
+
+async function translateVideoDescription(koreanDesc: string, foodName: string, userId: string): Promise<string> {
+    const aiClient = await getAIClientForUser(userId);
+    const client = aiClient || ai;
+
+    const response = await client.models.generateContent({
+        model: MODELS.TEXT,
+        contents: `Convert the following Korean food scene description into an English cinematic video motion prompt.
+The food is "${foodName}". Keep it concise (2-3 sentences).
+Focus on: camera movement (dolly, zoom, pan, tilt), food interaction, motion dynamics, cinematic quality.
+
+Korean description: "${sanitizePrompt(koreanDesc, 500)}"
+
+Output format (English only, no Korean):
+"Cinematic scene [camera movement and action description], warm golden lighting, shallow depth of field, food advertising quality, 4K cinematic"`,
+        config: {
+            temperature: 0.3,
+        },
+    });
+
+    const translated = (response.text || '').replace(/^["']|["']$/g, '').trim();
+
+    // 시네마틱 접미사 보장
+    if (translated.toLowerCase().includes('4k cinematic') || translated.toLowerCase().includes('cinematic')) {
+        return translated;
+    }
+    return `${translated}, food advertising quality, 4K cinematic`;
 }
 
 interface MukbangImageResult {
@@ -120,6 +187,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             generatePerson,
             personType = 'young-woman',
             customPersonPrompt,
+            customScenePrompt,
         } = req.body as GenerateMukbangImageRequest;
 
         if (!foodImage?.data || !foodImage?.mimeType) {
@@ -172,7 +240,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Step 2: FLUX 2 Turbo Edit로 먹방 합성 이미지 생성
         // 참조 이미지: [인물, 음식]
         console.log('Generating mukbang composite image...');
-        const mukbangPrompt = buildMukbangPrompt(foodName.trim());
+
+        let mukbangPrompt: string;
+        let videoPrompt: string;
+
+        if (customScenePrompt?.trim()) {
+            // 커스텀 한국어 씬 설명 → 영어 프롬프트 변환
+            console.log(`Translating custom scene description: ${customScenePrompt}`);
+            mukbangPrompt = await translateSceneDescription(customScenePrompt.trim(), foodName.trim(), auth.userId);
+            videoPrompt = await translateVideoDescription(customScenePrompt.trim(), foodName.trim(), auth.userId);
+            console.log(`Translated scene prompt: ${mukbangPrompt}`);
+            console.log(`Translated video prompt: ${videoPrompt}`);
+        } else {
+            // 기본 프롬프트 사용
+            mukbangPrompt = buildMukbangPrompt(foodName.trim());
+            videoPrompt = buildMukbangVideoPrompt(foodName.trim());
+        }
+
         console.log('Mukbang prompt:', mukbangPrompt);
 
         const compositeImage = await generateFlux2Edit({
@@ -184,8 +268,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         console.log('=== MUKBANG IMAGE GENERATION SUCCESS ===');
-
-        const videoPrompt = buildMukbangVideoPrompt(foodName.trim());
 
         const result: MukbangImageResult = {
             compositeImage,
