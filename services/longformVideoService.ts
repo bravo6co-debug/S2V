@@ -42,32 +42,103 @@ const HEIGHT = 1080;
 const SEGMENT_SEC = 10;
 const SEGMENT_FRAMES = SEGMENT_SEC * FPS; // 300
 const SCENE_TRANSITION_FRAMES = 15;       // 씬 간 크로스페이드 (0.5초)
-const VIEWPORT_TRANSITION_FRAMES = 30;    // 뷰포트 전환 애니메이션 (1초)
 const CHARS_PER_SEGMENT = 73;             // 10초당 목표 글자수 (72~74 중간값)
 
-// ─── 뷰포트 (전체 / 오른쪽 / 왼쪽) ──────────────
+// ─── 시네마틱 카메라 경로 (Ken Burns) ──────────────
 
-type Viewport = 'full' | 'right' | 'left';
-
-interface ViewportState {
+interface CameraKeyframe {
   scale: number;
   offsetXPercent: number;
+  offsetYPercent: number;
 }
 
-const VIEWPORT_STATES: Record<Viewport, ViewportState> = {
-  full:  { scale: 1.0,  offsetXPercent: 0 },
-  right: { scale: 1.35, offsetXPercent: -12 },
-  left:  { scale: 1.35, offsetXPercent: 12 },
-};
+/**
+ * 3가지 카메라 경로 패턴 — 씬마다 순환하여 반복감을 줄임.
+ * 각 패턴은 7개 키프레임(6세그먼트 경계) 기준.
+ * 줌+팬을 동시에 사용하여 정지 이미지를 영상처럼 보이게 함.
+ *
+ * 안전 마진: offsetXPercent의 최대값은 (scale-1)/2*100 이내로 유지
+ */
+const CAMERA_PATHS: CameraKeyframe[][] = [
+  // Pattern A: 와이드 → 줌인 우측 → 좌측 횡단 → 줌아웃 → 딥줌 센터
+  [
+    { scale: 1.00, offsetXPercent: 0,   offsetYPercent: 0 },
+    { scale: 1.12, offsetXPercent: -3,  offsetYPercent: -1.5 },
+    { scale: 1.22, offsetXPercent: -7,  offsetYPercent: 0.5 },
+    { scale: 1.18, offsetXPercent: 5,   offsetYPercent: 1.5 },
+    { scale: 1.08, offsetXPercent: -2,  offsetYPercent: -2 },
+    { scale: 1.15, offsetXPercent: 4,   offsetYPercent: 1 },
+    { scale: 1.25, offsetXPercent: 0,   offsetYPercent: 0 },
+  ],
+  // Pattern B: 우측 시작 → 좌측 대각선 → 센터 줌 → 우상단 → 정착
+  [
+    { scale: 1.05, offsetXPercent: -2,  offsetYPercent: -1 },
+    { scale: 1.18, offsetXPercent: -5,  offsetYPercent: 1 },
+    { scale: 1.22, offsetXPercent: 3,   offsetYPercent: -1.5 },
+    { scale: 1.12, offsetXPercent: 4,   offsetYPercent: 2 },
+    { scale: 1.08, offsetXPercent: -1,  offsetYPercent: -1.5 },
+    { scale: 1.20, offsetXPercent: 3,   offsetYPercent: 0 },
+    { scale: 1.10, offsetXPercent: 0,   offsetYPercent: 0 },
+  ],
+  // Pattern C: 줌인 시작 → 줌아웃 좌측 → 센터 복귀 → 딥줌 우측 → 와이드 마무리
+  [
+    { scale: 1.22, offsetXPercent: 0,   offsetYPercent: 0 },
+    { scale: 1.15, offsetXPercent: 4,   offsetYPercent: 1.5 },
+    { scale: 1.08, offsetXPercent: 3,   offsetYPercent: -1 },
+    { scale: 1.18, offsetXPercent: 0,   offsetYPercent: 0 },
+    { scale: 1.25, offsetXPercent: -5,  offsetYPercent: -2 },
+    { scale: 1.15, offsetXPercent: -2,  offsetYPercent: 2 },
+    { scale: 1.05, offsetXPercent: 0,   offsetYPercent: 0 },
+  ],
+];
 
-/** 세그먼트 0=전체, 이후 오른쪽/왼쪽 교대 */
-function getViewportForSegment(segmentIndex: number): Viewport {
-  if (segmentIndex === 0) return 'full';
-  return segmentIndex % 2 === 1 ? 'right' : 'left';
+/** 씬의 세그먼트 수에 맞게 카메라 키프레임 생성 (패턴 순환) */
+function getCameraKeyframesForScene(segmentCount: number, sceneIndex: number): CameraKeyframe[] {
+  const path = CAMERA_PATHS[sceneIndex % CAMERA_PATHS.length];
+
+  // 6세그먼트(7키프레임)이면 그대로 사용
+  if (segmentCount + 1 === path.length) return path;
+
+  // 다른 세그먼트 수: 경로를 균등 샘플링
+  const keyframes: CameraKeyframe[] = [];
+  for (let i = 0; i <= segmentCount; i++) {
+    const t = i / segmentCount;
+    const srcIdx = t * (path.length - 1);
+    const lo = Math.floor(srcIdx);
+    const hi = Math.min(lo + 1, path.length - 1);
+    const frac = srcIdx - lo;
+    keyframes.push({
+      scale: lerp(path[lo].scale, path[hi].scale, frac),
+      offsetXPercent: lerp(path[lo].offsetXPercent, path[hi].offsetXPercent, frac),
+      offsetYPercent: lerp(path[lo].offsetYPercent, path[hi].offsetYPercent, frac),
+    });
+  }
+  return keyframes;
+}
+
+/** 현재 프레임의 카메라 상태를 easeInOut 보간으로 계산 */
+function getCameraState(
+  keyframes: CameraKeyframe[],
+  segmentIndex: number,
+  frameInSegment: number
+): CameraKeyframe {
+  const from = keyframes[Math.min(segmentIndex, keyframes.length - 1)];
+  const to = keyframes[Math.min(segmentIndex + 1, keyframes.length - 1)];
+  const t = easeInOutCubic(frameInSegment / SEGMENT_FRAMES);
+  return {
+    scale: lerp(from.scale, to.scale, t),
+    offsetXPercent: lerp(from.offsetXPercent, to.offsetXPercent, t),
+    offsetYPercent: lerp(from.offsetYPercent, to.offsetYPercent, t),
+  };
 }
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * Math.max(0, Math.min(1, t));
+}
+
+/** Cubic ease-in-out: 시작/끝에서 감속, 중간에서 가속 */
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 // ─── 변환 유틸 ─────────────────────────────────
@@ -120,16 +191,19 @@ interface SceneTiming {
   segmentCount: number;
   subtitleSegments: string[];
   startTimeSec: number;
+  cameraKeyframes: CameraKeyframe[];
 }
 
 function calculateSceneTimings(scenes: RemotionSceneData[]): SceneTiming[] {
   const timings: SceneTiming[] = [];
   let currentFrame = 0;
 
-  for (const scene of scenes) {
+  for (let idx = 0; idx < scenes.length; idx++) {
+    const scene = scenes[idx];
     const segmentCount = Math.round(scene.duration / SEGMENT_SEC);
     const durationFrames = segmentCount * SEGMENT_FRAMES;
     const subtitleSegments = splitNarrationFixed(scene.narration, segmentCount);
+    const cameraKeyframes = getCameraKeyframesForScene(segmentCount, idx);
 
     timings.push({
       scene,
@@ -138,6 +212,7 @@ function calculateSceneTimings(scenes: RemotionSceneData[]): SceneTiming[] {
       segmentCount,
       subtitleSegments,
       startTimeSec: currentFrame / FPS,
+      cameraKeyframes,
     });
 
     currentFrame += durationFrames;
@@ -337,14 +412,13 @@ function sliceAudioBuffer(
   return sliced;
 }
 
-// ─── 이미지 드로잉 (뷰포트 기반) ────────────────
+// ─── 이미지 드로잉 (카메라 상태 기반) ────────────
 
-function drawImageWithViewport(
+function drawImageWithCamera(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   img: HTMLImageElement,
-  scale: number,
-  offsetXPercent: number
+  camera: CameraKeyframe
 ): void {
   const imgRatio = img.width / img.height;
   const canvasRatio = canvas.width / canvas.height;
@@ -360,12 +434,13 @@ function drawImageWithViewport(
     drawH = drawW / imgRatio;
   }
 
-  drawW *= scale;
-  drawH *= scale;
+  drawW *= camera.scale;
+  drawH *= camera.scale;
 
-  const offsetX = (offsetXPercent / 100) * canvas.width;
+  const offsetX = (camera.offsetXPercent / 100) * canvas.width;
+  const offsetY = (camera.offsetYPercent / 100) * canvas.height;
   const x = (canvas.width - drawW) / 2 + offsetX;
-  const y = (canvas.height - drawH) / 2;
+  const y = (canvas.height - drawH) / 2 + offsetY;
 
   ctx.drawImage(img, x, y, drawW, drawH);
 }
@@ -585,6 +660,7 @@ export async function renderLongformPart(
       onProgress?.({ status: 'rendering', progress: 20, totalFrames, currentFrame: 0 });
 
       const renderLoop = async () => {
+        const renderStartMs = performance.now();
         for (let frame = 0; frame < totalFrames; frame++) {
           if (abortSignal?.aborted) { mediaRecorder.stop(); return; }
 
@@ -601,6 +677,9 @@ export async function renderLongformPart(
             const isInSceneTransition = !isLastScene &&
               frameInScene >= timing.durationFrames - SCENE_TRANSITION_FRAMES;
 
+            // 현재 카메라 상태 (easeInOut 보간)
+            const camera = getCameraState(timing.cameraKeyframes, segmentIndex, frameInSegment);
+
             if (isInSceneTransition) {
               // ── 씬 간 크로스페이드 ──
               const nextImg = imageMap.get(timings[sceneIndex + 1].scene.id);
@@ -609,42 +688,20 @@ export async function renderLongformPart(
                 const tp = Math.min(1, Math.max(0, tf / SCENE_TRANSITION_FRAMES));
 
                 // 현재 씬 (페이드 아웃)
-                const currentVP = VIEWPORT_STATES[getViewportForSegment(segmentIndex)];
                 ctx.globalAlpha = 1 - tp;
-                drawImageWithViewport(ctx, canvas, img, currentVP.scale, currentVP.offsetXPercent);
+                drawImageWithCamera(ctx, canvas, img, camera);
 
-                // 다음 씬 (전체 뷰로 페이드 인)
+                // 다음 씬 (다음 씬의 시작 카메라로 페이드 인)
+                const nextCamera = timings[sceneIndex + 1].cameraKeyframes[0];
                 ctx.globalAlpha = tp;
-                drawImageWithViewport(ctx, canvas, nextImg, 1, 0);
+                drawImageWithCamera(ctx, canvas, nextImg, nextCamera);
                 ctx.globalAlpha = 1;
               } else {
-                const vp = VIEWPORT_STATES[getViewportForSegment(segmentIndex)];
-                drawImageWithViewport(ctx, canvas, img, vp.scale, vp.offsetXPercent);
+                drawImageWithCamera(ctx, canvas, img, camera);
               }
             } else {
-              // ── 뷰포트: 세그먼트 전환 시 1초 부드럽게 ──
-              const currentVP = getViewportForSegment(segmentIndex);
-              const prevVP = segmentIndex > 0
-                ? getViewportForSegment(segmentIndex - 1)
-                : currentVP;
-
-              let scale: number;
-              let offsetX: number;
-
-              if (frameInSegment < VIEWPORT_TRANSITION_FRAMES && segmentIndex > 0) {
-                // 부드러운 전환 (1초)
-                const t = frameInSegment / VIEWPORT_TRANSITION_FRAMES;
-                const fromState = VIEWPORT_STATES[prevVP];
-                const toState = VIEWPORT_STATES[currentVP];
-                scale = lerp(fromState.scale, toState.scale, t);
-                offsetX = lerp(fromState.offsetXPercent, toState.offsetXPercent, t);
-              } else {
-                const state = VIEWPORT_STATES[currentVP];
-                scale = state.scale;
-                offsetX = state.offsetXPercent;
-              }
-
-              drawImageWithViewport(ctx, canvas, img, scale, offsetX);
+              // ── 카메라 연속 이동 (easeInOut) ──
+              drawImageWithCamera(ctx, canvas, img, camera);
             }
 
             // ── 자막 (10초 고정) ──
@@ -666,17 +723,14 @@ export async function renderLongformPart(
             });
           }
 
-          // ── 오디오 시간에 동기화 ──
-          if (audioContext && audioContext.state !== 'closed') {
-            const targetTime = audioStartTime + (frame + 1) / FPS;
-            const waitMs = (targetTime - audioContext.currentTime) * 1000;
-            if (waitMs > 2) {
-              await new Promise<void>(r => setTimeout(r, waitMs));
-            } else if (frame % 2 === 0) {
-              await yieldToMain();
-            }
-          } else {
-            if (frame % 2 === 0) await yieldToMain();
+          // ── wall-clock 기반 30fps 페이싱 (오디오 유무 무관) ──
+          const targetMs = renderStartMs + ((frame + 1) / FPS) * 1000;
+          const nowMs = performance.now();
+          const waitMs = targetMs - nowMs;
+          if (waitMs > 2) {
+            await new Promise<void>(r => setTimeout(r, waitMs));
+          } else if (frame % 2 === 0) {
+            await yieldToMain();
           }
         }
 
