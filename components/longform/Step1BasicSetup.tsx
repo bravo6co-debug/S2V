@@ -13,6 +13,8 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
   const { hasApiKey, hasOpenaiApiKey, isAdmin, settings, openSettingsModal } = useAuth();
 
   const [topic, setTopic] = useState('');
+  const [referenceText, setReferenceText] = useState('');
+  const [showReference, setShowReference] = useState(false);
   const [duration, setDuration] = useState<LongformDuration>(DEFAULT_LONGFORM_CONFIG.duration);
   const [imageModel, setImageModel] = useState<LongformImageModel>(DEFAULT_LONGFORM_CONFIG.imageModel);
   const [textModel, setTextModel] = useState<string>(settings?.textModel || 'gemini-3-flash-preview');
@@ -38,6 +40,7 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
 
   const buildConfig = (overrideTextModel?: string): LongformConfig => ({
     topic: topic.trim(),
+    referenceText: referenceText.trim() || undefined,
     duration,
     imageModel,
     textModel: overrideTextModel,
@@ -98,6 +101,40 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
           disabled={isGenerating}
         />
         <p className="text-xs text-gray-500 mt-1 text-right">{topic.length}/200</p>
+      </div>
+
+      {/* 참고 자료 (선택) */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowReference(!showReference)}
+          disabled={isGenerating}
+          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-300 transition-colors"
+        >
+          <svg
+            className={`w-4 h-4 transition-transform ${showReference ? 'rotate-90' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          참고 자료 추가 (선택)
+        </button>
+        {showReference && (
+          <div className="mt-2">
+            <textarea
+              value={referenceText}
+              onChange={(e) => setReferenceText(e.target.value)}
+              placeholder="시나리오 작성에 참고할 자료를 입력하세요. 기사, 블로그, 대본 등 원하는 내용을 붙여넣으면 주제에 맞게 각색됩니다."
+              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:outline-none text-[16px] sm:text-sm resize-y min-h-[120px]"
+              rows={6}
+              maxLength={5000}
+              disabled={isGenerating}
+            />
+            <p className="text-xs text-gray-500 mt-1 text-right">{referenceText.length}/5,000</p>
+          </div>
+        )}
       </div>
 
       {/* 텍스트 모델 (시나리오 생성) */}

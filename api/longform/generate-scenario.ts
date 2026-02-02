@@ -7,6 +7,7 @@ interface GenerateLongformRequest {
   topic: string;
   duration: number;
   textModel?: string;
+  referenceText?: string;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -21,13 +22,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { topic, duration, textModel: requestTextModel } = req.body as GenerateLongformRequest;
+    const { topic, duration, textModel: requestTextModel, referenceText } = req.body as GenerateLongformRequest;
 
     if (!topic || !duration) {
       return res.status(400).json({ error: 'topic and duration are required' });
     }
 
     const sanitizedTopic = sanitizePrompt(topic, 200);
+    const sanitizedReference = referenceText ? sanitizePrompt(referenceText, 5000) : '';
     const totalScenes = duration - 1;
     // 요청 모델 우선, 없으면 설정 모델 폴백
     const textModel = requestTextModel || await getUserTextModel(auth.userId);
@@ -53,6 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 ## 주제
 ${sanitizedTopic}
+${sanitizedReference ? `\n## 참고 자료\n아래는 시나리오 작성에 참고할 자료입니다. 이 내용을 기반으로 주제에 맞게 각색하여 시나리오를 작성하세요. 참고 자료의 구조나 표현을 그대로 사용하지 말고, 영상 나레이션에 적합한 형태로 재구성하세요.\n\n${sanitizedReference}` : ''}
 
 ## 출력 구조 (JSON)
 {

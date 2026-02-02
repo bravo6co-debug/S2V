@@ -32,6 +32,7 @@ export type LongformDuration = 10 | 20 | 30 | 40 | 50 | 60;
 
 export interface LongformConfig {
   topic: string;
+  referenceText?: string;
   duration: LongformDuration;
   imageModel: LongformImageModel;
   textModel?: string;

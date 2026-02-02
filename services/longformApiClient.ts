@@ -35,6 +35,7 @@ export async function generateLongformScenario(config: LongformConfig): Promise<
     topic: config.topic,
     duration: config.duration,
     ...(config.textModel && { textModel: config.textModel }),
+    ...(config.referenceText && { referenceText: config.referenceText }),
   }, 'Generate Longform Scenario');
 
   return {
