@@ -17,16 +17,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ title, onImageChan
 
     useEffect(() => {
         if (value) {
-            const dataUrl = `data:${value.mimeType};base64,${value.data}`;
-            if (dataUrl !== imagePreview) {
-                setImagePreview(dataUrl);
-            }
+            setImagePreview(`data:${value.mimeType};base64,${value.data}`);
         } else {
-            if (imagePreview !== null) {
-                setImagePreview(null);
-            }
+            setImagePreview(null);
         }
-    }, [value, imagePreview]);
+    }, [value]);
 
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {

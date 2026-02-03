@@ -218,9 +218,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        // 사용자별 AI 클라이언트 및 모델 가져오기
-        const aiClient = await getAIClientForUser(auth.userId);
-        const imageModel = await getUserImageModel(auth.userId);
+        // 사용자별 AI 클라이언트 및 모델 가져오기 (병렬 로딩)
+        const [aiClient, imageModel] = await Promise.all([
+            getAIClientForUser(auth.userId),
+            getUserImageModel(auth.userId),
+        ]);
 
         console.log(`[generate-images] User: ${auth.userId}, Model: ${imageModel}`);
 

@@ -1,13 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { TabNavigation, TabNavigationCompact } from './components/common/TabNavigation';
-import { ScenarioTab } from './components/scenario/ScenarioTab';
-import { VideoTab } from './components/video/VideoTab';
-import AdTab from './components/ad/AdTab';
-import { FoodVideoTab } from './components/foodvideo/FoodVideoTab';
-import { LongformTab } from './components/longform/LongformTab';
-import ClipScenarioTab from './components/clip/ClipScenarioTab';
 import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode, IMAGE_STYLE_OPTIONS, ImageStyle } from './types';
 import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
 import { ResultDisplay } from './components/ResultDisplay';
@@ -15,12 +9,22 @@ import { IdIcon, LayersIcon, SparklesIcon, MagnifyingGlassPlusIcon, PlusCircleIc
 import { ChapterDisplay } from './components/ChapterDisplay';
 import { ScenarioGenerator } from './components/ScenarioGenerator';
 import { ScenarioEditor } from './components/ScenarioEditor';
-import LoginModal from './components/LoginModal';
-import SettingsModal from './components/SettingsModal';
-import ApiKeyRequiredModal from './components/ApiKeyRequiredModal';
-import AdminDashboard from './components/AdminDashboard';
-import WelcomeModal from './components/WelcomeModal';
-import FloatingHelpButton from './components/FloatingHelpButton';
+
+// ─── Lazy-loaded tab components (Rule 2.2: code-splitting) ──────
+const ScenarioTab = lazy(() => import('./components/scenario/ScenarioTab').then(m => ({ default: m.ScenarioTab })));
+const VideoTab = lazy(() => import('./components/video/VideoTab').then(m => ({ default: m.VideoTab })));
+const AdTab = lazy(() => import('./components/ad/AdTab'));
+const FoodVideoTab = lazy(() => import('./components/foodvideo/FoodVideoTab').then(m => ({ default: m.FoodVideoTab })));
+const LongformTab = lazy(() => import('./components/longform/LongformTab').then(m => ({ default: m.LongformTab })));
+const ClipScenarioTab = lazy(() => import('./components/clip/ClipScenarioTab'));
+
+// ─── Lazy-loaded modals (Rule 2.2: load on demand) ──────────────
+const LoginModal = lazy(() => import('./components/LoginModal'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const ApiKeyRequiredModal = lazy(() => import('./components/ApiKeyRequiredModal'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const WelcomeModal = lazy(() => import('./components/WelcomeModal'));
+const FloatingHelpButton = lazy(() => import('./components/FloatingHelpButton'));
 
 // 줌/확대 이미지 모달
 const ItemModal: React.FC<{ item: GeneratedItem; onClose: () => void; }> = ({ item, onClose }) => {
@@ -447,7 +451,9 @@ const AppContent: React.FC = () => {
             {/* 메인 콘텐츠 영역 */}
             <main className="flex-grow overflow-hidden p-2 sm:p-4">
                 <div className="h-full w-full max-w-screen-2xl mx-auto">
-                    {renderTabContent()}
+                    <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-500">로딩 중...</div>}>
+                        {renderTabContent()}
+                    </Suspense>
                 </div>
             </main>
 
@@ -461,20 +467,26 @@ const AppContent: React.FC = () => {
             )}
 
             {/* 인증 관련 글로벌 모달 */}
-            <GlobalModals />
+            <Suspense fallback={null}>
+                <GlobalModals />
+            </Suspense>
 
             {/* 첫 방문 환영 모달 */}
             {showWelcome && (
-                <WelcomeModal
-                    onClose={() => {
-                        localStorage.setItem('s2v_has_seen_welcome', 'true');
-                        setShowWelcome(false);
-                    }}
-                />
+                <Suspense fallback={null}>
+                    <WelcomeModal
+                        onClose={() => {
+                            localStorage.setItem('s2v_has_seen_welcome', 'true');
+                            setShowWelcome(false);
+                        }}
+                    />
+                </Suspense>
             )}
 
             {/* 플로팅 도움말 버튼 */}
-            <FloatingHelpButton />
+            <Suspense fallback={null}>
+                <FloatingHelpButton />
+            </Suspense>
         </div>
     );
 };

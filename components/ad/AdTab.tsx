@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import JSZip from 'jszip';
+// JSZip: dynamic import at point of use (bundle optimization)
 import { useProject } from '../../contexts/ProjectContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdScenario } from '../../hooks/useAdScenario';
@@ -324,6 +324,7 @@ const AdTab: React.FC = () => {
     const scenesWithAudio = adScenario.scenes.filter(s => s.narrationAudio?.data);
     if (scenesWithAudio.length === 0) return;
 
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     scenesWithAudio.forEach((scene) => {
       const ext = scene.narrationAudio!.mimeType === 'audio/mp3' ? 'mp3' : 'wav';

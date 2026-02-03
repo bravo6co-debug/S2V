@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
-import JSZip from 'jszip';
+// JSZip: dynamic import at point of use (bundle optimization)
 import { Chapter, GeneratedItem, DragItem } from '../types';
 import { PlusCircleIcon, TrashIcon, ArrowUpCircleIcon, MagnifyingGlassPlusIcon, DownloadIcon } from './Icons';
 
@@ -136,6 +136,7 @@ const ChapterItem = React.forwardRef<HTMLDivElement, ChapterItemProps>((
 
         setIsZipping(true);
         try {
+            const { default: JSZip } = await import('jszip');
             const zip = new JSZip();
 
             imageItems.forEach((item) => {

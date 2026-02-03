@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import JSZip from 'jszip';
+// JSZip: dynamic import at point of use (bundle optimization)
 import { GeneratedItem, DragItem } from '../types';
 import { DownloadIcon, SparklesIcon, IdIcon, CheckCircleIcon, TrashIcon } from './Icons';
 
@@ -137,6 +137,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, error, 
 
         setIsZipping(true);
         try {
+            const { default: JSZip } = await import('jszip');
             const zip = new JSZip();
             
             items.forEach((item) => {
