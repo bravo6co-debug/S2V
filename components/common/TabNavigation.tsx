@@ -189,7 +189,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
         title="상세페이지 협업"
       >
         <PadIcon className="w-4 h-4" />
-        <span className="text-sm whitespace-nowrap">상세페이지</span>
+        <span className="text-sm whitespace-nowrap">상페자동화</span>
       </a>
     </nav>
   );
@@ -286,7 +286,7 @@ export const MobileBottomNav: React.FC<TabNavigationProps> = ({
                 className="flex items-center gap-2.5 px-4 py-3 text-gray-300 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
               >
                 <PadIcon className="w-4 h-4 flex-shrink-0" />
-                <span className="text-sm">상세페이지</span>
+                <span className="text-sm">상페자동화</span>
               </a>
             </div>
           )}
