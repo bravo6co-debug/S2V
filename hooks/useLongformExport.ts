@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LongformScenario, LongformOutput } from '../types/longform';
 import {
   longformScenesToRemotionScenes,
@@ -36,18 +36,44 @@ export function useLongformExport(): UseLongformExportReturn {
   const [output, setOutput] = useState<LongformOutput | null>(null);
   const [part1State, setPart1State] = useState<PartExportState>(INITIAL_PART_STATE);
   const [part2State, setPart2State] = useState<PartExportState>(INITIAL_PART_STATE);
-  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // [B] 파트별 독립 AbortController (공유 시 Part2 시작이 Part1을 덮어씀)
+  const abortPart1Ref = useRef<AbortController | null>(null);
+  const abortPart2Ref = useRef<AbortController | null>(null);
+
+  // [A] Blob URL을 ref로 추적 (stale closure 방지)
+  const part1UrlRef = useRef<string | null>(null);
+  const part2UrlRef = useRef<string | null>(null);
+
+  // [C] 렌더링 상태를 ref로도 추적 (useCallback 내부에서 최신 상태 접근)
+  const part1RenderingRef = useRef(false);
+  const part2RenderingRef = useRef(false);
 
   const isExporting = part1State.status === 'rendering' || part2State.status === 'rendering';
 
+  // [D] 컴포넌트 언마운트 시 리소스 정리
+  useEffect(() => {
+    return () => {
+      abortPart1Ref.current?.abort();
+      abortPart2Ref.current?.abort();
+      if (part1UrlRef.current) URL.revokeObjectURL(part1UrlRef.current);
+      if (part2UrlRef.current) URL.revokeObjectURL(part2UrlRef.current);
+    };
+  }, []);
+
   const startExportPart1 = useCallback(async (scenario: LongformScenario) => {
+    // [C] 동시 렌더 가드
+    if (part1RenderingRef.current) return;
+
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+    abortPart1Ref.current = controller;
+    part1RenderingRef.current = true;
 
     const { part1 } = splitScenesForExport(scenario);
     const remotionScenes = longformScenesToRemotionScenes(part1);
 
     if (remotionScenes.length === 0) {
+      part1RenderingRef.current = false;
       setPart1State({ status: 'error', progress: 0, error: '이미지가 생성된 씬이 없습니다' });
       return;
     }
@@ -68,9 +94,17 @@ export function useLongformExport(): UseLongformExportReturn {
       controller.signal
     );
 
+    part1RenderingRef.current = false;
+
     if (controller.signal.aborted) return;
 
     if (result.success) {
+      // [A] ref에서 이전 URL 해제 (stale closure 방지)
+      if (part1UrlRef.current) {
+        URL.revokeObjectURL(part1UrlRef.current);
+      }
+      part1UrlRef.current = result.videoUrl ?? null;
+
       setPart1State({
         status: 'complete',
         progress: 100,
@@ -94,13 +128,18 @@ export function useLongformExport(): UseLongformExportReturn {
   }, []);
 
   const startExportPart2 = useCallback(async (scenario: LongformScenario) => {
+    // [C] 동시 렌더 가드
+    if (part2RenderingRef.current) return;
+
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+    abortPart2Ref.current = controller;
+    part2RenderingRef.current = true;
 
     const { part2 } = splitScenesForExport(scenario);
     const remotionScenes = longformScenesToRemotionScenes(part2);
 
     if (remotionScenes.length === 0) {
+      part2RenderingRef.current = false;
       setPart2State({ status: 'error', progress: 0, error: '이미지가 생성된 씬이 없습니다' });
       return;
     }
@@ -121,9 +160,17 @@ export function useLongformExport(): UseLongformExportReturn {
       controller.signal
     );
 
+    part2RenderingRef.current = false;
+
     if (controller.signal.aborted) return;
 
     if (result.success) {
+      // [A] ref에서 이전 URL 해제
+      if (part2UrlRef.current) {
+        URL.revokeObjectURL(part2UrlRef.current);
+      }
+      part2UrlRef.current = result.videoUrl ?? null;
+
       setPart2State({
         status: 'complete',
         progress: 100,
@@ -146,16 +193,28 @@ export function useLongformExport(): UseLongformExportReturn {
     }
   }, []);
 
+  // [E] cancelExport — ref 기반, deps 없음
   const cancelExport = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    if (part1State.status === 'rendering') {
-      setPart1State(INITIAL_PART_STATE);
+    abortPart1Ref.current?.abort();
+    abortPart2Ref.current?.abort();
+    abortPart1Ref.current = null;
+    abortPart2Ref.current = null;
+    part1RenderingRef.current = false;
+    part2RenderingRef.current = false;
+
+    // ref에서 Blob URL 해제
+    if (part1UrlRef.current) {
+      URL.revokeObjectURL(part1UrlRef.current);
+      part1UrlRef.current = null;
     }
-    if (part2State.status === 'rendering') {
-      setPart2State(INITIAL_PART_STATE);
+    if (part2UrlRef.current) {
+      URL.revokeObjectURL(part2UrlRef.current);
+      part2UrlRef.current = null;
     }
-  }, [part1State.status, part2State.status]);
+
+    setPart1State(prev => prev.status === 'rendering' ? INITIAL_PART_STATE : prev);
+    setPart2State(prev => prev.status === 'rendering' ? INITIAL_PART_STATE : prev);
+  }, []);
 
   const downloadPart = useCallback((part: 'part1' | 'part2', scenario: LongformScenario) => {
     const state = part === 'part1' ? part1State : part2State;

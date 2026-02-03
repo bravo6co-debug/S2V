@@ -360,14 +360,24 @@ async function preloadSceneImages(
   scenes: RemotionSceneData[]
 ): Promise<Map<string, HTMLImageElement>> {
   const imageMap = new Map<string, HTMLImageElement>();
-  await Promise.all(scenes.map(scene =>
-    new Promise<void>((resolve) => {
-      const img = new Image();
-      img.onload = () => { imageMap.set(scene.id, img); resolve(); };
-      img.onerror = () => resolve();
-      img.src = `data:${scene.imageData.mimeType};base64,${scene.imageData.data}`;
-    })
-  ));
+  await Promise.all(scenes.map(async (scene) => {
+    try {
+      // [H] fetch API로 base64→Blob 변환 (브라우저 네이티브, 수동 바이트 복사보다 빠름)
+      const dataUrl = `data:${scene.imageData.mimeType};base64,${scene.imageData.data}`;
+      const response = await fetch(dataUrl);
+      const imgBlob = await response.blob();
+      const imgUrl = URL.createObjectURL(imgBlob);
+
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(imgUrl); imageMap.set(scene.id, img); resolve(); };
+        img.onerror = () => { URL.revokeObjectURL(imgUrl); resolve(); };
+        img.src = imgUrl;
+      });
+    } catch {
+      // fetch 실패 시 무시 (이미지 없이 진행)
+    }
+  }));
   return imageMap;
 }
 
@@ -556,6 +566,10 @@ export async function renderLongformPart(
 
     // ── 3. 이미지 프리로드 ──
     const imageMap = await preloadSceneImages(scenes);
+    // [I] base64 데이터 참조 해제 — ~3-6MB/씬 × 6씬 = ~18-36MB 메모리 절감
+    for (const scene of scenes) {
+      (scene.imageData as any).data = '';
+    }
     onProgress?.({ status: 'preparing', progress: 10, totalFrames });
 
     // ── 4. 오디오: 10초 단위 슬라이싱 + 독립 스케줄링 ──
@@ -629,12 +643,35 @@ export async function renderLongformPart(
     };
 
     // ── 6. 렌더링 루프 ──
+    // [F] 렌더 루프 에러 플래그 — onstop에서 성공/실패 분기에 사용
+    let renderError: Error | null = null;
+
     return new Promise<LongformRenderResult>((resolve) => {
       mediaRecorder.onstop = () => {
+        // ── 리소스 정리 ──
         for (const { source } of audioSources) {
-          try { source.stop(); } catch { /* already stopped */ }
+          try { source.disconnect(); } catch {}
+          try { source.stop(); } catch {}
         }
-        if (audioContext) audioContext.close();
+        if (audioContext && audioContext.state !== 'closed') {
+          audioContext.close().catch(() => {});
+        }
+        combinedStream.getTracks().forEach(track => track.stop());
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.width = 0;
+        canvas.height = 0;
+        imageMap.clear();
+
+        // [F] abort 또는 에러 시 실패로 resolve — orphan Blob URL 방지
+        if (abortSignal?.aborted || renderError) {
+          resolve({
+            success: false,
+            duration: 0,
+            sceneCount: 0,
+            error: renderError?.message || '렌더링이 취소되었습니다',
+          });
+          return;
+        }
 
         const blob = new Blob(chunks, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
@@ -662,7 +699,12 @@ export async function renderLongformPart(
       const renderLoop = async () => {
         const renderStartMs = performance.now();
         for (let frame = 0; frame < totalFrames; frame++) {
-          if (abortSignal?.aborted) { mediaRecorder.stop(); return; }
+          if (abortSignal?.aborted) {
+            combinedStream.getTracks().forEach(track => track.stop());
+            imageMap.clear();
+            mediaRecorder.stop();
+            return;
+          }
 
           const { timing, sceneIndex, frameInScene, segmentIndex, frameInSegment } =
             getSceneAtFrame(timings, frame);
@@ -740,10 +782,27 @@ export async function renderLongformPart(
       };
 
       renderLoop().catch((err) => {
+        // [F] 에러 플래그 설정 — onstop에서 success:false로 resolve
+        renderError = err instanceof Error ? err : new Error('렌더링 실패');
+
+        // [G] 오디오 리소스 정리 (에러 경로에서 누락되어 있었음)
+        for (const { source } of audioSources) {
+          try { source.disconnect(); } catch {}
+          try { source.stop(); } catch {}
+        }
+        if (audioContext && audioContext.state !== 'closed') {
+          audioContext.close().catch(() => {});
+        }
+
+        combinedStream.getTracks().forEach(track => { try { track.stop(); } catch {} });
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.width = 0;
+        canvas.height = 0;
+        imageMap.clear();
         onProgress?.({
           status: 'error',
           progress: 0,
-          error: err instanceof Error ? err.message : '렌더링 실패',
+          error: renderError.message,
         });
         try { mediaRecorder.stop(); } catch { /* ignore */ }
       });
