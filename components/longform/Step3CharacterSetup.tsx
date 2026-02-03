@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { LongformScenario, LongformConfig, LongformCharacter, CharacterRole } from '../../types/longform';
 import type { CharacterExtractionStatus } from '../../hooks/useLongformCharacters';
 
@@ -41,6 +41,30 @@ interface CharacterCardProps {
 const CharacterCard: React.FC<CharacterCardProps> = ({ character, totalScenes, onUpdate, onRemove, onGenerateImage }) => {
   const [expanded, setExpanded] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const maxSize = 4 * 1024 * 1024; // 4MB
+    if (file.size > maxSize) {
+      alert('이미지 크기는 4MB 이하여야 합니다.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      const mimeType = file.type || 'image/png';
+      onUpdate({ referenceImage: { mimeType, data: base64 }, imageStatus: 'completed' });
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const toggleScene = (sceneNum: number) => {
     const current = character.sceneNumbers;
@@ -194,7 +218,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, totalScenes, o
           </div>
 
           {/* Reference image + actions */}
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
             {character.referenceImage && (
               <img
                 src={`data:${character.referenceImage.mimeType};base64,${character.referenceImage.data}`}
@@ -202,12 +226,31 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, totalScenes, o
                 className="w-20 h-20 rounded-lg object-cover border border-gray-700"
               />
             )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={character.imageStatus === 'generating'}
+              className="px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-xs rounded-lg transition-colors min-h-[36px]"
+            >
+              <span className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                이미지 업로드
+              </span>
+            </button>
             <button
               onClick={onGenerateImage}
               disabled={character.imageStatus === 'generating' || !character.appearanceDescription}
               className="px-3 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-700 disabled:text-gray-500 text-white text-xs rounded-lg transition-colors min-h-[36px]"
             >
-              {character.imageStatus === 'generating' ? '생성 중...' : character.referenceImage ? '다시 생성' : '이미지 생성'}
+              {character.imageStatus === 'generating' ? '생성 중...' : character.referenceImage ? '다시 생성' : 'AI 생성'}
             </button>
             {character.imageStatus === 'failed' && (
               <span className="text-red-400 text-xs">실패</span>

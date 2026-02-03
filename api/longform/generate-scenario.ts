@@ -141,7 +141,7 @@ const pass1Schema = {
         type: Type.OBJECT,
         properties: {
           sceneNumber: { type: Type.NUMBER, description: '씬 번호 (1부터)' },
-          timeRange: { type: Type.STRING, description: '시간 범위 (예: 0:10~1:10)' },
+          timeRange: { type: Type.STRING, description: '시간 범위 (예: 0:00~1:00)' },
           narration: { type: Type.STRING, description: '나레이션 텍스트 (한국어, 432~444자, 6구간×72~74자)' },
           narrationCharCount: { type: Type.NUMBER, description: '나레이션 글자 수' },
           narrationKeywords: { type: Type.ARRAY, items: { type: Type.STRING }, description: '시각화 핵심 키워드 (영어, 3~5개)' },
