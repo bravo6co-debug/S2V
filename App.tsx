@@ -1,7 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { TabNavigation, TabNavigationCompact } from './components/common/TabNavigation';
+import { TabNavigation, MobileBottomNav } from './components/common/TabNavigation';
 import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode, IMAGE_STYLE_OPTIONS, ImageStyle } from './types';
 import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
 import { ResultDisplay } from './components/ResultDisplay';
@@ -433,23 +433,25 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="h-screen bg-gray-900 text-gray-200 flex flex-col">
-            {/* 헤더: 탭 네비게이션 + 설정 */}
-            <header className="flex items-center justify-between px-2 sm:px-4 py-2 border-b border-gray-800">
-                {/* 모바일에서는 Compact, 데스크탑에서는 Full 네비게이션 */}
-                <div className="sm:hidden">
-                    <TabNavigationCompact currentTab={currentTab} onTabChange={setCurrentTab} />
-                </div>
-                <div className="hidden sm:block">
+            {/* 헤더: 데스크탑=탭+액션 중앙정렬 / 모바일=액션버튼만 */}
+            <header className="border-b border-gray-800">
+                {/* 데스크탑: 탭 + 액션 한 줄 중앙 정렬 */}
+                <div className="hidden sm:flex items-center justify-center gap-3 px-4 py-2">
                     <TabNavigation currentTab={currentTab} onTabChange={setCurrentTab} />
+                    <div className="flex items-center gap-2">
+                        <ProjectSettingsDropdown />
+                        <AuthButton />
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* 모바일: 액션 버튼만 상단 */}
+                <div className="flex sm:hidden items-center justify-end px-3 py-2 gap-2">
                     <ProjectSettingsDropdown />
                     <AuthButton />
                 </div>
             </header>
 
-            {/* 메인 콘텐츠 영역 */}
-            <main className="flex-grow overflow-hidden p-2 sm:p-4">
+            {/* 메인 콘텐츠 영역 (모바일: 하단 네비 높이만큼 pb) */}
+            <main className="flex-grow overflow-hidden p-2 sm:p-4 pb-16 sm:pb-4">
                 <div className="h-full w-full max-w-screen-2xl mx-auto">
                     <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-500">로딩 중...</div>}>
                         {renderTabContent()}
@@ -487,6 +489,9 @@ const AppContent: React.FC = () => {
             <Suspense fallback={null}>
                 <FloatingHelpButton />
             </Suspense>
+
+            {/* 모바일 하단 고정 네비게이션 */}
+            <MobileBottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
         </div>
     );
 };

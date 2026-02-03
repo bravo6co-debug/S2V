@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AppMode } from '../../types';
 
 interface TabConfig {
   mode: AppMode;
   label: string;
+  shortLabel: string;
   icon: React.ReactNode;
   activeColor: string;
+  activeBg: string;
 }
 
 interface TabNavigationProps {
@@ -57,120 +59,244 @@ const ClipIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+const YouTubeSearchIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10 9l4 2.5-4 2.5V9z" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+// 탭 순서: 시나리오 → 영상제작 → 롱폼 → 음식영상 → 광고 → 클립
 const TABS: TabConfig[] = [
   {
     mode: 'scenario',
     label: '시나리오',
-    icon: <ScenarioIcon className="w-5 h-5" />,
-    activeColor: 'from-purple-600 to-indigo-600',
-  },
-  {
-    mode: 'ad',
-    label: '광고',
-    icon: <AdIcon className="w-5 h-5" />,
-    activeColor: 'from-orange-500 to-red-600',
-  },
-  {
-    mode: 'clip',
-    label: '클립',
-    icon: <ClipIcon className="w-5 h-5" />,
-    activeColor: 'from-cyan-500 to-blue-600',
+    shortLabel: '시나리오',
+    icon: <ScenarioIcon className="w-4 h-4" />,
+    activeColor: 'text-purple-300',
+    activeBg: 'bg-purple-500/20 border-purple-500/50',
   },
   {
     mode: 'video',
     label: '영상 제작',
-    icon: <VideoIcon className="w-5 h-5" />,
-    activeColor: 'from-pink-600 to-purple-600',
-  },
-  {
-    mode: 'foodvideo',
-    label: '음식 영상',
-    icon: <FoodVideoIcon className="w-5 h-5" />,
-    activeColor: 'from-amber-500 to-orange-600',
+    shortLabel: '영상',
+    icon: <VideoIcon className="w-4 h-4" />,
+    activeColor: 'text-pink-300',
+    activeBg: 'bg-pink-500/20 border-pink-500/50',
   },
   {
     mode: 'longform',
     label: '롱폼',
-    icon: <LongformIcon className="w-5 h-5" />,
-    activeColor: 'from-teal-500 to-cyan-600',
+    shortLabel: '롱폼',
+    icon: <LongformIcon className="w-4 h-4" />,
+    activeColor: 'text-teal-300',
+    activeBg: 'bg-teal-500/20 border-teal-500/50',
+  },
+  {
+    mode: 'foodvideo',
+    label: '음식 영상',
+    shortLabel: '음식',
+    icon: <FoodVideoIcon className="w-4 h-4" />,
+    activeColor: 'text-amber-300',
+    activeBg: 'bg-amber-500/20 border-amber-500/50',
+  },
+  {
+    mode: 'ad',
+    label: '광고',
+    shortLabel: '광고',
+    icon: <AdIcon className="w-4 h-4" />,
+    activeColor: 'text-orange-300',
+    activeBg: 'bg-orange-500/20 border-orange-500/50',
+  },
+  {
+    mode: 'clip',
+    label: '클립',
+    shortLabel: '클립',
+    icon: <ClipIcon className="w-4 h-4" />,
+    activeColor: 'text-cyan-300',
+    activeBg: 'bg-cyan-500/20 border-cyan-500/50',
   },
 ];
 
+const YOUTUBE_SEARCH_URL = 'https://youtube-search-tau-wine.vercel.app/';
+const PAD_URL = 'https://pad.onsajang.life/';
+
+const PadIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
+
+const MoreIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <circle cx="12" cy="5" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="12" cy="19" r="2" />
+  </svg>
+);
+
+// ─── 데스크탑: 아이콘 + 풀 라벨 + YT검색 ─────────────────
 export const TabNavigation: React.FC<TabNavigationProps> = ({
   currentTab,
   onTabChange,
   disabled = false,
 }) => {
   return (
-    <nav className="flex items-center gap-1 p-1 bg-gray-800/50 rounded-xl">
+    <nav className="flex items-center gap-1 p-1 bg-gray-800/60 backdrop-blur-sm rounded-xl border border-gray-700/40">
       {TABS.map((tab) => {
         const isActive = currentTab === tab.mode;
-
         return (
           <button
             key={tab.mode}
             onClick={() => onTabChange(tab.mode)}
             disabled={disabled}
             className={`
-              relative flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg font-medium
-              transition-all duration-200 ease-in-out
+              relative flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium
+              transition-all duration-200 ease-out
               ${isActive
-                ? `bg-gradient-to-r ${tab.activeColor} text-white shadow-lg`
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                ? `${tab.activeBg} ${tab.activeColor} border shadow-sm`
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/40 border border-transparent'
               }
               disabled:opacity-50 disabled:cursor-not-allowed
             `}
             aria-current={isActive ? 'page' : undefined}
           >
             {tab.icon}
-            <span className="text-sm">{tab.label}</span>
-
-            {/* Active indicator dot */}
-            {isActive && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-lg" />
-            )}
+            <span className="text-sm whitespace-nowrap">{tab.label}</span>
           </button>
         );
       })}
+
+      {/* 구분선 */}
+      <div className="w-px h-5 bg-gray-700/60 mx-1" />
+
+      {/* 외부 링크 */}
+      <a
+        href={YOUTUBE_SEARCH_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent transition-all duration-200 ease-out"
+        title="YouTube 채널검색"
+      >
+        <YouTubeSearchIcon className="w-4 h-4" />
+        <span className="text-sm whitespace-nowrap">YT검색</span>
+      </a>
+      <a
+        href={PAD_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 border border-transparent transition-all duration-200 ease-out"
+        title="상세페이지 협업"
+      >
+        <PadIcon className="w-4 h-4" />
+        <span className="text-sm whitespace-nowrap">상세페이지</span>
+      </a>
     </nav>
   );
 };
 
-// Compact version for smaller screens
-export const TabNavigationCompact: React.FC<TabNavigationProps> = ({
+// ─── 모바일 하단 고정 네비 ────────────────────────────
+export const MobileBottomNav: React.FC<TabNavigationProps> = ({
   currentTab,
   onTabChange,
   disabled = false,
 }) => {
-  return (
-    <nav className="flex items-center gap-0.5 p-0.5 bg-gray-800/50 rounded-lg">
-      {TABS.map((tab) => {
-        const isActive = currentTab === tab.mode;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
 
-        return (
+  useEffect(() => {
+    if (!moreOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [moreOpen]);
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-md border-t border-gray-700/60 pb-[env(safe-area-inset-bottom)] sm:hidden">
+      <div className="flex items-stretch justify-around px-1 py-1">
+        {TABS.map((tab) => {
+          const isActive = currentTab === tab.mode;
+          return (
+            <button
+              key={tab.mode}
+              onClick={() => onTabChange(tab.mode)}
+              disabled={disabled}
+              className={`
+                flex flex-col items-center justify-center gap-0.5 flex-1 py-1.5 rounded-lg
+                transition-all duration-150 ease-out min-w-0
+                ${isActive
+                  ? `${tab.activeColor}`
+                  : 'text-gray-500'
+                }
+                disabled:opacity-50
+              `}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={tab.label}
+            >
+              <span className={`transition-transform duration-150 ${isActive ? 'scale-110' : ''}`}>
+                {tab.icon}
+              </span>
+              <span className={`text-[10px] leading-tight font-medium truncate ${isActive ? '' : 'opacity-70'}`}>
+                {tab.shortLabel}
+              </span>
+              {isActive && (
+                <span className="absolute -top-px left-1/2 -translate-x-1/2 w-6 h-0.5 bg-current rounded-full" />
+              )}
+            </button>
+          );
+        })}
+
+        {/* 더보기 */}
+        <div ref={moreRef} className="relative flex-1 min-w-0">
           <button
-            key={tab.mode}
-            onClick={() => onTabChange(tab.mode)}
-            disabled={disabled}
-            title={tab.label}
+            onClick={() => setMoreOpen(prev => !prev)}
             className={`
-              relative flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-md
-              transition-all duration-200 ease-in-out
-              ${isActive
-                ? `bg-gradient-to-r ${tab.activeColor} text-white`
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
-              }
-              disabled:opacity-50 disabled:cursor-not-allowed
+              flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-lg
+              transition-all duration-150 ease-out
+              ${moreOpen ? 'text-gray-200' : 'text-gray-500'}
             `}
-            aria-current={isActive ? 'page' : undefined}
-            aria-label={tab.label}
+            aria-label="더보기"
           >
-            {tab.icon}
+            <MoreIcon className="w-4 h-4" />
+            <span className="text-[10px] leading-tight font-medium opacity-70">더보기</span>
           </button>
-        );
-      })}
+
+          {moreOpen && (
+            <div className="absolute bottom-full right-0 mb-2 w-44 bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+              <a
+                href={YOUTUBE_SEARCH_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMoreOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-3 text-gray-300 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <YouTubeSearchIcon className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm">YT 채널검색</span>
+              </a>
+              <div className="h-px bg-gray-700/60" />
+              <a
+                href={PAD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMoreOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-3 text-gray-300 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+              >
+                <PadIcon className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm">상세페이지</span>
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
     </nav>
   );
 };
+
+// ─── 하위호환 (사용 안 함, App.tsx에서 제거 예정) ──────────
+export const TabNavigationCompact: React.FC<TabNavigationProps> = MobileBottomNav;
 
 export default TabNavigation;
