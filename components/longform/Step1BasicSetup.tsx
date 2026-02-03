@@ -340,8 +340,7 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
         <h4 className="text-sm font-medium text-gray-300 mb-2">예상 정보</h4>
         <div className="grid grid-cols-2 gap-2 text-xs text-gray-400">
           <div>총 씬 수: <span className="text-gray-200 font-medium">{sceneCount}개</span></div>
-          <div>후킹 영상: <span className="text-gray-200 font-medium">10초 (실사 동영상)</span></div>
-          <div>본편: <span className="text-gray-200 font-medium">{duration - 1}분 50초</span></div>
+          <div>영상 길이: <span className="text-gray-200 font-medium">{duration}분</span></div>
           <div>이미지 비용: <span className="text-teal-400 font-medium">{imageCost}</span></div>
           <div>TTS 비용: <span className="text-teal-400 font-medium">{ttsCost}</span></div>
         </div>
