@@ -269,37 +269,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 - suggestedCharacters는 선택적 (필요시 제안)
 - 비주얼보다 내레이션이 우선`;
 
-        // 모드에 따른 이미지 프롬프트 지시문
+        // 모드에 따른 이미지 프롬프트 지시문 (상세 버전)
         const imagePromptGuidelines = mode === 'character'
-            ? `- 한국인 인물 묘사 시 "Korean" 명시
-- 인물의 표정, 자세, 시선 방향 구체적으로
-- 배경, 조명, 시간대 명시
-- 감정과 분위기를 시각적으로 표현`
+            ? `**필수 구성요소 (반드시 모두 포함):**
+1. **주체(Subject)**: 누가/무엇이 화면에 있는지 - "Korean man in his late 20s", "Korean woman with long black hair"
+2. **행동/자세(Action/Pose)**: 무엇을 하고 있는지 - "holding a coffee cup", "looking out the window with a wistful expression"
+3. **표정/감정(Expression)**: 얼굴 표정과 감정 상태 - "warm smile showing relief", "tears welling up in eyes"
+4. **카메라(Camera)**: 샷 타입과 앵글 - "close-up shot", "medium shot from slightly below", "over-the-shoulder view"
+5. **조명(Lighting)**: 빛의 종류와 방향 - "soft golden hour sunlight from the left", "dramatic backlight creating silhouette"
+6. **배경/환경(Environment)**: 장소와 분위기 - "modern Seoul apartment with floor-to-ceiling windows", "rainy night street with neon reflections"
+7. **색감/톤(Color Palette)**: 전체적인 색상 분위기 - "warm amber and orange tones", "cool blue and gray palette"
+8. **분위기(Atmosphere)**: 감정적 분위기 - "melancholic and reflective mood", "hopeful and uplifting atmosphere"
+
+**나쁜 예시 (단순 번역 - 절대 금지):**
+"Brother giving a gift to younger brother, stacks of cash on table"
+
+**좋은 예시 (AI 이미지 생성에 최적화):**
+"Korean young man in his late 20s with a warm, relieved smile handing a beautifully wrapped gift box to his younger teenage brother, both sitting on a cozy living room sofa, medium shot with shallow depth of field focusing on their emotional exchange, soft afternoon sunlight streaming through sheer curtains creating a warm golden glow, warm amber and cream color palette, heartwarming family moment filled with gratitude and love"`
             : isHybridMode
-                ? `- **풍경이 메인, 캐릭터는 보조적으로만 등장**
-- 캐릭터가 등장하는 씬에서:
-  * "a small figure in the distance" 또는 "silhouette of a person"
-  * "person from behind looking at the scenery"
-  * 인물은 화면의 1/5 이하 크기로
-  * Wide shot으로 환경의 스케일 강조
-- 캐릭터가 없는 씬: 순수 풍경/환경만 묘사
-- 빛, 날씨, 시간대, 계절 명시
-- 장소의 분위기와 질감 상세히
-- 한국인 인물 묘사 시 "Korean" 명시`
+                ? `**하이브리드 모드: 풍경 중심 + 인물 보조**
+
+**필수 구성요소:**
+1. **풍경/환경 (메인)**: 장소, 날씨, 시간대, 계절 - "vast autumn mountain range at golden hour", "misty bamboo forest in early morning"
+2. **인물 (보조적)**: 작게 또는 실루엣으로 - "a small figure in the distance walking toward the horizon", "silhouette of a person from behind gazing at the scenery"
+3. **조명**: 자연광, 시간대별 빛 - "warm sunset light casting long shadows", "soft diffused light through overcast sky"
+4. **깊이감(Depth)**: 전경-중경-배경 레이어 - "foreground grass swaying, middle ground lake reflecting clouds, distant mountains fading into mist"
+5. **분위기**: 감정적 톤 - "serene and contemplative", "melancholic solitude"
+
+**인물 표현 규칙:**
+- 화면의 1/5 이하 크기로 작게
+- Wide shot 또는 Extreme wide shot 사용
+- "a lone figure", "silhouette", "person from behind" 등 비개인화된 표현
+- 한국인 인물 시 "Korean" 명시
+
+**좋은 예시:**
+"Vast Korean countryside at golden hour with endless rice paddies stretching to distant mountains, a small silhouette of a person walking alone on a narrow path between the fields, warm orange and gold sunset light casting long shadows, layers of depth from foreground grass to middle ground paddies to misty blue mountains, serene yet melancholic atmosphere of solitary reflection"`
                 : mode === 'environment'
-                    ? `- 풍경, 배경, 환경만 묘사 (인물 제외)
-- 빛, 날씨, 시간대, 계절 명시
-- 장소의 분위기와 질감 상세히
-- 공간의 깊이감과 레이어 표현`
+                    ? `**환경 모드: 순수 풍경/배경 (인물 제외)**
+
+**필수 구성요소:**
+1. **장소(Location)**: 구체적인 위치 - "traditional Korean hanok courtyard", "modern Seoul rooftop garden"
+2. **시간대(Time)**: 빛의 특성 결정 - "dawn with first light breaking", "deep night under starry sky"
+3. **날씨/계절(Weather/Season)**: 분위기 강화 - "heavy summer rain", "first snow of winter"
+4. **조명(Lighting)**: 자연광/인공광 - "dramatic thunderstorm lighting", "warm lantern glow"
+5. **질감(Texture)**: 표면과 재질 - "weathered wooden beams", "rain-slicked cobblestones"
+6. **깊이감(Depth)**: 공간감 - "leading lines drawing eye to distant temple", "layered fog creating depth"
+7. **분위기(Mood)**: 감정적 톤 - "peaceful sanctuary", "ominous and foreboding"
+
+**좋은 예시:**
+"Empty traditional Korean hanok courtyard at dawn, ancient wooden pillars with weathered patina, stone pathway leading to a distant garden gate shrouded in morning mist, first golden sunlight breaking through pine trees casting long shadows, dewdrops on moss-covered rocks, peaceful and contemplative atmosphere of a new beginning"`
                     : mode === 'abstract'
-                        ? `- 추상적 개념을 시각화
-- 색상, 형태, 질감, 패턴 중심
-- 상징적 오브젝트와 메타포 활용
-- 감정을 색과 형태로 표현`
-                        : `- 내레이션 내용을 보조하는 이미지
-- 정보 전달에 적합한 구도
-- 필요시 텍스트/타이포그래피 포함 가능
-- 설명적이고 명확한 시각화`;
+                        ? `**추상 모드: 개념의 시각화**
+
+**필수 구성요소:**
+1. **핵심 개념**: 표현하려는 감정/아이디어 - "the weight of regret", "fleeting moment of joy"
+2. **시각적 메타포**: 상징적 이미지 - "shattered mirror fragments floating", "roots growing through concrete"
+3. **색상/형태**: 감정을 색과 형태로 - "deep indigo swirls representing melancholy", "explosive warm colors radiating outward"
+4. **질감/패턴**: 추상적 요소 - "smooth gradients dissolving into chaos", "geometric patterns fracturing"
+5. **구도(Composition)**: 시각적 흐름 - "spiral composition drawing inward", "diagonal tension across frame"
+
+**좋은 예시:**
+"Abstract visualization of inner conflict, fractured mirror shards floating in deep indigo void, each fragment reflecting different facial expressions, warm golden light breaking through cracks suggesting hope, swirling mist connecting the fragments, tension between chaos and order, emotionally charged composition with dramatic diagonal movement"`
+                        : `**나레이션 모드: 정보 전달 보조 이미지**
+
+**필수 구성요소:**
+1. **핵심 주제**: 설명하려는 개념 - "the concept of compound interest", "stages of coffee brewing"
+2. **시각적 구조**: 정보 전달에 적합한 구도 - "clean infographic style layout", "step-by-step visual flow"
+3. **명확성**: 이해하기 쉬운 표현 - "clearly labeled elements", "distinct visual hierarchy"
+4. **색상 체계**: 정보 구분 - "color-coded categories", "consistent visual language"
+
+**좋은 예시:**
+"Clean educational illustration showing the coffee brewing process, four-stage horizontal flow from whole beans to finished cup, each stage clearly distinguished with warm earth-tone color coding, minimalist modern style with subtle shadows, professional infographic aesthetic with generous white space"`;
 
         // 챕터 구조 지시문 (장편용)
         const chapterGuidelines = durationConfig.chapters > 1
@@ -418,9 +458,15 @@ ${hookExamples.map(ex => `- ${ex}`).join('\n')}
 - **characters**: 이 씬에 등장하는 캐릭터 이름 목록 (suggestedCharacters의 name과 일치해야 함)
 - **imagePrompt**: 이미지 생성용 영어 프롬프트${durationConfig.chapters > 1 ? '\n- **chapterIndex**: 소속 챕터 번호 (0부터 시작)\n- **chapterTitle**: 챕터 제목' : ''}
 
-### 5. 이미지 프롬프트 작성 규칙 (imagePrompt)
+### 5. 이미지 프롬프트 작성 규칙 (imagePrompt) - 가장 중요!
+**주의: 단순 번역이 아닌 AI 이미지 생성에 최적화된 상세 프롬프트를 작성해야 합니다!**
+
+**기본 규칙:**
 - 반드시 영어로 작성
-- 아트 스타일 프리픽스 추가: "${stylePromptText.substring(0, 100)}..."
+- 아트 스타일 프리픽스로 시작: "${stylePromptText.substring(0, 100)}..."
+- visualDescription의 핵심 내용을 포함하되, AI 이미지 생성에 필요한 모든 시각적 세부사항을 추가
+- 최소 50단어 이상의 상세한 프롬프트 작성
+
 ${imagePromptGuidelines}
 
 ${characterGuidelines}

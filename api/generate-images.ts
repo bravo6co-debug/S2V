@@ -70,12 +70,28 @@ const generateOneImage = async (
     // Get style prompt based on user selection
     const stylePrompt = getStylePrompt(imageStyle);
     const isPhotorealistic = !imageStyle || imageStyle === 'photorealistic' || imageStyle === 'cinematic';
+    const isAnimationStyle = imageStyle === 'animation' || imageStyle === 'illustration' || imageStyle === '3d_render' || imageStyle === 'watercolor';
+
+    // 스타일과 캐릭터 레퍼런스 간의 일관성 지시문
+    const styleTransformInstruction = isAnimationStyle && effectiveCharacterCount > 0
+        ? `
+**CRITICAL STYLE TRANSFORMATION:**
+The character reference photos may be real photographs, but you MUST render the characters in the specified art style (${imageStyle}).
+- **PRESERVE:** Facial structure, distinctive features (eye shape, nose shape, face shape), age, hairstyle, and overall identity
+- **TRANSFORM:** Render these features in ${imageStyle} style - this means converting realistic features into stylized ${imageStyle} aesthetics
+- **GOAL:** The character should be RECOGNIZABLE as the same person from the reference, but rendered entirely in ${imageStyle} art style
+- **DO NOT:** Mix realistic photo elements with ${imageStyle} elements. The entire image including all characters MUST be in pure ${imageStyle} style.`
+        : '';
+
     const styleReferencePromptPart = `
 ---
 **2. ART STYLE (MANDATORY & STRICT)**
-**ACTION:** You MUST generate the image in the following style. This is a critical instruction.
+**ACTION:** You MUST generate the ENTIRE image in the following style. This is a critical instruction.
 **STYLE:** ${stylePrompt}
-${isPhotorealistic ? '**ABSOLUTE RESTRICTIONS:** Avoid any and all artistic stylization. No illustrated features, no airbrushed skin, no cartoonish proportions, no painterly textures. The image must appear as if it was captured by a high-end camera.' : '**STYLE CONSISTENCY:** Maintain this artistic style throughout the entire image while ensuring character consistency.'}
+${isPhotorealistic
+    ? '**ABSOLUTE RESTRICTIONS:** Avoid any and all artistic stylization. No illustrated features, no airbrushed skin, no cartoonish proportions, no painterly textures. The image must appear as if it was captured by a high-end camera.'
+    : `**STYLE CONSISTENCY:** The ENTIRE image - including all characters, backgrounds, and objects - MUST be rendered in this ${imageStyle} art style. Do NOT mix different styles.`}
+${styleTransformInstruction}
 `;
 
     const variationPrompt = addVariation ? "\n**VARIATION:** Create a different composition, pose, or camera angle from previous generations for this prompt." : "";
@@ -108,6 +124,16 @@ Use this background image as reference for the scene setting. Match the location
 ` : '';
 
     // 캐릭터 레퍼런스 섹션 생성 (이름이 있는 경우 각 캐릭터 명시)
+    // 스타일 변환 시 참고할 추가 지시문
+    const styleAwareCharacterNote = isAnimationStyle
+        ? `
+**STYLE-AWARE CHARACTER RENDERING:**
+- The reference images may be real photographs, but render the characters in the specified ${imageStyle} art style
+- PRESERVE: facial structure, eye shape, nose shape, face shape, age appearance, hairstyle, body proportions
+- TRANSFORM: Convert these identifying features into ${imageStyle} style aesthetics (e.g., anime eyes while keeping the same eye shape/size ratio)
+- The character should be RECOGNIZABLE as the same person but rendered entirely in ${imageStyle} style`
+        : '';
+
     let characterReferenceSection = '';
     if (characterNames.length > 0) {
         // 이름이 포함된 캐릭터 레퍼런스 (캐릭터 일관성 향상)
@@ -122,19 +148,20 @@ Use this background image as reference for the scene setting. Match the location
 ${characterDescriptions}
 
 **ABSOLUTE REQUIREMENT:**
-- Each character MUST appear EXACTLY as shown in their respective reference photo
-- Match facial features, age, hair style, skin tone, and body type with EXTREME PRECISION
+- Each character MUST be RECOGNIZABLE as the person shown in their respective reference photo
+- Match facial structure, distinctive features (eye shape, nose shape, face shape), age, hairstyle, and body proportions
 - When the user prompt mentions a character by name (e.g., "${characterNames[0]}"), use THAT specific character's reference image
 - If multiple characters appear in the scene, ensure EACH character matches their own reference photo - DO NOT mix features between characters
 - **CRITICAL ETHNICITY MANDATE:** All characters in the reference images are ethnically Korean. Your generated image MUST maintain Korean ethnicity for each character.
-- The generated persons must be undeniably the SAME PERSONS as in their respective reference photos.`;
+${styleAwareCharacterNote}`;
     } else if (effectiveCharacterCount > 0) {
         // 이름 없는 캐릭터 레퍼런스 (하위 호환성)
         characterReferenceSection = `
 ---
 **1. CHARACTER REFERENCE (First ${effectiveCharacterCount} image${effectiveCharacterCount > 1 ? 's' : ''})**
-**ACTION:** This is your highest priority. Analyze the provided reference image(s) to understand the character's exact appearance. You MUST replicate their facial features, age, hair style and color, and overall look with extreme precision.
-**CRITICAL ETHNICITY MANDATE:** The character in the reference images is ethnically Korean. Your generated image MUST maintain this Korean ethnicity. This is a strict, non-negotiable rule. The generated person must be undeniably the SAME PERSON as in the reference photos.`;
+**ACTION:** This is your highest priority. Analyze the provided reference image(s) to understand the character's exact appearance. You MUST replicate their facial structure, distinctive features, age, hair style and color, and overall look.
+**CRITICAL ETHNICITY MANDATE:** The character in the reference images is ethnically Korean. Your generated image MUST maintain this Korean ethnicity.
+${styleAwareCharacterNote}`;
     }
 
     const finalPrompt = `
