@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, Img, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Img, interpolate, useCurrentFrame, useVideoConfig, Easing } from 'remotion';
 import type { AnimationConfig, ImageData } from '../../types';
 
 interface KenBurnsEffectProps {
@@ -71,6 +71,49 @@ export const KenBurnsEffect: React.FC<KenBurnsEffectProps> = ({
           translateY = interpolate(progress, [0, 1], [maxTranslate, -maxTranslate]);
       }
       break;
+
+    case 'slideCycle': {
+      // 60초 주기 슬라이드 사이클 (1분 = 1씬에 최적화)
+      // 0-10초: 고정(중앙), 10-20초: 중앙→왼쪽, 20-30초: 왼쪽→중앙
+      // 30-40초: 중앙→오른쪽, 40-50초: 오른쪽→중앙, 50-60초: 고정(중앙)
+      const fps = 30;
+      const cycleFrames = 60 * fps; // 60초 = 1800 프레임
+      const segmentFrames = 10 * fps; // 10초 = 300 프레임
+
+      // 현재 프레임을 60초 사이클 내 위치로 변환
+      const cycleFrame = frame % cycleFrames;
+      const segment = Math.floor(cycleFrame / segmentFrames); // 0~5 구간
+      const segmentProgress = (cycleFrame % segmentFrames) / segmentFrames; // 0~1
+
+      // ease-in-out 적용
+      const eased = Easing.inOut(Easing.cubic)(segmentProgress);
+
+      scale = 1.15; // 이동 공간 확보를 위해 약간 확대
+      const slideAmount = intensity * 8; // 좌우 이동량 (%)
+
+      switch (segment) {
+        case 0: // 0-10초: 고정 (중앙)
+          translateX = 0;
+          break;
+        case 1: // 10-20초: 중앙 → 왼쪽
+          translateX = interpolate(eased, [0, 1], [0, -slideAmount]);
+          break;
+        case 2: // 20-30초: 왼쪽 → 중앙
+          translateX = interpolate(eased, [0, 1], [-slideAmount, 0]);
+          break;
+        case 3: // 30-40초: 중앙 → 오른쪽
+          translateX = interpolate(eased, [0, 1], [0, slideAmount]);
+          break;
+        case 4: // 40-50초: 오른쪽 → 중앙
+          translateX = interpolate(eased, [0, 1], [slideAmount, 0]);
+          break;
+        case 5: // 50-60초: 고정 (중앙)
+        default:
+          translateX = 0;
+          break;
+      }
+      break;
+    }
 
     case 'none':
     default:

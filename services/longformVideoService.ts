@@ -53,42 +53,29 @@ interface CameraKeyframe {
 }
 
 /**
- * 3가지 카메라 경로 패턴 — 씬마다 순환하여 반복감을 줄임.
- * 각 패턴은 7개 키프레임(6세그먼트 경계) 기준.
- * 줌+팬을 동시에 사용하여 정지 이미지를 영상처럼 보이게 함.
+ * 60초 슬라이드 사이클 카메라 경로
+ * 7개 키프레임(6세그먼트 경계) 기준:
+ * - 0-10초: 고정 (중앙)
+ * - 10-20초: 중앙 → 왼쪽
+ * - 20-30초: 왼쪽 → 중앙
+ * - 30-40초: 중앙 → 오른쪽
+ * - 40-50초: 오른쪽 → 중앙
+ * - 50-60초: 고정 (중앙)
  *
- * 안전 마진: offsetXPercent의 최대값은 (scale-1)/2*100 이내로 유지
+ * ease-in-out으로 부드럽게 전환되어 고급스러운 움직임 제공
  */
+const SLIDE_AMOUNT = 6; // 좌우 이동량 (%)
+
 const CAMERA_PATHS: CameraKeyframe[][] = [
-  // Pattern A: 와이드 → 줌인 우측 → 좌측 횡단 → 줌아웃 → 딥줌 센터
+  // 60초 슬라이드 사이클 (모든 씬에 동일 적용)
   [
-    { scale: 1.00, offsetXPercent: 0,   offsetYPercent: 0 },
-    { scale: 1.12, offsetXPercent: -3,  offsetYPercent: -1.5 },
-    { scale: 1.22, offsetXPercent: -7,  offsetYPercent: 0.5 },
-    { scale: 1.18, offsetXPercent: 5,   offsetYPercent: 1.5 },
-    { scale: 1.08, offsetXPercent: -2,  offsetYPercent: -2 },
-    { scale: 1.15, offsetXPercent: 4,   offsetYPercent: 1 },
-    { scale: 1.25, offsetXPercent: 0,   offsetYPercent: 0 },
-  ],
-  // Pattern B: 우측 시작 → 좌측 대각선 → 센터 줌 → 우상단 → 정착
-  [
-    { scale: 1.05, offsetXPercent: -2,  offsetYPercent: -1 },
-    { scale: 1.18, offsetXPercent: -5,  offsetYPercent: 1 },
-    { scale: 1.22, offsetXPercent: 3,   offsetYPercent: -1.5 },
-    { scale: 1.12, offsetXPercent: 4,   offsetYPercent: 2 },
-    { scale: 1.08, offsetXPercent: -1,  offsetYPercent: -1.5 },
-    { scale: 1.20, offsetXPercent: 3,   offsetYPercent: 0 },
-    { scale: 1.10, offsetXPercent: 0,   offsetYPercent: 0 },
-  ],
-  // Pattern C: 줌인 시작 → 줌아웃 좌측 → 센터 복귀 → 딥줌 우측 → 와이드 마무리
-  [
-    { scale: 1.22, offsetXPercent: 0,   offsetYPercent: 0 },
-    { scale: 1.15, offsetXPercent: 4,   offsetYPercent: 1.5 },
-    { scale: 1.08, offsetXPercent: 3,   offsetYPercent: -1 },
-    { scale: 1.18, offsetXPercent: 0,   offsetYPercent: 0 },
-    { scale: 1.25, offsetXPercent: -5,  offsetYPercent: -2 },
-    { scale: 1.15, offsetXPercent: -2,  offsetYPercent: 2 },
-    { scale: 1.05, offsetXPercent: 0,   offsetYPercent: 0 },
+    { scale: 1.15, offsetXPercent: 0,             offsetYPercent: 0 },  // 0초: 중앙
+    { scale: 1.15, offsetXPercent: 0,             offsetYPercent: 0 },  // 10초: 중앙 (고정 끝)
+    { scale: 1.15, offsetXPercent: -SLIDE_AMOUNT, offsetYPercent: 0 },  // 20초: 왼쪽
+    { scale: 1.15, offsetXPercent: 0,             offsetYPercent: 0 },  // 30초: 중앙
+    { scale: 1.15, offsetXPercent: SLIDE_AMOUNT,  offsetYPercent: 0 },  // 40초: 오른쪽
+    { scale: 1.15, offsetXPercent: 0,             offsetYPercent: 0 },  // 50초: 중앙
+    { scale: 1.15, offsetXPercent: 0,             offsetYPercent: 0 },  // 60초: 중앙 (고정 끝)
   ],
 ];
 
@@ -160,7 +147,7 @@ export function longformSceneToRemotionScene(scene: LongformScene): RemotionScen
     imageData: scene.generatedImage,
     narration: scene.narration,
     narrationAudio: scene.narrationAudio,
-    animation: { type: 'kenBurns', direction: 'in', intensity: 0.3 },
+    animation: { type: 'slideCycle', direction: 'in', intensity: 0.5 },
     mood: scene.mood,
   };
 }

@@ -204,7 +204,7 @@ export interface Transition {
 }
 
 export interface AnimationConfig {
-  type: 'kenBurns' | 'zoom' | 'pan' | 'none';
+  type: 'kenBurns' | 'zoom' | 'pan' | 'slideCycle' | 'none';
   direction?: 'in' | 'out' | 'left' | 'right';
   intensity: number;
 }
