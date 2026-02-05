@@ -352,6 +352,78 @@ export function calculateTotalDuration(scenes: Scene[]): number {
   return remotionScenes.reduce((acc, scene) => acc + scene.duration, 0);
 }
 
+// ─── 파트 분할 유틸리티 (2분 이상 영상) ────────────────
+
+/** 2분(120초) 이상이면 파트 분할 필요 */
+export const PART_SPLIT_THRESHOLD = 120; // 초
+export const PART_DURATION_TARGET = 120; // 파트당 목표 길이 (초)
+
+/** 파트 분할이 필요한지 확인 */
+export function needsPartSplit(scenes: Scene[]): boolean {
+  const totalDuration = calculateTotalDuration(scenes);
+  return totalDuration >= PART_SPLIT_THRESHOLD;
+}
+
+/** 씬을 파트로 분할 (각 파트가 약 2분이 되도록) */
+export function splitScenesIntoParts(scenes: Scene[]): {
+  parts: Scene[][];
+  ranges: { start: number; end: number; duration: number }[];
+} {
+  const scenesWithImages = scenes.filter(s => s.generatedImage || s.customImage);
+
+  if (scenesWithImages.length === 0) {
+    return { parts: [], ranges: [] };
+  }
+
+  const totalDuration = scenesWithImages.reduce((acc, s) => acc + s.duration, 0);
+
+  // 2분 미만이면 분할하지 않음
+  if (totalDuration < PART_SPLIT_THRESHOLD) {
+    return {
+      parts: [scenesWithImages],
+      ranges: [{ start: 0, end: scenesWithImages.length, duration: totalDuration }],
+    };
+  }
+
+  const parts: Scene[][] = [];
+  const ranges: { start: number; end: number; duration: number }[] = [];
+
+  let currentPart: Scene[] = [];
+  let currentDuration = 0;
+  let partStartIndex = 0;
+
+  for (let i = 0; i < scenesWithImages.length; i++) {
+    const scene = scenesWithImages[i];
+
+    // 현재 파트에 씬 추가
+    currentPart.push(scene);
+    currentDuration += scene.duration;
+
+    // 파트 목표 시간에 도달하거나 마지막 씬이면 파트 완료
+    if (currentDuration >= PART_DURATION_TARGET || i === scenesWithImages.length - 1) {
+      parts.push(currentPart);
+      ranges.push({
+        start: partStartIndex,
+        end: i + 1,
+        duration: currentDuration,
+      });
+
+      // 다음 파트 준비
+      currentPart = [];
+      currentDuration = 0;
+      partStartIndex = i + 1;
+    }
+  }
+
+  return { parts, ranges };
+}
+
+/** 파트 수 계산 */
+export function calculatePartCount(scenes: Scene[]): number {
+  const { parts } = splitScenesIntoParts(scenes);
+  return parts.length;
+}
+
 /**
  * 해상도 설정 가져오기
  */

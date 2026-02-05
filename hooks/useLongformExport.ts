@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { LongformScenario, LongformOutput } from '../types/longform';
+import type { LongformScenario, LongformOutput, LongformPartOutput } from '../types/longform';
+import { calculatePartRanges } from '../types/longform';
 import {
   longformScenesToRemotionScenes,
-  splitScenesForExport,
+  splitScenesForExportMulti,
   renderLongformPart,
   downloadLongformVideo,
   type LongformRenderProgress,
@@ -20,216 +21,190 @@ export interface PartExportState {
 
 interface UseLongformExportReturn {
   output: LongformOutput | null;
-  part1State: PartExportState;
-  part2State: PartExportState;
+  partStates: PartExportState[];
+  partCount: number;
   isExporting: boolean;
-  startExportPart1: (scenario: LongformScenario) => Promise<void>;
-  startExportPart2: (scenario: LongformScenario) => Promise<void>;
+  startExportPart: (scenario: LongformScenario, partIndex: number) => Promise<void>;
   cancelExport: () => void;
-  downloadPart: (part: 'part1' | 'part2', scenario: LongformScenario) => void;
+  downloadPart: (partIndex: number, scenario: LongformScenario) => void;
+  getPartRange: (scenario: LongformScenario, partIndex: number) => { start: number; end: number };
 }
 
 const INITIAL_PART_STATE: PartExportState = { status: 'idle', progress: 0 };
 
 export function useLongformExport(): UseLongformExportReturn {
   const [output, setOutput] = useState<LongformOutput | null>(null);
-  const [part1State, setPart1State] = useState<PartExportState>(INITIAL_PART_STATE);
-  const [part2State, setPart2State] = useState<PartExportState>(INITIAL_PART_STATE);
+  const [partStates, setPartStates] = useState<PartExportState[]>([]);
+  const [partCount, setPartCount] = useState(0);
 
-  // [B] 파트별 독립 AbortController (공유 시 Part2 시작이 Part1을 덮어씀)
-  const abortPart1Ref = useRef<AbortController | null>(null);
-  const abortPart2Ref = useRef<AbortController | null>(null);
+  // AbortController refs for each part
+  const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
+  const renderingPartsRef = useRef<Set<number>>(new Set());
+  const blobUrlsRef = useRef<Map<number, string>>(new Map());
 
-  // [A] Blob URL을 ref로 추적 (stale closure 방지)
-  const part1UrlRef = useRef<string | null>(null);
-  const part2UrlRef = useRef<string | null>(null);
+  const isExporting = partStates.some(s => s.status === 'rendering');
 
-  // [C] 렌더링 상태를 ref로도 추적 (useCallback 내부에서 최신 상태 접근)
-  const part1RenderingRef = useRef(false);
-  const part2RenderingRef = useRef(false);
-
-  const isExporting = part1State.status === 'rendering' || part2State.status === 'rendering';
-
-  // [D] 컴포넌트 언마운트 시 리소스 정리
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      abortPart1Ref.current?.abort();
-      abortPart2Ref.current?.abort();
-      if (part1UrlRef.current) URL.revokeObjectURL(part1UrlRef.current);
-      if (part2UrlRef.current) URL.revokeObjectURL(part2UrlRef.current);
+      abortControllersRef.current.forEach(ctrl => ctrl.abort());
+      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
     };
   }, []);
 
-  const startExportPart1 = useCallback(async (scenario: LongformScenario) => {
-    // [C] 동시 렌더 가드
-    if (part1RenderingRef.current) return;
+  // Initialize part states when scenario changes
+  const initializeParts = useCallback((scenario: LongformScenario) => {
+    const ranges = calculatePartRanges(scenario.scenes.length);
+    const count = ranges.length;
+    setPartCount(count);
+    setPartStates(Array(count).fill(null).map(() => ({ ...INITIAL_PART_STATE })));
+    setOutput({ parts: Array(count).fill(null) });
+  }, []);
+
+  const startExportPart = useCallback(async (scenario: LongformScenario, partIndex: number) => {
+    // Initialize if not done
+    const ranges = calculatePartRanges(scenario.scenes.length);
+    if (partStates.length !== ranges.length) {
+      initializeParts(scenario);
+    }
+
+    // Guard against concurrent render of same part
+    if (renderingPartsRef.current.has(partIndex)) return;
 
     const controller = new AbortController();
-    abortPart1Ref.current = controller;
-    part1RenderingRef.current = true;
+    abortControllersRef.current.set(partIndex, controller);
+    renderingPartsRef.current.add(partIndex);
 
-    const { part1 } = splitScenesForExport(scenario);
-    const remotionScenes = longformScenesToRemotionScenes(part1);
+    const { parts, ranges: partRanges } = splitScenesForExportMulti(scenario);
+    const scenesForPart = parts[partIndex];
 
-    if (remotionScenes.length === 0) {
-      part1RenderingRef.current = false;
-      setPart1State({ status: 'error', progress: 0, error: '이미지가 생성된 씬이 없습니다' });
+    if (!scenesForPart || scenesForPart.length === 0) {
+      renderingPartsRef.current.delete(partIndex);
+      setPartStates(prev => {
+        const updated = [...prev];
+        updated[partIndex] = { status: 'error', progress: 0, error: '씬이 없습니다' };
+        return updated;
+      });
       return;
     }
 
-    setPart1State({ status: 'rendering', progress: 0 });
+    const remotionScenes = longformScenesToRemotionScenes(scenesForPart);
+
+    if (remotionScenes.length === 0) {
+      renderingPartsRef.current.delete(partIndex);
+      setPartStates(prev => {
+        const updated = [...prev];
+        updated[partIndex] = { status: 'error', progress: 0, error: '이미지가 생성된 씬이 없습니다' };
+        return updated;
+      });
+      return;
+    }
+
+    setPartStates(prev => {
+      const updated = [...prev];
+      updated[partIndex] = { status: 'rendering', progress: 0 };
+      return updated;
+    });
 
     const result = await renderLongformPart(
       remotionScenes,
       (p: LongformRenderProgress) => {
         if (controller.signal.aborted) return;
-        setPart1State(prev => ({
-          ...prev,
-          progress: p.progress,
-          currentFrame: p.currentFrame,
-          totalFrames: p.totalFrames,
-        }));
+        setPartStates(prev => {
+          const updated = [...prev];
+          updated[partIndex] = {
+            ...updated[partIndex],
+            progress: p.progress,
+            currentFrame: p.currentFrame,
+            totalFrames: p.totalFrames,
+          };
+          return updated;
+        });
       },
       controller.signal
     );
 
-    part1RenderingRef.current = false;
+    renderingPartsRef.current.delete(partIndex);
 
     if (controller.signal.aborted) return;
 
     if (result.success) {
-      // [A] ref에서 이전 URL 해제 (stale closure 방지)
-      if (part1UrlRef.current) {
-        URL.revokeObjectURL(part1UrlRef.current);
-      }
-      part1UrlRef.current = result.videoUrl ?? null;
+      // Revoke previous URL
+      const prevUrl = blobUrlsRef.current.get(partIndex);
+      if (prevUrl) URL.revokeObjectURL(prevUrl);
+      if (result.videoUrl) blobUrlsRef.current.set(partIndex, result.videoUrl);
 
-      setPart1State({
-        status: 'complete',
-        progress: 100,
-        totalFrames: result.duration * 30,
-        currentFrame: result.duration * 30,
-        result,
+      setPartStates(prev => {
+        const updated = [...prev];
+        updated[partIndex] = {
+          status: 'complete',
+          progress: 100,
+          totalFrames: result.duration * 30,
+          currentFrame: result.duration * 30,
+          result,
+        };
+        return updated;
       });
-      setOutput(prev => ({
-        partOne: {
+
+      setOutput(prev => {
+        const parts = prev?.parts ? [...prev.parts] : Array(ranges.length).fill(null);
+        const partOutput: LongformPartOutput = {
+          partIndex,
           blob: result.videoBlob,
           duration: result.duration,
           sceneCount: result.sceneCount,
+          sceneRange: partRanges[partIndex],
           format: 'webm',
-        },
-        partTwo: prev?.partTwo ?? null,
-      }));
-    } else {
-      setPart1State({ status: 'error', progress: 0, error: result.error });
-    }
-  }, []);
-
-  const startExportPart2 = useCallback(async (scenario: LongformScenario) => {
-    // [C] 동시 렌더 가드
-    if (part2RenderingRef.current) return;
-
-    const controller = new AbortController();
-    abortPart2Ref.current = controller;
-    part2RenderingRef.current = true;
-
-    const { part2 } = splitScenesForExport(scenario);
-    const remotionScenes = longformScenesToRemotionScenes(part2);
-
-    if (remotionScenes.length === 0) {
-      part2RenderingRef.current = false;
-      setPart2State({ status: 'error', progress: 0, error: '이미지가 생성된 씬이 없습니다' });
-      return;
-    }
-
-    setPart2State({ status: 'rendering', progress: 0 });
-
-    const result = await renderLongformPart(
-      remotionScenes,
-      (p: LongformRenderProgress) => {
-        if (controller.signal.aborted) return;
-        setPart2State(prev => ({
-          ...prev,
-          progress: p.progress,
-          currentFrame: p.currentFrame,
-          totalFrames: p.totalFrames,
-        }));
-      },
-      controller.signal
-    );
-
-    part2RenderingRef.current = false;
-
-    if (controller.signal.aborted) return;
-
-    if (result.success) {
-      // [A] ref에서 이전 URL 해제
-      if (part2UrlRef.current) {
-        URL.revokeObjectURL(part2UrlRef.current);
-      }
-      part2UrlRef.current = result.videoUrl ?? null;
-
-      setPart2State({
-        status: 'complete',
-        progress: 100,
-        totalFrames: result.duration * 30,
-        currentFrame: result.duration * 30,
-        result,
+        };
+        parts[partIndex] = partOutput;
+        return { parts };
       });
-      setOutput(prev => ({
-        partOne: prev?.partOne ?? null,
-        partTwo: {
-          blob: result.videoBlob,
-          duration: result.duration,
-          sceneCount: result.sceneCount,
-          format: 'webm',
-        },
-      }));
     } else {
-      setPart2State({ status: 'error', progress: 0, error: result.error });
+      setPartStates(prev => {
+        const updated = [...prev];
+        updated[partIndex] = { status: 'error', progress: 0, error: result.error };
+        return updated;
+      });
     }
-  }, []);
+  }, [partStates.length, initializeParts]);
 
-  // [E] cancelExport — ref 기반, deps 없음
   const cancelExport = useCallback(() => {
-    abortPart1Ref.current?.abort();
-    abortPart2Ref.current?.abort();
-    abortPart1Ref.current = null;
-    abortPart2Ref.current = null;
-    part1RenderingRef.current = false;
-    part2RenderingRef.current = false;
+    abortControllersRef.current.forEach(ctrl => ctrl.abort());
+    abortControllersRef.current.clear();
+    renderingPartsRef.current.clear();
 
-    // ref에서 Blob URL 해제
-    if (part1UrlRef.current) {
-      URL.revokeObjectURL(part1UrlRef.current);
-      part1UrlRef.current = null;
-    }
-    if (part2UrlRef.current) {
-      URL.revokeObjectURL(part2UrlRef.current);
-      part2UrlRef.current = null;
-    }
+    blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    blobUrlsRef.current.clear();
 
-    setPart1State(prev => prev.status === 'rendering' ? INITIAL_PART_STATE : prev);
-    setPart2State(prev => prev.status === 'rendering' ? INITIAL_PART_STATE : prev);
+    setPartStates(prev =>
+      prev.map(s => s.status === 'rendering' ? { ...INITIAL_PART_STATE } : s)
+    );
   }, []);
 
-  const downloadPart = useCallback((part: 'part1' | 'part2', scenario: LongformScenario) => {
-    const state = part === 'part1' ? part1State : part2State;
-    if (state.result?.videoBlob) {
+  const downloadPart = useCallback((partIndex: number, scenario: LongformScenario) => {
+    const state = partStates[partIndex];
+    if (state?.result?.videoBlob) {
       const title = scenario.metadata.title.replace(/[^a-zA-Z0-9가-힣]/g, '_');
-      const partLabel = part === 'part1' ? '파트1' : '파트2';
+      const ranges = calculatePartRanges(scenario.scenes.length);
+      const range = ranges[partIndex];
+      const partLabel = `파트${partIndex + 1}_씬${range.start + 1}-${range.end}`;
       downloadLongformVideo(state.result.videoBlob, `${title}_${partLabel}.webm`);
     }
-  }, [part1State, part2State]);
+  }, [partStates]);
+
+  const getPartRange = useCallback((scenario: LongformScenario, partIndex: number) => {
+    const ranges = calculatePartRanges(scenario.scenes.length);
+    return ranges[partIndex] || { start: 0, end: 0 };
+  }, []);
 
   return {
     output,
-    part1State,
-    part2State,
+    partStates,
+    partCount,
     isExporting,
-    startExportPart1,
-    startExportPart2,
+    startExportPart,
     cancelExport,
     downloadPart,
+    getPartRange,
   };
 }

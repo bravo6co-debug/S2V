@@ -1,20 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { LongformPlayer } from './LongformPlayer';
-import { splitScenesForExport, longformScenesToRemotionScenes } from '../../services/longformVideoService';
-import { calculateSplitPoint } from '../../types/longform';
+import { splitScenesForExportMulti, longformScenesToRemotionScenes } from '../../services/longformVideoService';
+import { calculatePartRanges } from '../../types/longform';
 import type { LongformScenario, LongformConfig, LongformScene } from '../../types/longform';
 import type { PartExportState } from '../../hooks/useLongformExport';
 
 interface Step4PreviewDownloadProps {
   scenario: LongformScenario;
   config: LongformConfig;
-  part1State: PartExportState;
-  part2State: PartExportState;
+  partStates: PartExportState[];
   isExporting: boolean;
-  onExportPart1: () => void;
-  onExportPart2: () => void;
+  onExportPart: (partIndex: number) => void;
   onCancelExport: () => void;
-  onDownloadPart: (part: 'part1' | 'part2') => void;
+  onDownloadPart: (partIndex: number) => void;
   onReset: () => void;
   onRegenerateFailedScenes?: () => void;
   isRegenerating?: boolean;
@@ -53,21 +51,19 @@ const ExportProgressBar: React.FC<{ state: PartExportState; label: string }> = (
 export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
   scenario,
   config,
-  part1State,
-  part2State,
+  partStates,
   isExporting,
-  onExportPart1,
-  onExportPart2,
+  onExportPart,
   onCancelExport,
   onDownloadPart,
   onReset,
   onRegenerateFailedScenes,
   isRegenerating = false,
 }) => {
-  const [showExportConfirm, setShowExportConfirm] = useState<'part1' | 'part2' | null>(null);
+  const [showExportConfirm, setShowExportConfirm] = useState<number | null>(null);
 
-  const { part1, part2 } = useMemo(() => splitScenesForExport(scenario), [scenario]);
-  const splitPoint = calculateSplitPoint(scenario.scenes.length);
+  // 씬을 파트별로 분할
+  const { parts, ranges } = useMemo(() => splitScenesForExportMulti(scenario), [scenario]);
 
   // 실패한 씬 찾기
   const failedScenes = useMemo(() =>
@@ -75,26 +71,32 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
   [scenario.scenes]);
 
   // 각 파트별 실제 렌더링될 씬 수
-  const part1Renderable = useMemo(() => longformScenesToRemotionScenes(part1).length, [part1]);
-  const part2Renderable = useMemo(() => longformScenesToRemotionScenes(part2).length, [part2]);
-
-  const part1Duration = part1.length; // 1분 x 씬 수
-  const part2Duration = part2.length;
+  const partRenderableCounts = useMemo(() =>
+    parts.map(partScenes => longformScenesToRemotionScenes(partScenes).length),
+  [parts]);
 
   // 내보내기 버튼 클릭 핸들러 (실패 씬 있으면 확인 모달)
-  const handleExportClick = (part: 'part1' | 'part2') => {
+  const handleExportClick = (partIndex: number) => {
     if (failedScenes.length > 0) {
-      setShowExportConfirm(part);
+      setShowExportConfirm(partIndex);
     } else {
-      part === 'part1' ? onExportPart1() : onExportPart2();
+      onExportPart(partIndex);
     }
   };
 
   const handleConfirmExport = () => {
-    if (showExportConfirm === 'part1') onExportPart1();
-    else if (showExportConfirm === 'part2') onExportPart2();
+    if (showExportConfirm !== null) {
+      onExportPart(showExportConfirm);
+    }
     setShowExportConfirm(null);
   };
+
+  // 전체 내보내기 진행률
+  const totalProgress = useMemo(() => {
+    if (partStates.length === 0) return 0;
+    const completedParts = partStates.filter(s => s.status === 'complete').length;
+    return Math.round((completedParts / partStates.length) * 100);
+  }, [partStates]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 py-4">
@@ -102,8 +104,21 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
       <div className="text-center">
         <h2 className="text-xl font-bold text-white">{scenario.metadata.title}</h2>
         <p className="text-sm text-gray-400 mt-1">
-          총 {scenario.scenes.length}개 씬 · ~{config.duration}분
+          총 {scenario.scenes.length}개 씬 · ~{config.duration}분 · {parts.length}개 파트
         </p>
+        {partStates.length > 0 && (
+          <div className="mt-2 flex items-center justify-center gap-2">
+            <div className="w-32 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-teal-500 transition-all duration-300"
+                style={{ width: `${totalProgress}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-400">
+              {partStates.filter(s => s.status === 'complete').length}/{parts.length} 완료
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 실패 씬 경고 배너 */}
@@ -158,107 +173,66 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
         </div>
       )}
 
-      {/* 파트 1 */}
-      <section className="bg-gray-800/50 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-base font-semibold text-white">
-              파트 1 (씬 1~{splitPoint})
-            </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {part1.length}개 씬 · ~{part1Duration}분
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {part1State.status === 'complete' && (
-              <button
-                onClick={() => onDownloadPart('part1')}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-500 transition-colors min-h-[36px]"
-              >
-                <DownloadIcon className="w-4 h-4" />
-                다운로드
-              </button>
-            )}
-            {part1State.status !== 'rendering' && part1State.status !== 'complete' && (
-              <button
-                onClick={() => handleExportClick('part1')}
-                disabled={isExporting || isRegenerating}
-                className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px]"
-              >
-                내보내기
-              </button>
-            )}
-          </div>
-        </div>
+      {/* 파트 목록 - 그리드 레이아웃 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {parts.map((partScenes, partIndex) => {
+          const state = partStates[partIndex] || { status: 'idle', progress: 0 };
+          const range = ranges[partIndex];
+          const partDuration = partScenes.length; // 1분 x 씬 수
 
-        <LongformPlayer scenes={part1} />
+          return (
+            <section key={partIndex} className="bg-gray-800/50 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-base font-semibold text-white">
+                    파트 {partIndex + 1} (씬 {range.start + 1}~{range.end})
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {partScenes.length}개 씬 · ~{partDuration}분
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {state.status === 'complete' && (
+                    <button
+                      onClick={() => onDownloadPart(partIndex)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-500 transition-colors min-h-[36px]"
+                    >
+                      <DownloadIcon className="w-4 h-4" />
+                      다운로드
+                    </button>
+                  )}
+                  {state.status !== 'rendering' && state.status !== 'complete' && (
+                    <button
+                      onClick={() => handleExportClick(partIndex)}
+                      disabled={isExporting || isRegenerating}
+                      className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px]"
+                    >
+                      내보내기
+                    </button>
+                  )}
+                </div>
+              </div>
 
-        <ExportProgressBar state={part1State} label="파트 1" />
+              <LongformPlayer scenes={partScenes} />
 
-        {part1State.status === 'error' && (
-          <p className="mt-2 text-sm text-red-400">{part1State.error}</p>
-        )}
+              <ExportProgressBar state={state} label={`파트 ${partIndex + 1}`} />
 
-        {part1State.status === 'complete' && part1State.result && (
-          <div className="mt-2 flex items-center gap-2 text-sm text-green-400">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            렌더링 완료 ({Math.round(part1State.result.duration / 60)}분 {Math.round(part1State.result.duration % 60)}초)
-          </div>
-        )}
-      </section>
+              {state.status === 'error' && (
+                <p className="mt-2 text-sm text-red-400">{state.error}</p>
+              )}
 
-      {/* 파트 2 */}
-      <section className="bg-gray-800/50 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-base font-semibold text-white">
-              파트 2 (씬 {splitPoint + 1}~{scenario.scenes.length})
-            </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {part2.length}개 씬 · ~{part2Duration}분
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {part2State.status === 'complete' && (
-              <button
-                onClick={() => onDownloadPart('part2')}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-500 transition-colors min-h-[36px]"
-              >
-                <DownloadIcon className="w-4 h-4" />
-                다운로드
-              </button>
-            )}
-            {part2State.status !== 'rendering' && part2State.status !== 'complete' && (
-              <button
-                onClick={() => handleExportClick('part2')}
-                disabled={isExporting || isRegenerating}
-                className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px]"
-              >
-                내보내기
-              </button>
-            )}
-          </div>
-        </div>
-
-        <LongformPlayer scenes={part2} />
-
-        <ExportProgressBar state={part2State} label="파트 2" />
-
-        {part2State.status === 'error' && (
-          <p className="mt-2 text-sm text-red-400">{part2State.error}</p>
-        )}
-
-        {part2State.status === 'complete' && part2State.result && (
-          <div className="mt-2 flex items-center gap-2 text-sm text-green-400">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            렌더링 완료 ({Math.round(part2State.result.duration / 60)}분 {Math.round(part2State.result.duration % 60)}초)
-          </div>
-        )}
-      </section>
+              {state.status === 'complete' && state.result && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-green-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  렌더링 완료 ({Math.round(state.result.duration / 60)}분 {Math.round(state.result.duration % 60)}초)
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
 
       {/* 취소/초기화 버튼 */}
       <div className="flex items-center justify-center gap-3 pt-2">
@@ -280,14 +254,22 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
       </div>
 
       {/* 안내 */}
-      <div className="text-center">
-        <p className="text-xs text-gray-500">
+      <div className="bg-gray-800/30 rounded-lg p-4 text-center">
+        <p className="text-xs text-gray-400 mb-2">
           비디오는 브라우저에서 실시간 렌더링됩니다. 렌더링 중에는 탭을 닫지 마세요.
         </p>
+        <div className="text-xs text-gray-500 space-y-1">
+          <p className="font-medium text-gray-400">왜 2분 단위로 분할하나요?</p>
+          <p>
+            브라우저 메모리 제한으로 긴 영상을 한 번에 렌더링하면 크래시가 발생할 수 있습니다.
+            2분(2씬) 단위로 분할하여 안정적인 렌더링을 보장합니다.
+            렌더링된 파트들은 후편집 프로그램(CapCut, Premiere 등)에서 간단히 이어붙일 수 있습니다.
+          </p>
+        </div>
       </div>
 
       {/* 내보내기 확인 모달 */}
-      {showExportConfirm && (
+      {showExportConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-5">
             <div className="flex items-center gap-3 mb-4">
@@ -307,15 +289,15 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
             <div className="bg-gray-700/50 rounded-lg p-3 mb-4">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-400">원래 씬 수</span>
-                <span className="text-white">{showExportConfirm === 'part1' ? part1.length : part2.length}개</span>
+                <span className="text-white">{parts[showExportConfirm]?.length || 0}개</span>
               </div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-400">렌더링될 씬 수</span>
-                <span className="text-amber-400">{showExportConfirm === 'part1' ? part1Renderable : part2Renderable}개</span>
+                <span className="text-amber-400">{partRenderableCounts[showExportConfirm] || 0}개</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">예상 영상 길이</span>
-                <span className="text-white">~{showExportConfirm === 'part1' ? part1Renderable : part2Renderable}분</span>
+                <span className="text-white">~{partRenderableCounts[showExportConfirm] || 0}분</span>
               </div>
             </div>
 

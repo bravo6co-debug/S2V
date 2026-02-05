@@ -5,8 +5,13 @@ import { VideoClip, Scene, NarrationAudio } from '../../types';
 import { checkVideoApiAvailability } from '../../services/apiClient';
 import { generateNarration, type TTSVoice } from '../../services/apiClient';
 import { RemotionPlayer } from './RemotionPlayer';
-import { VideoExportModal, type ExportConfig } from './VideoExportModal';
-import { renderVideo, downloadVideo } from '../../services/videoService';
+import { VideoExportModal, type ExportConfig, type PartExportState } from './VideoExportModal';
+import {
+  renderVideo,
+  downloadVideo,
+  needsPartSplit,
+  splitScenesIntoParts,
+} from '../../services/videoService';
 import {
   SparklesIcon,
   TrashIcon,
@@ -581,6 +586,11 @@ export const VideoTab: React.FC = () => {
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
 
+  // 멀티파트 내보내기 상태 (2분 이상 영상)
+  const [partStates, setPartStates] = useState<PartExportState[]>([]);
+  const [isExportingPart, setIsExportingPart] = useState(false);
+  const partBlobsRef = useRef<Map<number, Blob>>(new Map());
+
   // TTS 나레이션 상태
   const [ttsVoice, setTtsVoice] = useState<TTSVoice>('Kore');
 
@@ -606,17 +616,33 @@ export const VideoTab: React.FC = () => {
     }
   }, [videoSource]);
 
-  // Remotion 비디오 내보내기
-  const handleRemotionExport = useCallback(async (config: ExportConfig) => {
+  // 파트 분할 필요 여부 확인
+  const requiresPartSplit = useMemo(() => {
+    if (!activeScenario) return false;
+    return needsPartSplit(activeScenario.scenes);
+  }, [activeScenario]);
+
+  // 파트 정보 계산
+  const { parts: sceneParts } = useMemo(() => {
+    if (!activeScenario) return { parts: [], ranges: [] };
+    return splitScenesIntoParts(activeScenario.scenes);
+  }, [activeScenario]);
+
+  // 모달 열 때 파트 상태 초기화
+  useEffect(() => {
+    if (isExportModalOpen && requiresPartSplit && sceneParts.length > 0) {
+      setPartStates(sceneParts.map(() => ({ status: 'idle', progress: 0 })));
+      partBlobsRef.current.clear();
+    }
+  }, [isExportModalOpen, requiresPartSplit, sceneParts.length]);
+
+  // Remotion 비디오 내보내기 (단일 또는 파트별)
+  const handleRemotionExport = useCallback(async (config: ExportConfig, partIndex?: number) => {
     if (!activeScenario) return;
 
-    setIsRendering(true);
-    setRenderProgress(0);
-
-    try {
-      // previewAudios에 있는 오디오를 씬에 병합
-      const scenesWithAudio = activeScenario.scenes.map(scene => {
-        // 이미 씬에 오디오가 있으면 그대로 사용, 없으면 previewAudios에서 가져옴
+    // previewAudios 병합 함수
+    const mergeAudioToScenes = (scenes: Scene[]) =>
+      scenes.map(scene => {
         const previewAudio = previewAudios.get(scene.id);
         if (!scene.narrationAudio && previewAudio) {
           return { ...scene, narrationAudio: previewAudio };
@@ -624,13 +650,64 @@ export const VideoTab: React.FC = () => {
         return scene;
       });
 
-      const result = await renderVideo(
-        scenesWithAudio,
-        config,
-        (progress) => {
-          setRenderProgress(progress.progress);
+    // 파트별 내보내기 (2분 이상)
+    if (partIndex !== undefined && requiresPartSplit) {
+      const partScenes = sceneParts[partIndex];
+      if (!partScenes || partScenes.length === 0) return;
+
+      setIsExportingPart(true);
+      setPartStates(prev => {
+        const updated = [...prev];
+        updated[partIndex] = { status: 'rendering', progress: 0 };
+        return updated;
+      });
+
+      try {
+        const scenesWithAudio = mergeAudioToScenes(partScenes);
+        const result = await renderVideo(scenesWithAudio, config, (progress) => {
+          setPartStates(prev => {
+            const updated = [...prev];
+            updated[partIndex] = { ...updated[partIndex], progress: progress.progress };
+            return updated;
+          });
+        });
+
+        if (result.success && result.videoBlob) {
+          partBlobsRef.current.set(partIndex, result.videoBlob);
+          setPartStates(prev => {
+            const updated = [...prev];
+            updated[partIndex] = { status: 'complete', progress: 100, videoBlob: result.videoBlob };
+            return updated;
+          });
+        } else {
+          throw new Error(result.error || '렌더링 실패');
         }
-      );
+      } catch (err) {
+        console.error(`Part ${partIndex + 1} export error:`, err);
+        setPartStates(prev => {
+          const updated = [...prev];
+          updated[partIndex] = {
+            status: 'error',
+            progress: 0,
+            error: err instanceof Error ? err.message : '렌더링 실패',
+          };
+          return updated;
+        });
+      } finally {
+        setIsExportingPart(false);
+      }
+      return;
+    }
+
+    // 단일 내보내기 (2분 미만)
+    setIsRendering(true);
+    setRenderProgress(0);
+
+    try {
+      const scenesWithAudio = mergeAudioToScenes(activeScenario.scenes);
+      const result = await renderVideo(scenesWithAudio, config, (progress) => {
+        setRenderProgress(progress.progress);
+      });
 
       if (result.success && result.videoBlob) {
         const filename = `${activeScenario.title || 'video'}_${Date.now()}.${config.format}`;
@@ -645,7 +722,16 @@ export const VideoTab: React.FC = () => {
       setIsRendering(false);
       setRenderProgress(0);
     }
-  }, [activeScenario, previewAudios]);
+  }, [activeScenario, previewAudios, requiresPartSplit, sceneParts]);
+
+  // 파트 다운로드
+  const handleDownloadPart = useCallback((partIndex: number) => {
+    const blob = partBlobsRef.current.get(partIndex);
+    if (blob && activeScenario) {
+      const filename = `${activeScenario.title || 'video'}_파트${partIndex + 1}_${Date.now()}.webm`;
+      downloadVideo(blob, filename);
+    }
+  }, [activeScenario]);
 
   // 씬의 TTS 상태 확인
   const getTTSStatus = useCallback(() => {
@@ -1501,6 +1587,9 @@ export const VideoTab: React.FC = () => {
           onClose={() => setIsExportModalOpen(false)}
           scenes={activeScenario.scenes}
           onExport={handleRemotionExport}
+          partStates={partStates}
+          isExportingPart={isExportingPart}
+          onDownloadPart={handleDownloadPart}
         />
       )}
     </div>

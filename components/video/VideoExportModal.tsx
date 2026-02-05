@@ -1,13 +1,22 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import type { Scene, AspectRatio } from '../../types';
 import type { TransitionConfig } from '../../remotion/types';
 import { ClearIcon } from '../Icons';
+import {
+  needsPartSplit,
+  splitScenesIntoParts,
+  PART_SPLIT_THRESHOLD,
+} from '../../services/videoService';
 
 interface VideoExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   scenes: Scene[];
-  onExport: (config: ExportConfig) => Promise<void>;
+  onExport: (config: ExportConfig, partIndex?: number) => Promise<void>;
+  // 멀티파트 모드용 props
+  partStates?: PartExportState[];
+  isExportingPart?: boolean;
+  onDownloadPart?: (partIndex: number) => void;
 }
 
 export interface ExportConfig {
@@ -17,8 +26,15 @@ export interface ExportConfig {
   transitionType: TransitionConfig['type'];
   transitionDuration: number;
   showSubtitles: boolean;
-  includeAudio: boolean;  // TTS 나레이션 오디오 포함 여부
+  includeAudio: boolean;
   format: 'mp4' | 'webm';
+}
+
+export interface PartExportState {
+  status: 'idle' | 'rendering' | 'complete' | 'error';
+  progress: number;
+  error?: string;
+  videoBlob?: Blob;
 }
 
 const RESOLUTION_OPTIONS = [
@@ -39,6 +55,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
   onClose,
   scenes,
   onExport,
+  partStates,
+  isExportingPart = false,
+  onDownloadPart,
 }) => {
   const [config, setConfig] = useState<ExportConfig>({
     aspectRatio: '16:9',
@@ -47,8 +66,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
     transitionType: 'fade',
     transitionDuration: 15,
     showSubtitles: true,
-    includeAudio: true,  // 기본적으로 오디오 포함
-    format: 'webm',  // webm이 오디오 지원이 더 안정적
+    includeAudio: true,
+    format: 'webm',
   });
 
   const [isExporting, setIsExporting] = useState(false);
@@ -58,10 +77,15 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
   const scenesWithImages = scenes.filter(s => s.generatedImage || s.customImage);
   const totalDuration = scenesWithImages.reduce((acc, s) => acc + s.duration, 0);
 
+  // 파트 분할 필요 여부 확인
+  const requiresPartSplit = needsPartSplit(scenes);
+  const { parts, ranges } = useMemo(() => splitScenesIntoParts(scenes), [scenes]);
+
   // 나레이션 오디오가 있는 씬 수 확인
   const scenesWithAudio = scenes.filter(s => s.narrationAudio?.data);
   const hasNarrationAudio = scenesWithAudio.length > 0;
 
+  // 단일 파트 내보내기 (2분 미만)
   const handleExport = useCallback(async () => {
     setIsExporting(true);
     setProgress(0);
@@ -70,7 +94,6 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
     try {
       await onExport(config);
       setProgress(100);
-      // 잠시 후 모달 닫기
       setTimeout(() => {
         onClose();
         setIsExporting(false);
@@ -82,11 +105,27 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
     }
   }, [config, onExport, onClose]);
 
+  // 파트별 내보내기 (2분 이상)
+  const handleExportPart = useCallback(async (partIndex: number) => {
+    setError(null);
+    try {
+      await onExport(config, partIndex);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '내보내기에 실패했습니다');
+    }
+  }, [config, onExport]);
+
   const updateConfig = <K extends keyof ExportConfig>(
     key: K,
     value: ExportConfig[K]
   ) => {
     setConfig(prev => ({ ...prev, [key]: value }));
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return mins > 0 ? `${mins}분 ${secs}초` : `${secs}초`;
   };
 
   if (!isOpen) return null;
@@ -99,7 +138,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
           <h3 className="text-base sm:text-lg font-bold text-white">비디오 내보내기</h3>
           <button
             onClick={onClose}
-            disabled={isExporting}
+            disabled={isExporting || isExportingPart}
             className="text-gray-400 hover:text-white disabled:opacity-50"
           >
             <ClearIcon className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -116,7 +155,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
             </div>
             <div className="flex items-center justify-between text-sm mt-1">
               <span className="text-gray-400">총 재생 시간</span>
-              <span className="text-white font-medium">{totalDuration}초</span>
+              <span className="text-white font-medium">{formatDuration(totalDuration)}</span>
             </div>
             <div className="flex items-center justify-between text-sm mt-1">
               <span className="text-gray-400">나레이션 오디오</span>
@@ -124,7 +163,31 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
                 {hasNarrationAudio ? `${scenesWithAudio.length}개 씬` : '없음'}
               </span>
             </div>
+            {requiresPartSplit && (
+              <div className="flex items-center justify-between text-sm mt-1">
+                <span className="text-gray-400">파트 분할</span>
+                <span className="text-cyan-400 font-medium">{parts.length}개 파트</span>
+              </div>
+            )}
           </div>
+
+          {/* 2분 이상 파트 분할 안내 */}
+          {requiresPartSplit && (
+            <div className="bg-cyan-900/30 border border-cyan-700/50 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <svg className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-xs text-cyan-300">
+                  <p className="font-medium mb-1">왜 파트로 분할하나요?</p>
+                  <p className="text-cyan-400/80">
+                    브라우저 메모리 제한으로 {PART_SPLIT_THRESHOLD / 60}분 이상 영상은 파트별로 렌더링해야 안정적입니다.
+                    렌더링된 파트들은 CapCut, Premiere 등에서 간단히 이어붙일 수 있습니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 화면 비율 */}
           <div>
@@ -269,6 +332,73 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
             </div>
           )}
 
+          {/* 파트별 내보내기 UI (2분 이상) */}
+          {requiresPartSplit && partStates && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-300">
+                파트별 내보내기
+              </label>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {parts.map((partScenes, partIndex) => {
+                  const range = ranges[partIndex];
+                  const state = partStates[partIndex] || { status: 'idle', progress: 0 };
+
+                  return (
+                    <div
+                      key={partIndex}
+                      className="flex items-center justify-between p-2 bg-gray-700/50 rounded-lg"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white">
+                          파트 {partIndex + 1}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          씬 {range.start + 1}~{range.end} · {formatDuration(range.duration)}
+                        </p>
+                        {state.status === 'rendering' && (
+                          <div className="mt-1 h-1 bg-gray-600 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-500 transition-all"
+                              style={{ width: `${state.progress}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        {state.status === 'complete' && onDownloadPart ? (
+                          <button
+                            onClick={() => onDownloadPart(partIndex)}
+                            className="px-3 py-1.5 text-xs bg-teal-600 text-white rounded-lg hover:bg-teal-500"
+                          >
+                            다운로드
+                          </button>
+                        ) : state.status === 'rendering' ? (
+                          <span className="text-xs text-blue-400">{Math.round(state.progress)}%</span>
+                        ) : state.status === 'error' ? (
+                          <button
+                            onClick={() => handleExportPart(partIndex)}
+                            disabled={isExportingPart}
+                            className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-500 disabled:opacity-50"
+                          >
+                            재시도
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleExportPart(partIndex)}
+                            disabled={isExportingPart}
+                            className="px-3 py-1.5 text-xs bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 disabled:opacity-50"
+                          >
+                            내보내기
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* 에러 메시지 */}
           {error && (
             <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg">
@@ -276,8 +406,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
             </div>
           )}
 
-          {/* 진행률 표시 */}
-          {isExporting && (
+          {/* 진행률 표시 (단일 내보내기 모드) */}
+          {isExporting && !requiresPartSplit && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">내보내기 중...</span>
@@ -297,18 +427,20 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
         <div className="flex justify-end gap-2 sm:gap-3 p-3 sm:p-4 border-t border-gray-700 flex-shrink-0">
           <button
             onClick={onClose}
-            disabled={isExporting}
+            disabled={isExporting || isExportingPart}
             className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-300 bg-gray-600 rounded-lg hover:bg-gray-500 disabled:opacity-50"
           >
-            취소
+            {requiresPartSplit ? '닫기' : '취소'}
           </button>
-          <button
-            onClick={handleExport}
-            disabled={isExporting || scenesWithImages.length === 0}
-            className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isExporting ? '내보내는 중...' : '내보내기'}
-          </button>
+          {!requiresPartSplit && (
+            <button
+              onClick={handleExport}
+              disabled={isExporting || scenesWithImages.length === 0}
+              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isExporting ? '내보내는 중...' : '내보내기'}
+            </button>
+          )}
         </div>
       </div>
     </div>

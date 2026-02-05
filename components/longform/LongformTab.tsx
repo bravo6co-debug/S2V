@@ -54,11 +54,9 @@ export const LongformTab: React.FC = () => {
 
   // 내보내기 훅
   const {
-    part1State,
-    part2State,
+    partStates,
     isExporting,
-    startExportPart1,
-    startExportPart2,
+    startExportPart,
     cancelExport,
     downloadPart,
   } = useLongformExport();
@@ -313,13 +311,11 @@ export const LongformTab: React.FC = () => {
           <Step4PreviewDownload
             scenario={scenario}
             config={config}
-            part1State={part1State}
-            part2State={part2State}
+            partStates={partStates}
             isExporting={isExporting}
-            onExportPart1={() => startExportPart1(scenario)}
-            onExportPart2={() => startExportPart2(scenario)}
+            onExportPart={(partIndex) => startExportPart(scenario, partIndex)}
             onCancelExport={cancelExport}
-            onDownloadPart={(part) => downloadPart(part, scenario)}
+            onDownloadPart={(partIndex) => downloadPart(partIndex, scenario)}
             onReset={handleReset}
             onRegenerateFailedScenes={handleRegenerateFailedScenes}
             isRegenerating={isRegeneratingFailed}

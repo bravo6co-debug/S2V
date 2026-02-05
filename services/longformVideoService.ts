@@ -8,7 +8,7 @@
  */
 
 import type { LongformScene, LongformScenario } from '../types/longform';
-import { calculateSplitPoint } from '../types/longform';
+import { calculateSplitPoint, calculatePartRanges, SCENES_PER_PART } from '../types/longform';
 import type { RemotionSceneData } from '../remotion/types';
 
 // ─── 타입 ──────────────────────────────────────
@@ -158,6 +158,19 @@ export function longformScenesToRemotionScenes(scenes: LongformScene[]): Remotio
     .filter((s): s is RemotionSceneData => s !== null);
 }
 
+// 2분(2씬) 단위로 여러 파트로 분할
+export function splitScenesForExportMulti(scenario: LongformScenario): {
+  parts: LongformScene[][];
+  ranges: { start: number; end: number }[];
+} {
+  const ranges = calculatePartRanges(scenario.scenes.length);
+  const parts = ranges.map(range =>
+    scenario.scenes.slice(range.start, range.end)
+  );
+  return { parts, ranges };
+}
+
+// 레거시 호환 (기존 코드에서 사용)
 export function splitScenesForExport(scenario: LongformScenario): {
   part1: LongformScene[];
   part2: LongformScene[];

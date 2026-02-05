@@ -113,19 +113,17 @@ export interface GenerationProgress {
 }
 
 // ─── 출력물 ──────────────────────────────────────
+export interface LongformPartOutput {
+  partIndex: number;
+  blob?: Blob;
+  duration: number;
+  sceneCount: number;
+  sceneRange: { start: number; end: number };
+  format: 'mp4' | 'webm';
+}
+
 export interface LongformOutput {
-  partOne: {
-    blob?: Blob;
-    duration: number;
-    sceneCount: number;
-    format: 'mp4' | 'webm';
-  } | null;
-  partTwo: {
-    blob?: Blob;
-    duration: number;
-    sceneCount: number;
-    format: 'mp4' | 'webm';
-  } | null;
+  parts: (LongformPartOutput | null)[];
 }
 
 // ─── 워크플로우 상태 ──────────────────────────────
@@ -201,6 +199,27 @@ export function calculateSceneCount(duration: LongformDuration): number {
   return duration;
 }
 
+// 2분(2씬) 단위로 파트 분할
+export const SCENES_PER_PART = 2;
+
+export function calculatePartCount(totalScenes: number): number {
+  return Math.ceil(totalScenes / SCENES_PER_PART);
+}
+
+export function calculatePartRanges(totalScenes: number): { start: number; end: number }[] {
+  const partCount = calculatePartCount(totalScenes);
+  const ranges: { start: number; end: number }[] = [];
+
+  for (let i = 0; i < partCount; i++) {
+    const start = i * SCENES_PER_PART;
+    const end = Math.min(start + SCENES_PER_PART, totalScenes);
+    ranges.push({ start, end });
+  }
+
+  return ranges;
+}
+
+// 레거시 호환 (기존 코드에서 사용)
 export function calculateSplitPoint(totalScenes: number): number {
   return Math.ceil(totalScenes / 2);
 }
