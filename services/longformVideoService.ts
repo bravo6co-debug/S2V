@@ -606,9 +606,8 @@ export async function renderLongformPart(
     onProgress?.({ status: 'preparing', progress: 15, totalFrames });
 
     // ── 5. MediaRecorder 설정 ──
-    const videoStream = canvas.captureStream(0);
-    const videoTrack = videoStream.getVideoTracks()[0] as any;
-    const canRequestFrame = videoTrack && typeof videoTrack.requestFrame === 'function';
+    // captureStream(FPS)로 자동 프레임 캡처 모드 사용 (0은 수동 모드로 일부 브라우저 미지원)
+    const videoStream = canvas.captureStream(FPS);
 
     const combinedStream = audioDestination
       ? new MediaStream([
@@ -617,7 +616,18 @@ export async function renderLongformPart(
         ])
       : videoStream;
 
-    const mimeType = audioDestination ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+    // 코덱 호환성: vp9 → vp8 → 기본 폴백
+    const getMimeType = (hasAudio: boolean): string => {
+      const codecs = hasAudio
+        ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+        : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+      for (const codec of codecs) {
+        if (MediaRecorder.isTypeSupported(codec)) return codec;
+      }
+      return 'video/webm';
+    };
+
+    const mimeType = getMimeType(!!audioDestination);
     const mediaRecorder = new MediaRecorder(combinedStream, {
       mimeType,
       videoBitsPerSecond: 10_000_000,
@@ -737,9 +747,6 @@ export async function renderLongformPart(
             const subtitleText = timing.subtitleSegments[segmentIndex] || '';
             drawSubtitle(ctx, canvas, subtitleText, frameInSegment);
           }
-
-          // 프레임 푸시
-          if (canRequestFrame) videoTrack.requestFrame();
 
           // 진행률 (1초마다 업데이트)
           if (frame % FPS === 0) {
