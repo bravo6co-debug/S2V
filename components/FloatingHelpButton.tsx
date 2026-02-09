@@ -9,7 +9,7 @@ export const FloatingHelpButton: React.FC = () => {
             {/* Floating Help Button */}
             <button
                 onClick={() => setIsManualOpen(true)}
-                className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-[55] w-12 h-12 sm:w-14 sm:h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center group"
+                className="fixed bottom-6 right-6 z-[55] w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hidden sm:flex items-center justify-center group"
                 title="도움말"
                 aria-label="도움말 열기"
             >

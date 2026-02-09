@@ -1,5 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { AppMode } from '../../types';
+
+const ManualModal = lazy(() => import('../ManualModal').then(m => ({ default: m.ManualModal })));
 
 interface TabConfig {
   mode: AppMode;
@@ -202,6 +204,7 @@ export const MobileBottomNav: React.FC<TabNavigationProps> = ({
   disabled = false,
 }) => {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -288,10 +291,27 @@ export const MobileBottomNav: React.FC<TabNavigationProps> = ({
                 <PadIcon className="w-4 h-4 flex-shrink-0" />
                 <span className="text-sm">상페자동화</span>
               </a>
+              <div className="h-px bg-gray-700/60" />
+              <button
+                onClick={() => { setIsManualOpen(true); setMoreOpen(false); }}
+                className="flex items-center gap-2.5 px-4 py-3 w-full text-gray-300 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm">사용설명서</span>
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* 사용설명서 모달 */}
+      {isManualOpen && (
+        <Suspense fallback={null}>
+          <ManualModal isOpen={isManualOpen} onClose={() => setIsManualOpen(false)} />
+        </Suspense>
+      )}
     </nav>
   );
 };
