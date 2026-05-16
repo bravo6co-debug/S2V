@@ -1,4 +1,5 @@
 import type { LongformConfig, LongformScenario, LongformScene, LongformCharacter } from '../types/longform';
+import type { ImageData } from '../types';
 
 const API_BASE = '';
 const TOKEN_KEY = 's2v_auth_token';
@@ -95,6 +96,7 @@ export interface SceneImageInput {
   cameraAngle?: string;
   lightingMood?: string;
   mood?: string;
+  characterIndices?: number[];   // characterImages 풀 인덱스 — 페이로드 중복 방지
 }
 
 export interface SceneImageResult {
@@ -105,15 +107,21 @@ export interface SceneImageResult {
   error?: string;
 }
 
+/**
+ * 씬 이미지 일괄 생성.
+ * @param characterImages — 캐릭터 참조 이미지 풀 (deduplicated). 각 sceneInput.characterIndices가 이 배열을 인덱스로 참조
+ */
 export async function generateSceneImages(
   scenes: SceneImageInput[],
   imageModel: string,
-  batchSize: number = 5
+  batchSize: number = 5,
+  characterImages: ImageData[] = []
 ): Promise<{ results: SceneImageResult[] }> {
   return post('/api/longform/generate-scene-images', {
     scenes,
     imageModel,
     batchSize,
+    characterImages,
   }, 'Generate Scene Images');
 }
 

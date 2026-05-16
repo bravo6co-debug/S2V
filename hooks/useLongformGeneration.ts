@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { LongformScenario, LongformConfig, GenerationProgress, AssetStatus } from '../types/longform';
+import type { ImageData } from '../types';
 import {
   generateSceneImages,
   generateNarrations,
@@ -73,6 +74,17 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
       // 사용자가 업로드하지 않은 sub-image만 백엔드 호출 대상
       const subImagesToGenerate = allSubImages.filter(x => !x.sub.userUploaded);
 
+      // 캐릭터 이미지 풀 (deduplicated) — 페이로드 중복 방지
+      // 캐릭터 id → 풀 인덱스 매핑
+      const charImageMap = new Map<string, number>();
+      const characterImages: ImageData[] = [];
+      for (const char of (scenario.characters || [])) {
+        if (char.referenceImage && !charImageMap.has(char.id)) {
+          charImageMap.set(char.id, characterImages.length);
+          characterImages.push(char.referenceImage);
+        }
+      }
+
       // Enrich scene image prompts with character descriptions + metadata for consistency
       const sceneInputs = subImagesToGenerate.map(({ scene, sub, subIndex }) => {
         const sceneChars = (scenario.characters || [])
@@ -84,6 +96,11 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
             .join(' ');
           imagePrompt = `${charDesc} ${imagePrompt}`;
         }
+        // 캐릭터 참조 이미지 인덱스 (최대 2개) — 백엔드에서 풀에서 resolve
+        const characterIndices = sceneChars
+          .map(c => charImageMap.get(c.id))
+          .filter((idx): idx is number => idx !== undefined)
+          .slice(0, 2);
         return {
           sceneNumber: scene.sceneNumber,
           subIndex,
@@ -91,13 +108,14 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
           cameraAngle: scene.cameraAngle,
           lightingMood: scene.lightingMood,
           mood: scene.mood,
+          ...(characterIndices.length > 0 && { characterIndices }),
         };
       });
       const narrationInputs = scenario.scenes.map(s => ({ sceneNumber: s.sceneNumber, narration: s.narration }));
 
-      // 이미지 생성은 필요한 sub-image가 있을 때만 호출
+      // 이미지 생성은 필요한 sub-image가 있을 때만 호출 (캐릭터 풀 함께 전달)
       const imagePromise = sceneInputs.length > 0
-        ? generateSceneImages(sceneInputs, config.imageModel, 5)
+        ? generateSceneImages(sceneInputs, config.imageModel, 5, characterImages)
         : Promise.resolve({ results: [] as Awaited<ReturnType<typeof generateSceneImages>>['results'] });
 
       const [imageResults, narrationResults] = await Promise.all([

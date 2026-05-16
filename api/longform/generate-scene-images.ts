@@ -3,6 +3,7 @@ import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, setCorsHeaders, Modality, extractSafetyError } from '../lib/gemini.js';
 import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from '../lib/eachlabs.js';
 import { buildImagePrompt } from '../lib/imagePromptBuilder.js';
+import type { ImageData } from '../lib/types.js';
 
 interface SceneInput {
   sceneNumber: number;
@@ -11,7 +12,16 @@ interface SceneInput {
   cameraAngle?: string;
   lightingMood?: string;
   mood?: string;
+  characterIndices?: number[]; // 공유 characterImages 풀의 인덱스
 }
+
+// Imagen 4.0 등 text-to-image 전용 모델은 multimodal 입력 미지원 → 텍스트 폴백
+function supportsImageInput(model: string): boolean {
+  if (model.startsWith('imagen-')) return false;
+  return true;
+}
+
+const REF_LIMIT = 2; // 씬당 참조 이미지 최대 개수 (모델 호환성 + 페이로드 안전 마진)
 
 interface SceneResult {
   sceneNumber: number;
@@ -39,7 +49,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { scenes, imageModel = 'gemini-2.5-flash-image', batchSize = 5 } = req.body;
+    const { scenes, imageModel = 'gemini-2.5-flash-image', batchSize = 5, characterImages = [] } = req.body as {
+      scenes: SceneInput[];
+      imageModel?: string;
+      batchSize?: number;
+      characterImages?: ImageData[];
+    };
     if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
       return res.status(400).json({ error: 'scenes array is required' });
     }
@@ -52,6 +67,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const batchPromises = batch.map(async (scene): Promise<SceneResult> => {
         const subIndex = scene.subIndex ?? 0; // 미지정 시 0 (롱폼1 호환)
+
+        // 캐릭터 참조 이미지 resolve (인덱스 → 풀에서 조회, 최대 REF_LIMIT장)
+        const refs: ImageData[] = (scene.characterIndices || [])
+          .map(idx => characterImages[idx])
+          .filter(Boolean)
+          .slice(0, REF_LIMIT);
+
         let lastError = '';
 
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -65,14 +87,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (isEachlabsImageModel(imageModel)) {
               const apiKey = await getEachLabsApiKey(auth.userId!);
-              const result = await generateEachlabsImage({ apiKey, model: imageModel, prompt, aspectRatio: '16:9' });
+              const result = await generateEachlabsImage({
+                apiKey,
+                model: imageModel,
+                prompt,
+                aspectRatio: '16:9',
+                ...(refs.length > 0 && { referenceImages: refs }),
+              });
               return { sceneNumber: scene.sceneNumber, subIndex, success: true, image: result };
             }
 
             const aiClient = await getAIClientForUser(auth.userId!);
+            // Gemini multimodal: refs가 있고 모델이 이미지 입력 지원하면 contents에 inline image parts 추가
+            const useRefs = refs.length > 0 && supportsImageInput(imageModel);
+            const contents = useRefs
+              ? [
+                  { text: prompt },
+                  ...refs.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
+                ]
+              : prompt;
             const response = await aiClient.models.generateContent({
               model: imageModel,
-              contents: prompt,
+              contents,
               config: { responseModalities: [Modality.IMAGE, Modality.TEXT] },
             });
 
