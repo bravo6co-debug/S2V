@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import type { LongformConfig, LongformDuration, LongformImageModel, TtsProvider, OpenAiVoice, GeminiVoice, OpenAiTtsModel } from '../../types/longform';
-import { IMAGE_MODEL_OPTIONS, OPENAI_VOICE_OPTIONS, GEMINI_VOICE_OPTIONS, DURATION_OPTIONS, DEFAULT_TTS_CONFIG, DEFAULT_LONGFORM_CONFIG, calculateSceneCount, estimateImageCost, estimateTtsCost } from '../../types/longform';
+import type { LongformConfig, LongformDuration, LongformImageModel, TtsProvider, OpenAiVoice, GeminiVoice, OpenAiTtsModel, ImageFrequency } from '../../types/longform';
+import { IMAGE_MODEL_OPTIONS, OPENAI_VOICE_OPTIONS, GEMINI_VOICE_OPTIONS, DURATION_OPTIONS, DEFAULT_TTS_CONFIG, DEFAULT_LONGFORM_CONFIG, calculateSceneCount, estimateImageCost, estimateTtsCost, SUB_IMAGES_PER_SCENE } from '../../types/longform';
 import { AVAILABLE_TEXT_MODELS } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -16,6 +16,7 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
   const [referenceText, setReferenceText] = useState('');
   const [showReference, setShowReference] = useState(false);
   const [duration, setDuration] = useState<LongformDuration>(DEFAULT_LONGFORM_CONFIG.duration);
+  const [imageFrequency, setImageFrequency] = useState<ImageFrequency>('per-minute');
   const [imageModel, setImageModel] = useState<LongformImageModel>(DEFAULT_LONGFORM_CONFIG.imageModel);
   const [textModel, setTextModel] = useState<string>(settings?.textModel || 'gemini-3-flash-preview');
   const [ttsProvider, setTtsProvider] = useState<TtsProvider>(DEFAULT_TTS_CONFIG.provider);
@@ -28,8 +29,10 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
   const [pendingConfig, setPendingConfig] = useState<LongformConfig | null>(null);
 
   const sceneCount = useMemo(() => calculateSceneCount(duration), [duration]);
+  const subImagesPerScene = SUB_IMAGES_PER_SCENE[imageFrequency];
+  const totalImageCount = sceneCount * subImagesPerScene;
   const ttsModel = ttsProvider === 'openai' ? openaiModel : 'gemini-2.5-flash-preview-tts';
-  const imageCost = useMemo(() => estimateImageCost(imageModel, sceneCount), [imageModel, sceneCount]);
+  const imageCost = useMemo(() => estimateImageCost(imageModel, totalImageCount), [imageModel, totalImageCount]);
   const ttsCost = useMemo(() => estimateTtsCost(ttsModel, sceneCount), [ttsModel, sceneCount]);
 
   const googleModels = IMAGE_MODEL_OPTIONS.filter(m => m.provider === 'google');
@@ -43,6 +46,7 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
     referenceText: referenceText.trim() || undefined,
     duration,
     imageModel,
+    imageFrequency,
     textModel: overrideTextModel,
     tts: {
       provider: ttsProvider,
@@ -189,6 +193,44 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
               {opt.label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* 이미지 빈도 (롱폼1 / 롱폼2) */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-sm font-medium text-gray-300">이미지 빈도</label>
+          <span className="text-xs text-gray-500">
+            이미지 <span className="text-teal-400 font-medium">{totalImageCount}장</span>, 약 <span className="text-teal-400 font-medium">{imageCost}</span>
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setImageFrequency('per-minute')}
+            disabled={isGenerating}
+            className={`p-2.5 rounded-lg text-left text-xs transition-all ${
+              imageFrequency === 'per-minute'
+                ? 'bg-teal-600/20 border-2 border-teal-500 text-teal-300'
+                : 'bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            <div className="font-medium">롱폼 1 · 1분당 1장</div>
+            <div className="text-gray-400 mt-0.5">기본 · 가장 저렴</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setImageFrequency('per-20-seconds')}
+            disabled={isGenerating}
+            className={`p-2.5 rounded-lg text-left text-xs transition-all ${
+              imageFrequency === 'per-20-seconds'
+                ? 'bg-teal-600/20 border-2 border-teal-500 text-teal-300'
+                : 'bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            <div className="font-medium">롱폼 2 · 20초당 1장</div>
+            <div className="text-gray-400 mt-0.5">씬당 이미지 3배 · 더 풍부한 영상</div>
+          </button>
         </div>
       </div>
 
