@@ -78,8 +78,16 @@ export const LongformVideo: React.FC<LongformVideoProps> = ({
                 <Transition
                   type="fade"
                   durationInFrames={transitionDuration}
-                  fromImage={scene.imageData}
-                  toImage={nextScene.scene.imageData}
+                  fromImage={
+                    scene.subImages && scene.subImages.length > 0
+                      ? scene.subImages[scene.subImages.length - 1]  // 현재 씬의 마지막 sub-image
+                      : scene.imageData
+                  }
+                  toImage={
+                    nextScene.scene.subImages && nextScene.scene.subImages.length > 0
+                      ? nextScene.scene.subImages[0]                  // 다음 씬의 첫 sub-image
+                      : nextScene.scene.imageData
+                  }
                 />
               </Sequence>
             )}

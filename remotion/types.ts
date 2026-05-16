@@ -5,7 +5,8 @@ export interface RemotionSceneData {
   id: string;
   sceneNumber: number;
   duration: number; // 초 단위
-  imageData: ImageData;
+  imageData: ImageData;        // 첫 sub-image (legacy 호환 + 폴백)
+  subImages?: ImageData[];     // 롱폼2: 씬당 다중 이미지 (없으면 imageData 단일로 동작)
   narration?: string;
   narrationAudio?: NarrationAudio;  // TTS 오디오 데이터
   animation?: AnimationConfig;

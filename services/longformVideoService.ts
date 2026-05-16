@@ -131,7 +131,16 @@ function easeInOutCubic(t: number): number {
 // ─── 변환 유틸 ─────────────────────────────────
 
 export function longformSceneToRemotionScene(scene: LongformScene): RemotionSceneData | null {
-  if (!scene.generatedImage) return null;
+  // 롱폼2: subScenes에서 이미지 추출 / 롱폼1: legacy generatedImage 사용
+  const subImagesFromSubScenes = (scene.subScenes || [])
+    .map(sub => sub.generatedImage)
+    .filter((img): img is import('../types').ImageData => !!img);
+
+  const allImages = subImagesFromSubScenes.length > 0
+    ? subImagesFromSubScenes
+    : (scene.generatedImage ? [scene.generatedImage] : []);
+
+  if (allImages.length === 0) return null;
 
   // 텍스트 기반 세그먼트 수 계산 (72-74자 = 10초)
   const textLength = scene.narration?.length || 0;
@@ -144,7 +153,8 @@ export function longformSceneToRemotionScene(scene: LongformScene): RemotionScen
     id: scene.id,
     sceneNumber: scene.sceneNumber,
     duration,
-    imageData: scene.generatedImage,
+    imageData: allImages[0],
+    subImages: allImages.length > 1 ? allImages : undefined,
     narration: scene.narration,
     narrationAudio: scene.narrationAudio,
     animation: { type: 'slideCycle', direction: 'in', intensity: 0.5 },
@@ -356,29 +366,57 @@ function getSceneAtFrame(timings: SceneTiming[], frame: number): {
 
 // ─── 이미지 프리로딩 ───────────────────────────
 
+/**
+ * 씬별 sub-image 배열 프리로드.
+ * 키: scene.id → HTMLImageElement 배열 (subImages 사용 시 N개, 아니면 imageData 1개)
+ */
 async function preloadSceneImages(
   scenes: RemotionSceneData[]
-): Promise<Map<string, HTMLImageElement>> {
-  const imageMap = new Map<string, HTMLImageElement>();
-  await Promise.all(scenes.map(async (scene) => {
-    try {
-      // [H] fetch API로 base64→Blob 변환 (브라우저 네이티브, 수동 바이트 복사보다 빠름)
-      const dataUrl = `data:${scene.imageData.mimeType};base64,${scene.imageData.data}`;
-      const response = await fetch(dataUrl);
-      const imgBlob = await response.blob();
-      const imgUrl = URL.createObjectURL(imgBlob);
+): Promise<Map<string, HTMLImageElement[]>> {
+  const imageMap = new Map<string, HTMLImageElement[]>();
 
-      await new Promise<void>((resolve) => {
-        const img = new Image();
-        img.onload = () => { URL.revokeObjectURL(imgUrl); imageMap.set(scene.id, img); resolve(); };
-        img.onerror = () => { URL.revokeObjectURL(imgUrl); resolve(); };
-        img.src = imgUrl;
-      });
-    } catch {
-      // fetch 실패 시 무시 (이미지 없이 진행)
+  await Promise.all(scenes.map(async (scene) => {
+    const sourceImages = scene.subImages && scene.subImages.length > 0
+      ? scene.subImages
+      : [scene.imageData];
+
+    const loaded: HTMLImageElement[] = [];
+    for (const imgData of sourceImages) {
+      try {
+        const dataUrl = `data:${imgData.mimeType};base64,${imgData.data}`;
+        const response = await fetch(dataUrl);
+        const imgBlob = await response.blob();
+        const imgUrl = URL.createObjectURL(imgBlob);
+
+        const htmlImg = await new Promise<HTMLImageElement | null>((resolve) => {
+          const img = new Image();
+          img.onload = () => { URL.revokeObjectURL(imgUrl); resolve(img); };
+          img.onerror = () => { URL.revokeObjectURL(imgUrl); resolve(null); };
+          img.src = imgUrl;
+        });
+
+        if (htmlImg) loaded.push(htmlImg);
+      } catch {
+        // fetch 실패 시 무시
+      }
     }
+
+    if (loaded.length > 0) imageMap.set(scene.id, loaded);
   }));
+
   return imageMap;
+}
+
+/** 씬 내 현재 프레임에 해당하는 sub-image 선택 */
+function pickSubImage(
+  images: HTMLImageElement[],
+  frameInScene: number,
+  sceneDurationFrames: number,
+): HTMLImageElement {
+  if (images.length === 1) return images[0];
+  const subDuration = sceneDurationFrames / images.length;
+  const subIndex = Math.min(Math.max(0, Math.floor(frameInScene / subDuration)), images.length - 1);
+  return images[subIndex];
 }
 
 // ─── 오디오 유틸 ───────────────────────────────
@@ -714,7 +752,9 @@ export async function renderLongformPart(
 
           const { timing, sceneIndex, frameInScene, segmentIndex, frameInSegment } =
             getSceneAtFrame(timings, frame);
-          const img = imageMap.get(timing.scene.id);
+          const sceneImgs = imageMap.get(timing.scene.id);
+          // 현재 sub-image 선택 (롱폼2: 씬 내 시간순으로 균등 분할 교체)
+          const img = sceneImgs ? pickSubImage(sceneImgs, frameInScene, timing.durationFrames) : undefined;
 
           // 캔버스 클리어
           ctx.fillStyle = '#000';
@@ -730,7 +770,9 @@ export async function renderLongformPart(
 
             if (isInSceneTransition) {
               // ── 씬 간 크로스페이드 ──
-              const nextImg = imageMap.get(timings[sceneIndex + 1].scene.id);
+              const nextSceneImgs = imageMap.get(timings[sceneIndex + 1].scene.id);
+              // 다음 씬은 첫 sub-image부터 시작
+              const nextImg = nextSceneImgs?.[0];
               if (nextImg) {
                 const tf = frameInScene - (timing.durationFrames - SCENE_TRANSITION_FRAMES);
                 const tp = Math.min(1, Math.max(0, tf / SCENE_TRANSITION_FRAMES));

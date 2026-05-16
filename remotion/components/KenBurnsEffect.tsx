@@ -4,12 +4,14 @@ import type { AnimationConfig, ImageData } from '../../types';
 
 interface KenBurnsEffectProps {
   imageData: ImageData;
+  subImages?: ImageData[];      // 롱폼2: 씬당 다중 이미지 (시간순으로 균등 분할)
   animation?: AnimationConfig;
   durationInFrames?: number;
 }
 
 export const KenBurnsEffect: React.FC<KenBurnsEffectProps> = ({
   imageData,
+  subImages,
   animation = { type: 'kenBurns', direction: 'in', intensity: 0.5 },
   durationInFrames: propDuration,
 }) => {
@@ -17,7 +19,12 @@ export const KenBurnsEffect: React.FC<KenBurnsEffectProps> = ({
   const { durationInFrames: configDuration } = useVideoConfig();
   const durationInFrames = propDuration || configDuration;
 
-  const imageSrc = `data:${imageData.mimeType};base64,${imageData.data}`;
+  // 현재 프레임 기준 sub-image 선택 (subImages 없으면 imageData 단일)
+  const images = subImages && subImages.length > 0 ? subImages : [imageData];
+  const subDurationFrames = durationInFrames / images.length;
+  const subIndex = Math.min(Math.max(0, Math.floor(frame / subDurationFrames)), images.length - 1);
+  const currentImage = images[subIndex];
+  const imageSrc = `data:${currentImage.mimeType};base64,${currentImage.data}`;
 
   // 애니메이션 강도 (0-1 범위)
   const intensity = animation.intensity ?? 0.5;

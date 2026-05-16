@@ -15,9 +15,10 @@ export const SceneSequence: React.FC<SceneSequenceProps> = ({
 }) => {
   return (
     <AbsoluteFill>
-      {/* 배경 이미지 + 애니메이션 */}
+      {/* 배경 이미지 + 애니메이션 (롱폼2: subImages 시간순 자동 교체) */}
       <KenBurnsEffect
         imageData={scene.imageData}
+        subImages={scene.subImages}
         animation={scene.animation}
       />
 
