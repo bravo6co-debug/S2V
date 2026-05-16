@@ -107,35 +107,57 @@ function buildPass2Prompt(pass1Result: any, perScene: number): string {
 4. 나레이션과 동기: 각 프롬프트는 해당 시간대의 나레이션 내용을 시각화해야 함`;
 
   return `당신은 AI 이미지 생성 전문가입니다.
-아래 시나리오의 각 씬에 대해 고품질 이미지 프롬프트를 생성하세요.
+아래 시나리오의 각 씬에 대해 고품질 이미지 프롬프트를 **한국어**로 생성하세요.
 
 ## 생성 개수 규칙
 ${countInstruction}
 
 ## 이미지 프롬프트 작성 필수 규칙
 
-### 구조 (반드시 이 순서를 따르세요):
-1. **주체 (Subject)**: 누가/무엇이 화면 중심인지 (인물 외형, 표정, 자세 상세 묘사)
-2. **행동/상태 (Action)**: 무엇을 하고 있는지 (동사 + 구체적 동작)
-3. **배경/장소 (Setting)**: 어디에 있는지 (장소 + 주변 소품/환경 디테일)
-4. **분위기/조명 (Atmosphere)**: 빛, 색감, 날씨, 시간대
-5. **카메라 앵글 (Camera)**: 촬영 각도와 거리
-6. **아트 스타일 (Style)**: 애니메이션 세부 스타일 지정
+### 언어
+- **반드시 한국어로 작성하세요.** 영어 단어는 사용하지 마세요.
+- 단, 카메라/조명 등 영문 기술용어가 자연스러운 경우 한국어 풀어쓰기로 대체 (예: "low angle" → "로우 앵글", "golden hour" → "황금빛 일몰녘")
 
-### 금지사항:
-- 텍스트, 글자, 자막, 워터마크, 로고 절대 포함 금지
-- "text", "words", "letters", "subtitle", "watermark" 등의 단어 사용 금지
+### 구조 (반드시 이 순서를 따르세요)
+1. **주체**: 누가/무엇이 화면 중심인지 (인물 외형, 표정, 자세 상세 묘사)
+2. **행동/상태**: 무엇을 하고 있는지 (구체적 동작)
+3. **배경/장소**: 어디에 있는지 (장소 + 주변 소품/환경 디테일)
+4. **분위기/조명**: 빛, 색감, 날씨, 시간대
+5. **카메라 앵글**: 촬영 각도와 거리
+6. **아트 스타일**: 애니메이션 세부 스타일
 
-### 품질 규칙:
-- 프롬프트 길이: 최소 80단어, 최대 150단어
-- 구체적 형용사 사용 (좋음: "crumbling moss-covered stone wall" / 나쁨: "old wall")
-- 색상 팔레트 명시 (예: "muted earth tones with pops of crimson")
-- 질감/재질 묘사 포함 (예: "polished marble floor reflecting light")
+### 금지사항 — ⚠️ 절대 지킬 것
+- ❌ **키워드 콤마 나열 금지**: "강남역, 직장인, 네온사인, 야간 출근" 같은 짧은 단어 나열은 절대 안 됨
+- ❌ **영어 단어 나열 금지**: "salaryman, gangnam station, neon signs" 같은 영어 나열은 절대 안 됨
+- ❌ **80자 미만의 짧은 응답 절대 금지** — 200자 이상의 완성된 한국어 문장으로 작성
+- ❌ 화면 안에 글자/문자/자막/워터마크/로고가 보이는 묘사 금지
+- ❌ 프롬프트에 "글자", "문자", "자막", "텍스트", "로고", "워터마크" 같은 단어가 들어가지 않도록 작성
+
+### 품질 규칙 (반드시 모두 지킬 것)
+- **길이**: 한국어 기준 정확히 200~450자. 짧으면 즉시 실패로 간주
+- **형식**: 완전한 문장으로 구성된 단락. 절대 콤마로 단어를 나열하지 말 것
+- 구체적 형용사 사용 (좋음: "낡고 이끼가 낀 돌담" / 나쁨: "오래된 벽")
+- 색상 팔레트 명시 (예: "차분한 흙빛 톤에 진홍색 포인트")
+- 질감/재질 묘사 포함 (예: "윤기 나는 대리석 바닥에 비친 빛")
 - 나레이션 키워드 3개 이상을 반드시 시각적으로 포함
 
-### 예시:
-나레이션 키워드: ["exhausted salaryman", "Gangnam station", "neon signs", "night commute"]
-→ "A young exhausted salaryman in a wrinkled dark navy suit with loosened tie, standing alone at a rain-soaked crosswalk near Gangnam station, briefcase hanging limply from his right hand, hundreds of blurred commuters rushing past him, towering neon advertising signs casting colorful reflections on the wet asphalt, cool blue and purple ambient lighting with warm orange and pink neon accents, low angle medium shot looking slightly upward, detailed anime style with realistic shading, atmospheric fog, and cinematic depth of field, muted desaturated color palette with vibrant neon highlights"
+### 잘못된 예시 vs 올바른 예시
+
+❌ **나쁨 (절대 금지)**: "exhausted salaryman, Gangnam station, neon signs, night commute, loneliness"
+❌ **나쁨 (절대 금지)**: "keyword pool, search results, Naver algorithm, local shop, ranking list"
+✅ **좋음**: "20대 후반의 지친 직장인이 구겨진 짙은 네이비 정장에 풀어진 넥타이 차림으로, 비에 젖은 강남역 앞 횡단보도에 홀로 서 있다. 오른손에는 서류가방이 힘없이 늘어져 있고, 흐릿하게 보이는 수많은 사람들이 그의 옆을 빠르게 지나간다. 거대한 네온 광고판들이 젖은 아스팔트에 다채로운 색의 반사를 만들어내고, 차가운 파란빛과 보랏빛 환경광에 따뜻한 주황과 분홍 네온 강조색이 어우러진다. 살짝 위를 올려다보는 로우 앵글 미디엄 샷, 디테일한 애니메이션 스타일에 사실적인 음영, 분위기 있는 옅은 안개, 시네마틱 피사계심도, 톤다운된 색감에 선명한 네온 하이라이트."
+
+${perScene > 1 ? `### 시간 구간별 차별화 예시 (${perScene}개 프롬프트 작성 시 필수 참고)
+
+나레이션: "퇴근길 강남역 앞, 지친 직장인이 네온사인 아래에서 한숨을 쉰다. 잠시 멈춰 서서 하늘을 올려다본다. 다시 발걸음을 옮긴다."
+
+✅ **1번째 (0~20초)**: "20대 후반의 지친 직장인이 구겨진 짙은 네이비 정장 차림으로 강남역 앞 인도에 서서 깊은 한숨을 내쉬고 있다. 어깨가 무겁게 처져 있고 시선은 발끝을 향한다. 머리 위로 거대한 네온 광고판이 보랏빛과 분홍빛으로 점멸하고, 비에 젖은 아스팔트가 그 빛을 반사한다. 차가운 파란 환경광과 따뜻한 네온이 대비를 이루며, 정면에서 약간 옆을 바라보는 미디엄 샷. 디테일한 애니메이션 스타일에 사실적인 음영, 옅은 안개."
+
+✅ **2번째 (20~40초)**: "같은 직장인이 잠시 멈춰 서서 고개를 들어 밤하늘을 올려다본다. 표정에는 피로와 함께 잠깐의 멍한 감정이 어려 있다. 카메라는 그의 뒷모습 어깨 너머로 위를 향하며, 네온 광고판 사이로 흐릿한 별빛이 보이는 좁은 하늘을 잡는다. 같은 강남역 거리, 같은 옷차림, 같은 색감 팔레트(차가운 파랑과 따뜻한 네온)지만, 카메라 각도는 로우 앵글로 상승. 디테일한 애니메이션 스타일."
+
+✅ **3번째 (40~60초)**: "같은 직장인이 어깨를 살짝 펴고 다시 한 걸음 내딛으며 인파 속으로 걸어 들어간다. 표정은 여전히 피곤하지만 결연함이 비친다. 흐릿한 행인들이 그의 양옆을 스쳐 지나가고, 네온 광고판은 뒤로 멀어진다. 카메라는 정면에서 그의 걷는 모습을 잡는 트래킹 미디엄 샷, 살짝 뒤로 빠지며. 같은 환경/캐릭터/색감 유지, 차가운 파란빛과 네온 강조색. 디테일한 애니메이션 스타일에 시네마틱 피사계심도."
+
+→ 3장이 모두 **같은 캐릭터/옷차림/환경/스타일**이지만, **자세·표정·카메라 앵글·시선·동작이 다른** 것이 핵심입니다.` : ''}
 
 ## 씬 정보
 ${sceneSummaries}
@@ -146,9 +168,9 @@ ${sceneSummaries}
     {
       "sceneNumber": 1,
       "imagePrompts": [
-        "${perScene === 1 ? '씬 전체를 대표하는 1개 프롬프트 (영어, 80~150단어)' : `1번째 (0~${Math.round(60 / perScene)}초) 프롬프트 (영어, 80~150단어)`}"${perScene > 1 ? `,
-        "2번째 (${Math.round(60 / perScene)}~${Math.round(60 / perScene * 2)}초) 프롬프트 (영어, 80~150단어)"` : ''}${perScene > 2 ? `,
-        "3번째 (${Math.round(60 / perScene * 2)}~60초) 프롬프트 (영어, 80~150단어)"` : ''}
+        "${perScene === 1 ? '씬 전체를 대표하는 1개 프롬프트 (한국어, 200~450자)' : `1번째 (0~${Math.round(60 / perScene)}초) 프롬프트 (한국어, 200~450자)`}"${perScene > 1 ? `,
+        "2번째 (${Math.round(60 / perScene)}~${Math.round(60 / perScene * 2)}초) 프롬프트 (한국어, 200~450자)"` : ''}${perScene > 2 ? `,
+        "3번째 (${Math.round(60 / perScene * 2)}~60초) 프롬프트 (한국어, 200~450자)"` : ''}
       ]
     }
   ]
@@ -266,7 +288,7 @@ async function generateWithOpenAI(openaiKey: string, textModel: string, topic: s
   // Pass 2: 나레이션 기반 이미지 프롬프트 생성 (씬당 perScene 개)
   const pass2Prompt = buildPass2Prompt(pass1Result, perScene);
   const pass2Text = await generateTextWithOpenAI(openaiKey, textModel, pass2Prompt, {
-    systemPrompt: 'You are an expert AI image prompt engineer. Always respond with valid JSON. Write all image prompts in English, following the exact structure and quality rules specified.',
+    systemPrompt: 'You are an expert AI image prompt engineer. Always respond with valid JSON. Write all image prompts in **Korean (한국어)** as complete sentences (200-450 characters), NOT as comma-separated keyword lists. Follow the exact structure and quality rules specified in the user message.',
     jsonMode: true,
   });
   const pass2Result = JSON.parse(pass2Text);
