@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import type { LongformScene, SubScene } from '../../types/longform';
 import { NarrationCounter } from './NarrationCounter';
 
@@ -55,8 +55,20 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const charCount = scene.narration.length;
   const needsAdjustment = charCount < 432 || charCount > 444;
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [copiedSubIndex, setCopiedSubIndex] = useState<number | null>(null);
 
   const subScenes = resolveSubScenes(scene);
+
+  const handleCopyPrompt = async (subIndex: number, text: string) => {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSubIndex(subIndex);
+      setTimeout(() => setCopiedSubIndex(curr => curr === subIndex ? null : curr), 1500);
+    } catch {
+      alert('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해 주세요.');
+    }
+  };
 
   const updateSubScene = (subIndex: number, updates: Partial<SubScene>) => {
     const newSubs = subScenes.map((sub, i) => i === subIndex ? { ...sub, ...updates } : sub);
@@ -155,16 +167,29 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                     <span className="text-teal-400 font-medium ml-1.5">(직접 업로드 사용 중)</span>
                   )}
                 </label>
-                {!sub.userUploaded && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRefs.current[subIndex]?.click()}
-                    disabled={disabled}
-                    className="text-xs text-teal-400 hover:text-teal-300 disabled:opacity-50"
-                  >
-                    📎 직접 업로드
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {!sub.userUploaded && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPrompt(subIndex, sub.imagePrompt)}
+                        disabled={disabled || !sub.imagePrompt.trim()}
+                        className="text-xs text-gray-400 hover:text-teal-300 disabled:opacity-30"
+                        title="프롬프트 복사"
+                      >
+                        {copiedSubIndex === subIndex ? '✓ 복사됨' : '📋 복사'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRefs.current[subIndex]?.click()}
+                        disabled={disabled}
+                        className="text-xs text-teal-400 hover:text-teal-300 disabled:opacity-50"
+                      >
+                        📎 직접 업로드
+                      </button>
+                    </>
+                  )}
+                </div>
                 <input
                   ref={el => { fileInputRefs.current[subIndex] = el; }}
                   type="file"
