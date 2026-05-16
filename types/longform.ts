@@ -62,6 +62,7 @@ export interface LongformScene {
   imageStatus: AssetStatus;
   imageError?: string;             // 이미지 생성 실패 원인
   narrationStatus: AssetStatus;
+  userUploaded?: boolean;          // 사용자가 직접 업로드한 이미지 사용 시 true → AI 생성 스킵
 }
 
 // ─── 캐릭터 ─────────────────────────────────────

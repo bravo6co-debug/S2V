@@ -12,10 +12,10 @@ interface UseLongformGenerationReturn {
   cancelGeneration: () => void;
 }
 
-function createInitialProgress(sceneCount: number): GenerationProgress {
+function createInitialProgress(sceneCount: number, preCompletedImages: number = 0): GenerationProgress {
   return {
     currentStep: 'scene-images',
-    sceneImages: { total: sceneCount, completed: 0, failed: 0, inProgress: 0 },
+    sceneImages: { total: sceneCount, completed: preCompletedImages, failed: 0, inProgress: 0 },
     narrations: { total: sceneCount, completed: 0, failed: 0, inProgress: 0 },
     overallPercent: 0,
   };
@@ -53,7 +53,9 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
     cancelledRef.current = false;
     setIsGenerating(true);
     const sceneCount = scenario.scenes.length;
-    setProgress(createInitialProgress(sceneCount));
+    // 사용자가 직접 업로드한 씬은 이미지 생성 대상에서 제외 — 시작 시점부터 completed로 카운트
+    const userUploadedCount = scenario.scenes.filter(s => s.userUploaded).length;
+    setProgress(createInitialProgress(sceneCount, userUploadedCount));
 
     let updatedScenario = { ...scenario };
 
@@ -63,8 +65,11 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
 
       if (cancelledRef.current) throw new Error('Cancelled');
 
+      // 사용자가 업로드한 이미지가 있는 씬은 백엔드 호출에서 제외
+      const scenesNeedingImage = scenario.scenes.filter(s => !s.userUploaded);
+
       // Enrich scene image prompts with character descriptions + metadata for consistency
-      const sceneInputs = scenario.scenes.map(scene => {
+      const sceneInputs = scenesNeedingImage.map(scene => {
         const sceneChars = (scenario.characters || [])
           .filter(c => c.sceneNumbers.includes(scene.sceneNumber));
         let imagePrompt = scene.imagePrompt;
@@ -84,8 +89,13 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
       });
       const narrationInputs = scenario.scenes.map(s => ({ sceneNumber: s.sceneNumber, narration: s.narration }));
 
+      // 이미지 생성은 필요한 씬이 있을 때만 호출 (모두 사용자 업로드면 스킵)
+      const imagePromise = sceneInputs.length > 0
+        ? generateSceneImages(sceneInputs, config.imageModel, 5)
+        : Promise.resolve({ results: [] as { sceneNumber: number; success: boolean; image?: any; error?: string }[] });
+
       const [imageResults, narrationResults] = await Promise.all([
-        generateSceneImages(sceneInputs, config.imageModel, 5),
+        imagePromise,
         generateNarrations(
           narrationInputs,
           config.tts.provider,
@@ -95,7 +105,7 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
         ),
       ]);
 
-      // Apply image results (실패 원인도 저장)
+      // Apply image results (실패 원인도 저장) — 사용자 업로드 씬은 결과에 없으므로 그대로 유지
       const updatedScenes = [...updatedScenario.scenes];
       for (const r of imageResults.results) {
         const idx = updatedScenes.findIndex(s => s.sceneNumber === r.sceneNumber);
@@ -123,7 +133,8 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
 
       updatedScenario = { ...updatedScenario, scenes: updatedScenes };
 
-      const imgCompleted = imageResults.results.filter(r => r.success).length;
+      // 사용자 업로드 + AI 생성 성공을 모두 완료로 카운트
+      const imgCompleted = imageResults.results.filter(r => r.success).length + userUploadedCount;
       const imgFailed = imageResults.results.filter(r => !r.success).length;
       const narCompleted = narrationResults.results.filter(r => r.success).length;
       const narFailed = narrationResults.results.filter(r => !r.success).length;
