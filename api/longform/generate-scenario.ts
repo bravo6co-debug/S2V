@@ -2,6 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, getUserTextModel, getThinkingConfig, sanitizePrompt, setCorsHeaders, Type, callGeminiWithRetry, parseGeminiError } from '../lib/gemini.js';
 import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from '../lib/openai.js';
+import { createLogger } from '../lib/logger.js';
+
+const log = createLogger('longform-scenario');
+const PASS2_BATCH_SIZE = 4;          // 씬 배치 크기 — 토큰 한도 안전 마진
+const PASS1_MAX_TOKENS = 16384;      // 한국어 10씬 × 444자 충분히 처리
+const PASS2_MAX_TOKENS = 8192;       // 배치당 (4씬 × 3프롬프트 × 한국어 300자 가능)
 
 type ImageFrequency = 'per-minute' | 'per-20-seconds';
 
@@ -28,17 +34,26 @@ function buildPass1Prompt(topic: string, duration: number, totalScenes: number, 
 
 ## 규칙
 1. 본편은 ${totalScenes}개의 씬으로 구성 (각 씬 = 1분)
-2. ⚠️ [최우선 규칙] 나레이션 글자수 — 반드시 아래 규칙을 지켜야 합니다:
-   - 각 씬의 나레이션은 정확히 6개 구간으로 구성됩니다 (10초 × 6 = 60초 = 1분)
-   - 각 구간은 띄어쓰기 포함 72~74자입니다
-   - 따라서 총 글자수는 432~444자 (6 × 72~74)
-   - 글자수가 432자 미만이거나 444자를 초과하면 절대 안 됩니다
-   - 글자수를 맞추기 위해 형용사, 부사, 접속사 등을 조절하세요
+2. ⚠️ [최우선 규칙 — 절대 어기지 마세요] 나레이션 글자수:
+   - **각 씬의 나레이션은 반드시 432자 이상, 444자 이하** (띄어쓰기 포함)
+   - 200자, 300자 같은 짧은 응답은 즉시 실패로 간주합니다
+   - 내부 구성: 10초씩 6개 구간 × 72~74자/구간
+   - **글자수 부족하면 다음을 추가하여 무조건 432자 이상으로 늘리세요**:
+     • 구체적 예시 ("예를 들어 ~", "가령 ~")
+     • 부연 설명 ("다시 말해 ~", "쉽게 말해 ~")
+     • 감정·뉘앙스 형용사·부사 ("아주", "결국", "여전히", "분명히")
+     • 자연스러운 접속어 ("그래서", "물론", "하지만", "결과적으로")
+   - **나레이션 작성 후 직접 글자수를 세서 432~444 범위인지 검증하고, 부족하면 보완 후 다시 검증**하세요
 3. 스토리 구조: 도입(~20%) → 전개(~25%) → 심화(~25%) → 절정(~20%) → 마무리(~10%)
 4. 나레이션은 자연스러운 한국어, 다큐멘터리/설명 톤
-5. 나레이션 작성 후 반드시 글자수를 세서 432~444자 범위인지 검증하세요
-6. 각 씬에서 나레이션의 핵심 시각화 키워드를 3~5개 추출하세요 (영어)
-7. 각 씬의 분위기, 카메라 앵글, 조명/분위기를 지정하세요
+5. 각 씬에서 나레이션의 핵심 시각화 키워드를 3~5개 추출하세요 (영어)
+6. 각 씬의 분위기, 카메라 앵글, 조명/분위기를 지정하세요
+
+### 좋은 예시 (438자, 정확)
+"매달 광고비 백만 원을 꾸준히 쓰는데도 매출이 그대로라면, 문제는 사장님 역량이 아닙니다. 대개 돈이 새는 곳은 '키워드'예요. 네이버는 모든 가게를 한 줄로 세우지 않습니다. 키워드마다 전혀 다른 경기장과 다른 룰, 또 다른 순위표가 따로 있어요. 오늘 10분 동안, 매출이 따라오는 키워드를 고르는 의사결정 프레임을 통째로 드릴게요. 검색량 큰 단어에 무작정 돈을 태우는 대신, 고객이 지금 당장 방문할 단어를 가려내는 방식입니다. 한 번의 설정으로 끝나는 게 아니라, 광고와 소개글과 메뉴까지 같은 방향으로 정렬하는 전략이에요. 영상 끝나면 우리 가게에 바로 적용할 체크리스트를 손에 쥐게 됩니다, 지금 바로 시작합니다."
+
+### 나쁜 예시 (180자 — 절대 금지)
+"매달 광고비를 쓰는데도 매출이 그대로라면 문제는 키워드입니다. 네이버는 키워드마다 다른 경기장이 있어요. 오늘 10분 동안 매출이 따라오는 키워드를 고르는 프레임을 드립니다. 지금 시작합니다."
 
 ## narrationKeywords 추출 규칙
 - 나레이션에서 시각적으로 표현 가능한 핵심 요소를 영어로 추출
@@ -236,9 +251,35 @@ const pass2Schema = {
   required: ['scenePrompts'],
 };
 
-// ─── Gemini 2-pass 실행 ─────────────────────────────
+// ─── Pass 2 응답 검증 (잘린/부실한 응답 감지) ──────
+function validatePass2Result(pass2Result: any, expectedScenes: number[], perScene: number): { ok: boolean; issues: string[] } {
+  const issues: string[] = [];
+  const scenePrompts = pass2Result?.scenePrompts || [];
+  const returnedScenes = new Set(scenePrompts.map((sp: any) => sp.sceneNumber));
+
+  for (const sceneNum of expectedScenes) {
+    if (!returnedScenes.has(sceneNum)) {
+      issues.push(`scene ${sceneNum}: 누락`);
+      continue;
+    }
+    const sp = scenePrompts.find((x: any) => x.sceneNumber === sceneNum);
+    const prompts = Array.isArray(sp.imagePrompts) ? sp.imagePrompts : [];
+    if (prompts.length < perScene) {
+      issues.push(`scene ${sceneNum}: ${prompts.length}/${perScene}개`);
+    }
+    for (let i = 0; i < prompts.length; i++) {
+      const p = prompts[i];
+      if (typeof p !== 'string' || p.length < 100) {
+        issues.push(`scene ${sceneNum} prompt ${i}: ${typeof p === 'string' ? p.length : 0}자 (100자 미만)`);
+      }
+    }
+  }
+  return { ok: issues.length === 0, issues };
+}
+
+// ─── Gemini 2-pass 실행 (Pass 2는 토큰 한도 회피 위해 배치 병렬) ──
 async function generateWithGemini(aiClient: any, textModel: string, topic: string, duration: number, totalScenes: number, reference: string, perScene: number) {
-  // Pass 1: 나레이션 + 스토리 구조
+  // Pass 1: 나레이션 + 스토리 구조 (전체 씬 한 번에)
   const pass1Prompt = buildPass1Prompt(topic, duration, totalScenes, reference);
   const pass1Response = await callGeminiWithRetry<any>(
     () => aiClient.models.generateContent({
@@ -247,53 +288,118 @@ async function generateWithGemini(aiClient: any, textModel: string, topic: strin
       config: {
         responseMimeType: 'application/json',
         responseSchema: pass1Schema,
+        maxOutputTokens: PASS1_MAX_TOKENS,
         ...getThinkingConfig(textModel),
       },
     }),
     { label: 'longform-scenario-pass1' },
   );
-  const pass1Result = JSON.parse(pass1Response.text!);
+  const pass1Text = pass1Response.text!;
+  log.info('Pass 1 응답 길이', { chars: pass1Text.length });
+  const pass1Result = JSON.parse(pass1Text);
 
-  // Pass 2: 나레이션 기반 이미지 프롬프트 생성 (씬당 perScene 개)
-  const pass2Prompt = buildPass2Prompt(pass1Result, perScene);
-  const pass2Response = await callGeminiWithRetry<any>(
-    () => aiClient.models.generateContent({
-      model: textModel,
-      contents: pass2Prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: pass2Schema,
-        ...getThinkingConfig(textModel),
-      },
-    }),
-    { label: 'longform-scenario-pass2' },
-  );
-  const pass2Result = JSON.parse(pass2Response.text!);
+  // Pass 1 나레이션 길이 검증 (디버깅 로그)
+  for (const s of (pass1Result.scenes || [])) {
+    const narLen = (s.narration || '').length;
+    if (narLen < 400) {
+      log.warn(`Pass 1 씬 ${s.sceneNumber} 나레이션 짧음`, { length: narLen, target: '432~444' });
+    }
+  }
 
-  return { pass1Result, pass2Result };
+  // Pass 2: 씬을 PASS2_BATCH_SIZE 개씩 배치로 묶어 병렬 호출 (토큰 한도 회피)
+  const scenes: any[] = pass1Result.scenes || [];
+  const batches: any[][] = [];
+  for (let i = 0; i < scenes.length; i += PASS2_BATCH_SIZE) {
+    batches.push(scenes.slice(i, i + PASS2_BATCH_SIZE));
+  }
+  log.info('Pass 2 배치 실행', { totalScenes: scenes.length, batchCount: batches.length, batchSize: PASS2_BATCH_SIZE, perScene });
+
+  const batchResults = await Promise.all(batches.map(async (batch, batchIdx) => {
+    const expectedScenes = batch.map(s => s.sceneNumber);
+    const partialPass1 = { scenes: batch };
+    const pass2Prompt = buildPass2Prompt(partialPass1, perScene);
+
+    const pass2Response = await callGeminiWithRetry<any>(
+      () => aiClient.models.generateContent({
+        model: textModel,
+        contents: pass2Prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: pass2Schema,
+          maxOutputTokens: PASS2_MAX_TOKENS,
+          ...getThinkingConfig(textModel),
+        },
+      }),
+      { label: `longform-scenario-pass2-batch${batchIdx + 1}/${batches.length}` },
+    );
+    const text = pass2Response.text!;
+    const parsed = JSON.parse(text);
+    const validation = validatePass2Result(parsed, expectedScenes, perScene);
+    log.info(`Pass 2 배치 ${batchIdx + 1}/${batches.length} 응답`, {
+      chars: text.length,
+      scenes: expectedScenes,
+      returned: (parsed.scenePrompts || []).length,
+      ok: validation.ok,
+      ...(validation.ok ? {} : { issues: validation.issues }),
+    });
+    return parsed;
+  }));
+
+  // 모든 배치의 scenePrompts 병합
+  const allScenePrompts = batchResults.flatMap(r => r.scenePrompts || []);
+  return { pass1Result, pass2Result: { scenePrompts: allScenePrompts } };
 }
 
-// ─── OpenAI 2-pass 실행 ─────────────────────────────
+// ─── OpenAI 2-pass 실행 (Pass 2 배치 병렬) ─────────
 async function generateWithOpenAI(openaiKey: string, textModel: string, topic: string, duration: number, totalScenes: number, reference: string, perScene: number) {
-  const systemPrompt = 'You are a professional YouTube video scenario writer. Always respond with valid JSON matching the requested structure. Write narrations in Korean and everything else in the specified language.';
+  const systemPrompt = 'You are a professional YouTube video scenario writer. Always respond with valid JSON matching the requested structure. Write narrations in Korean (각 씬 정확히 432~444자) and everything else in the specified language.';
 
-  // Pass 1: 나레이션 + 스토리 구조
+  // Pass 1
   const pass1Prompt = buildPass1Prompt(topic, duration, totalScenes, reference);
   const pass1Text = await generateTextWithOpenAI(openaiKey, textModel, pass1Prompt, {
     systemPrompt,
     jsonMode: true,
   });
+  log.info('Pass 1 응답 길이 (OpenAI)', { chars: pass1Text.length });
   const pass1Result = JSON.parse(pass1Text);
 
-  // Pass 2: 나레이션 기반 이미지 프롬프트 생성 (씬당 perScene 개)
-  const pass2Prompt = buildPass2Prompt(pass1Result, perScene);
-  const pass2Text = await generateTextWithOpenAI(openaiKey, textModel, pass2Prompt, {
-    systemPrompt: 'You are an expert AI image prompt engineer. Always respond with valid JSON. Write all image prompts in **Korean (한국어)** as complete sentences (200-450 characters), NOT as comma-separated keyword lists. Follow the exact structure and quality rules specified in the user message.',
-    jsonMode: true,
-  });
-  const pass2Result = JSON.parse(pass2Text);
+  for (const s of (pass1Result.scenes || [])) {
+    const narLen = (s.narration || '').length;
+    if (narLen < 400) {
+      log.warn(`Pass 1 씬 ${s.sceneNumber} 나레이션 짧음`, { length: narLen, target: '432~444' });
+    }
+  }
 
-  return { pass1Result, pass2Result };
+  // Pass 2: 배치 병렬
+  const scenes: any[] = pass1Result.scenes || [];
+  const batches: any[][] = [];
+  for (let i = 0; i < scenes.length; i += PASS2_BATCH_SIZE) {
+    batches.push(scenes.slice(i, i + PASS2_BATCH_SIZE));
+  }
+  log.info('Pass 2 배치 실행 (OpenAI)', { totalScenes: scenes.length, batchCount: batches.length, perScene });
+
+  const batchResults = await Promise.all(batches.map(async (batch, batchIdx) => {
+    const expectedScenes = batch.map(s => s.sceneNumber);
+    const partialPass1 = { scenes: batch };
+    const pass2Prompt = buildPass2Prompt(partialPass1, perScene);
+    const text = await generateTextWithOpenAI(openaiKey, textModel, pass2Prompt, {
+      systemPrompt: 'You are an expert AI image prompt engineer. Always respond with valid JSON. Write all image prompts in **Korean (한국어)** as complete sentences (200-450 characters), NOT as comma-separated keyword lists. Follow the exact structure and quality rules specified in the user message.',
+      jsonMode: true,
+    });
+    const parsed = JSON.parse(text);
+    const validation = validatePass2Result(parsed, expectedScenes, perScene);
+    log.info(`Pass 2 배치 ${batchIdx + 1}/${batches.length} 응답 (OpenAI)`, {
+      chars: text.length,
+      scenes: expectedScenes,
+      returned: (parsed.scenePrompts || []).length,
+      ok: validation.ok,
+      ...(validation.ok ? {} : { issues: validation.issues }),
+    });
+    return parsed;
+  }));
+
+  const allScenePrompts = batchResults.flatMap(r => r.scenePrompts || []);
+  return { pass1Result, pass2Result: { scenePrompts: allScenePrompts } };
 }
 
 // ─── 결과 병합 ──────────────────────────────────────
@@ -312,13 +418,14 @@ function mergeResults(pass1: any, pass2: any, perScene: number) {
     id: crypto.randomUUID(),
     scenes: pass1.scenes.map((scene: any, index: number) => {
       const sceneNum = scene.sceneNumber || index + 1;
-      const keywordsFallback = scene.narrationKeywords?.join(', ') || '';
+      // 폴백: Pass 2가 실패해도 영어 키워드 나열이 아닌, 의미있는 한국어 나레이션 텍스트 사용
+      const narrationFallback = (scene.narration || scene.narrationKeywords?.join(', ') || '').slice(0, 300);
       const rawPrompts = promptMap.get(sceneNum) || [];
 
       // 정확히 perScene 개 보장 — 부족하면 마지막을 복제, 넘치면 자르기
       const prompts: string[] = [];
       for (let i = 0; i < perScene; i++) {
-        prompts.push(rawPrompts[i] || rawPrompts[rawPrompts.length - 1] || keywordsFallback);
+        prompts.push(rawPrompts[i] || rawPrompts[rawPrompts.length - 1] || narrationFallback);
       }
 
       const subScenes = prompts.map(prompt => ({
