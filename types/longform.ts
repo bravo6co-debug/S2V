@@ -8,8 +8,8 @@ export type LongformImageModel =
   | 'gemini-2.5-flash-image'
   | 'imagen-4.0-generate-001'
   | 'imagen-4.0-fast-generate-001'
-  | 'flux-kontext-pro'
-  | 'flux-kontext-max';
+  | 'qwen-image-2.0'
+  | 'gpt-image-2.0';
 
 // ─── TTS 모델 ────────────────────────────────────
 export type TtsProvider = 'openai' | 'gemini';
@@ -151,8 +151,8 @@ export const IMAGE_MODEL_OPTIONS: ImageModelOption[] = [
   { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image', provider: 'google', costPerImage: '~$0.24', description: '최고 품질 (4K)' },
   { value: 'imagen-4.0-generate-001', label: 'Imagen 4.0', provider: 'google', costPerImage: '~$0.039', description: '고품질' },
   { value: 'imagen-4.0-fast-generate-001', label: 'Imagen 4.0 Fast', provider: 'google', costPerImage: '~$0.039', description: '속도 우선' },
-  { value: 'flux-kontext-pro', label: 'FLUX Kontext Pro', provider: 'eachlabs', costPerImage: '$0.04', description: '고품질' },
-  { value: 'flux-kontext-max', label: 'FLUX Kontext Max', provider: 'eachlabs', costPerImage: '$0.08', description: '최고 품질' },
+  { value: 'qwen-image-2.0', label: 'QWEN Image 2.0', provider: 'eachlabs', costPerImage: '$0.035', description: '코스트 효율, 2K 출력' },
+  { value: 'gpt-image-2.0', label: 'GPT Image 2.0', provider: 'eachlabs', costPerImage: '~$0.05~0.15', description: '텍스트/로고 정확, 느림' },
 ];
 
 export const OPENAI_VOICE_OPTIONS: { value: OpenAiVoice; label: string; description: string }[] = [
@@ -230,8 +230,8 @@ export function estimateImageCost(model: LongformImageModel, sceneCount: number)
     'gemini-3-pro-image-preview': 0.24,
     'imagen-4.0-generate-001': 0.039,
     'imagen-4.0-fast-generate-001': 0.039,
-    'flux-kontext-pro': 0.04,
-    'flux-kontext-max': 0.08,
+    'qwen-image-2.0': 0.035,
+    'gpt-image-2.0': 0.10, // 평균 추정값 ($0.05~0.15)
   };
   const total = costs[model] * sceneCount;
   return `~$${total.toFixed(2)}`;

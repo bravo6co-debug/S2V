@@ -33,7 +33,7 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
   const ttsCost = useMemo(() => estimateTtsCost(ttsModel, sceneCount), [ttsModel, sceneCount]);
 
   const googleModels = IMAGE_MODEL_OPTIONS.filter(m => m.provider === 'google');
-  const fluxModels = IMAGE_MODEL_OPTIONS.filter(m => m.provider === 'eachlabs');
+  const eachlabsModels = IMAGE_MODEL_OPTIONS.filter(m => m.provider === 'eachlabs');
 
   const isOpenAIModel = (model: string) => model.startsWith('gpt-') || model.startsWith('o3-') || model.startsWith('o4-');
   const selectedModelLabel = AVAILABLE_TEXT_MODELS.find(m => m.value === textModel)?.label || textModel;
@@ -214,9 +214,9 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">EachLabs FLUX</p>
+          <p className="text-xs text-gray-500 mt-2">EachLabs</p>
           <div className="grid grid-cols-2 gap-2">
-            {fluxModels.map((m) => (
+            {eachlabsModels.map((m) => (
               <button
                 key={m.value}
                 onClick={() => setImageModel(m.value)}
