@@ -638,9 +638,10 @@ export const AVAILABLE_IMAGE_MODELS: { value: string; label: string; price?: str
   { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (기본)', provider: 'gemini' },
   { value: 'imagen-4.0-generate-001', label: 'Imagen 4.0 (고품질)', provider: 'gemini' },
   { value: 'imagen-4.0-fast-generate-001', label: 'Imagen 4.0 Fast (빠름)', provider: 'gemini' },
-  // FLUX Kontext 모델 (EachLabs API 키 사용)
-  { value: 'flux-kontext-pro', label: 'FLUX Kontext Pro', price: '$0.04/장', provider: 'eachlabs' },
-  { value: 'flux-kontext-max', label: 'FLUX Kontext Max (최고품질)', price: '$0.08/장', provider: 'eachlabs' },
+  // QWEN Image 모델 (참조 이미지 유무 따라 text-to-image / image-edit 자동 라우팅)
+  { value: 'qwen-image-2.0', label: 'QWEN Image 2.0 (Alibaba)', price: '$0.035/장', provider: 'eachlabs' },
+  // GPT Image v2 (OpenAI) — 텍스트/로고/브랜드 정확도 최강, 토큰 과금
+  { value: 'gpt-image-2.0', label: 'GPT Image 2.0 (OpenAI, 텍스트/로고 정확)', price: '약 $0.05~0.15/장', provider: 'eachlabs' },
 ];
 
 // 사용 가능한 비디오 모델

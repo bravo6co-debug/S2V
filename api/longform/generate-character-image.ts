@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, setCorsHeaders, Modality } from '../lib/gemini.js';
-import { isFluxModel, getEachLabsApiKey, generateFluxImage } from '../lib/eachlabs.js';
+import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from '../lib/eachlabs.js';
 import { buildImagePrompt } from '../lib/imagePromptBuilder.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -23,9 +23,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const prompt = buildImagePrompt(imageModel, 'character', { characterName, appearanceDescription, outfit });
 
-    if (isFluxModel(imageModel)) {
+    if (isEachlabsImageModel(imageModel)) {
       const apiKey = await getEachLabsApiKey(auth.userId);
-      const result = await generateFluxImage({
+      const result = await generateEachlabsImage({
         apiKey,
         model: imageModel,
         prompt,

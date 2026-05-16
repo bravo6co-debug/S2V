@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from "@google/genai";
 import { sanitizePrompt, setCorsHeaders, getStylePrompt, getAIClientForUser, getUserImageModel, MODELS, extractSafetyError } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
-import { isFluxModel, getEachLabsApiKey, generateFluxImage } from './lib/eachlabs.js';
+import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from './lib/eachlabs.js';
 import type { GeneratePortraitsRequest, ImageData, ApiErrorResponse, ImageStyle } from './lib/types.js';
 
 /**
@@ -160,13 +160,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const count = Math.min(Math.max(numberOfImages || 1, 1), 10); // 1-10 images
         const ratio = aspectRatio === '9:16' ? '9:16' : '16:9';
 
-        // FLUX 모델인 경우 EachLabs API 사용
-        if (isFluxModel(imageModel)) {
+        // Eachlabs 모델인 경우 EachLabs API 사용
+        if (isEachlabsImageModel(imageModel)) {
             const apiKey = await getEachLabsApiKey(auth.userId);
-            console.log(`[generate-portraits] Using FLUX model: ${imageModel}, style: ${imageStyle || 'default'}`);
+            console.log(`[generate-portraits] Using Eachlabs model: ${imageModel}, style: ${imageStyle || 'default'}`);
 
-            // 스타일별 FLUX 프롬프트 생성
-            const getFluxStylePrefix = (style?: ImageStyle): string => {
+            // 스타일별 Eachlabs 프롬프트 생성
+            const getEachlabsStylePrefix = (style?: ImageStyle): string => {
                 switch (style) {
                     case 'animation':
                         return "High-quality Japanese anime style character illustration with clean linework and vibrant colors";
@@ -198,15 +198,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
             };
 
-            const fluxStylePrefix = getFluxStylePrefix(imageStyle);
-            const fluxPrompt = `${fluxStylePrefix}.\n\nCharacter: ${sanitizedPrompt}\n\nRequirements:\n- Bust shot (chest up), facing forward, looking at camera\n- Ethnically Korean character\n- Clean, simple background (solid light gray or off-white)\n- Neutral or gentle facial expression\n- No hands visible in frame\n- Absolutely no visible text, letters, numbers, or writing in any language on any surface\n- No watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
+            const eachlabsStylePrefix = getEachlabsStylePrefix(imageStyle);
+            const eachlabsPrompt = `${eachlabsStylePrefix}.\n\nCharacter: ${sanitizedPrompt}\n\nRequirements:\n- Bust shot (chest up), facing forward, looking at camera\n- Ethnically Korean character\n- Clean, simple background (solid light gray or off-white)\n- Neutral or gentle facial expression\n- No hands visible in frame\n- Absolutely no visible text, letters, numbers, or writing in any language on any surface\n- No watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
 
             const generationPromises: Promise<ImageData>[] = [];
             for (let i = 0; i < count; i++) {
-                generationPromises.push(generateFluxImage({
+                generationPromises.push(generateEachlabsImage({
                     apiKey,
                     model: imageModel,
-                    prompt: fluxPrompt,
+                    prompt: eachlabsPrompt,
                     aspectRatio: ratio,
                 }));
             }

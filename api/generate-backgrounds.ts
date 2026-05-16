@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from "@google/genai";
 import { sanitizePrompt, setCorsHeaders, getStylePrompt, getAIClientForUser, getUserImageModel, MODELS } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
-import { isFluxModel, getEachLabsApiKey, generateFluxImage } from './lib/eachlabs.js';
+import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from './lib/eachlabs.js';
 import type { GenerateBackgroundsRequest, ImageData, ApiErrorResponse, ImageStyle } from './lib/types.js';
 
 /**
@@ -139,22 +139,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const count = Math.min(Math.max(numberOfImages || 1, 1), 10);
         const ratio = aspectRatio === '9:16' ? '9:16' : '16:9';
 
-        // FLUX 모델인 경우 EachLabs API 사용
-        if (isFluxModel(imageModel)) {
+        // Eachlabs 모델인 경우 EachLabs API 사용
+        if (isEachlabsImageModel(imageModel)) {
             const apiKey = await getEachLabsApiKey(auth.userId);
-            console.log(`[generate-backgrounds] Using FLUX model: ${imageModel}`);
+            console.log(`[generate-backgrounds] Using Eachlabs model: ${imageModel}`);
 
             const loc = locationType || 'exterior';
             const time = timeOfDay || 'day';
             const wthr = weather || 'clear';
-            const fluxPrompt = `Generate a background/environment photograph.\n\nScene: ${sanitizedPrompt}\nLocation: ${loc}\nTime of day: ${time}\nWeather: ${wthr}\n\nRequirements:\n- Pure landscape/environment shot, NO people or human figures\n- Wide establishing shot with depth and layers\n- Cinematic quality, natural lighting for ${time}\n- Absolutely no visible text, letters, numbers, or writing in any language, signs and screens must be blank or blurred\n- No watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
+            const eachlabsPrompt = `Generate a background/environment photograph.\n\nScene: ${sanitizedPrompt}\nLocation: ${loc}\nTime of day: ${time}\nWeather: ${wthr}\n\nRequirements:\n- Pure landscape/environment shot, NO people or human figures\n- Wide establishing shot with depth and layers\n- Cinematic quality, natural lighting for ${time}\n- Absolutely no visible text, letters, numbers, or writing in any language, signs and screens must be blank or blurred\n- No watermarks\n- ${ratio === '9:16' ? 'Vertical 9:16' : 'Horizontal 16:9'} aspect ratio`;
 
             const generationPromises: Promise<ImageData>[] = [];
             for (let i = 0; i < count; i++) {
-                generationPromises.push(generateFluxImage({
+                generationPromises.push(generateEachlabsImage({
                     apiKey,
                     model: imageModel,
-                    prompt: fluxPrompt,
+                    prompt: eachlabsPrompt,
                     aspectRatio: ratio,
                 }));
             }

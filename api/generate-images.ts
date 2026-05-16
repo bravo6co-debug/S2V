@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from "@google/genai";
 import { Part, sanitizePrompt, setCorsHeaders, getStylePrompt, getAIClientForUser, getUserImageModel, MODELS, extractSafetyError } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
-import { isFluxModel, getEachLabsApiKey, generateFluxImage } from './lib/eachlabs.js';
+import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from './lib/eachlabs.js';
 import type { GenerateImagesRequest, ImageData, ApiErrorResponse, ImageStyle, NamedCharacterImage } from './lib/types.js';
 
 /**
@@ -263,10 +263,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const count = Math.min(Math.max(numberOfImages || 1, 1), 10);
         const ratio = aspectRatio === '9:16' ? '9:16' : '16:9';
 
-        // FLUX 모델인 경우 EachLabs API 사용
-        if (isFluxModel(imageModel)) {
+        // Eachlabs 모델인 경우 EachLabs API 사용
+        if (isEachlabsImageModel(imageModel)) {
             const apiKey = await getEachLabsApiKey(auth.userId);
-            console.log(`[generate-images] Using FLUX model: ${imageModel}`);
+            console.log(`[generate-images] Using Eachlabs model: ${imageModel}`);
 
             // 참조 이미지 수집 (캐릭터 → 소품 → 배경 순서, 최대 2장)
             const refImages: ImageData[] = [];
@@ -308,16 +308,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 .replace(/\s{2,}/g, ' ')                   // 다중 공백 정리
                 .trim();
 
-            const fluxPrompt = `Photorealistic cinematic scene, absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, and labels, no watermarks.${charInfo} ${cleanedPrompt}`;
+            const eachlabsPrompt = `Photorealistic cinematic scene, absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, and labels, no watermarks.${charInfo} ${cleanedPrompt}`;
 
-            console.log(`[generate-images] FLUX prompt (${fluxPrompt.length} chars): ${fluxPrompt.substring(0, 200)}...`);
+            console.log(`[generate-images] Eachlabs prompt (${eachlabsPrompt.length} chars): ${eachlabsPrompt.substring(0, 200)}...`);
 
             const generationPromises: Promise<ImageData>[] = [];
             for (let i = 0; i < count; i++) {
-                generationPromises.push(generateFluxImage({
+                generationPromises.push(generateEachlabsImage({
                     apiKey,
                     model: imageModel,
-                    prompt: fluxPrompt,
+                    prompt: eachlabsPrompt,
                     aspectRatio: ratio,
                     referenceImages: refImages.length > 0 ? refImages : undefined,
                 }));

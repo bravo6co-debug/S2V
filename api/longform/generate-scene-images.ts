@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, setCorsHeaders, Modality, extractSafetyError } from '../lib/gemini.js';
-import { isFluxModel, getEachLabsApiKey, generateFluxImage } from '../lib/eachlabs.js';
+import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from '../lib/eachlabs.js';
 import { buildImagePrompt } from '../lib/imagePromptBuilder.js';
 
 interface SceneInput {
@@ -53,9 +53,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               mood: scene.mood,
             });
 
-            if (isFluxModel(imageModel)) {
+            if (isEachlabsImageModel(imageModel)) {
               const apiKey = await getEachLabsApiKey(auth.userId!);
-              const result = await generateFluxImage({ apiKey, model: imageModel, prompt, aspectRatio: '16:9' });
+              const result = await generateEachlabsImage({ apiKey, model: imageModel, prompt, aspectRatio: '16:9' });
               return { sceneNumber: scene.sceneNumber, success: true, image: result };
             }
 

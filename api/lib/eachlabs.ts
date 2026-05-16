@@ -22,11 +22,56 @@ const FLUX_MULTI_MODELS: Record<string, string> = {
     'flux-kontext-max': 'multi-image-kontext-max',
 };
 
+// QWEN 모델 ID (앱 내부 단일 식별자 → eachlabs slug 매핑은 generateQwenImage 내부)
+const QWEN_IMAGE_MODEL_ID = 'qwen-image-2.0';
+const QWEN_TEXT_TO_IMAGE_SLUG = 'alibaba-qwen-image-2-0-text-to-image';
+const QWEN_IMAGE_EDIT_SLUG = 'alibaba-qwen-image-2-0-image-edit';
+
+// QWEN 비율 → size 매핑 (WIDTH*HEIGHT, "*" 구분자)
+const QWEN_SIZE_MAP: Record<'16:9' | '9:16' | '1:1', string> = {
+    '1:1': '1024*1024',
+    '16:9': '1280*720',
+    '9:16': '720*1280',
+};
+
+// GPT Image v2 모델 ID (앱 내부 단일 식별자)
+const GPT_IMAGE_V2_MODEL_ID = 'gpt-image-2.0';
+const GPT_IMAGE_V2_TEXT_TO_IMAGE_SLUG = 'gpt-image-v2-text-to-image';
+const GPT_IMAGE_V2_EDIT_SLUG = 'gpt-image-v2-edit';
+
+// GPT Image v2 비율 → size 매핑 (WIDTHxHEIGHT, "x" 구분자)
+const GPT_IMAGE_V2_SIZE_MAP: Record<'16:9' | '9:16' | '1:1', string> = {
+    '1:1': '1024x1024',
+    '16:9': '1792x1024',
+    '9:16': '1024x1792',
+};
+
 /**
  * FLUX 모델인지 확인
  */
 export function isFluxModel(model: string): boolean {
     return model.startsWith('flux-kontext-');
+}
+
+/**
+ * QWEN Image 모델인지 확인
+ */
+export function isQwenImageModel(model: string): boolean {
+    return model === QWEN_IMAGE_MODEL_ID;
+}
+
+/**
+ * GPT Image v2 모델인지 확인
+ */
+export function isGptImageV2Model(model: string): boolean {
+    return model === GPT_IMAGE_V2_MODEL_ID;
+}
+
+/**
+ * Eachlabs 이미지 모델(FLUX / QWEN / GPT Image 등)인지 확인 — Eachlabs API 키로 처리되는 모델 전체
+ */
+export function isEachlabsImageModel(model: string): boolean {
+    return isFluxModel(model) || isQwenImageModel(model) || isGptImageV2Model(model);
 }
 
 /**
@@ -222,6 +267,138 @@ export async function generateFluxImage(options: FluxGenerationOptions): Promise
             try { await del(url); } catch (e) { console.warn('[FLUX] Blob cleanup failed:', e); }
         }
     }
+}
+
+// =============================================
+// QWEN Image 2.0 (Alibaba) — Text-to-Image + Image-Edit
+// =============================================
+
+/**
+ * QWEN Image 2.0 모델로 이미지 생성
+ * - 참조 이미지 0장: alibaba-qwen-image-2-0-text-to-image (text-to-image)
+ * - 참조 이미지 1~3장: alibaba-qwen-image-2-0-image-edit (image-edit)
+ */
+export async function generateQwenImage(options: EachlabsImageOptions): Promise<ImageData> {
+    const { apiKey, prompt, aspectRatio, referenceImages } = options;
+    const blobUrls: string[] = [];
+
+    try {
+        const hasRefs = !!(referenceImages && referenceImages.length > 0);
+        const eachLabsModel = hasRefs ? QWEN_IMAGE_EDIT_SLUG : QWEN_TEXT_TO_IMAGE_SLUG;
+        const size = QWEN_SIZE_MAP[aspectRatio || '1:1'];
+
+        const input: Record<string, unknown> = {
+            prompt,
+            n: 1,
+            size,
+            prompt_extend: true,
+        };
+
+        if (hasRefs) {
+            // image-edit 모델은 image_urls 배열 (최대 3장)
+            const urls: string[] = [];
+            for (const img of referenceImages!.slice(0, 3)) {
+                const url = await uploadImageToBlob(img);
+                blobUrls.push(url);
+                urls.push(url);
+            }
+            input.image_urls = urls;
+        }
+
+        const predictionId = await createPrediction(apiKey, eachLabsModel, input);
+        const outputUrl = await pollPrediction(apiKey, predictionId, 'QWEN');
+        return await downloadImageAsBase64(outputUrl);
+    } finally {
+        for (const url of blobUrls) {
+            try { await del(url); } catch (e) { console.warn('[QWEN] Blob cleanup failed:', e); }
+        }
+    }
+}
+
+// =============================================
+// GPT Image v2 (OpenAI) — Text-to-Image + Image-Edit
+// =============================================
+
+/**
+ * GPT Image v2 모델로 이미지 생성
+ * - 참조 이미지 0장: gpt-image-v2-text-to-image
+ * - 참조 이미지 1~16장: gpt-image-v2-edit
+ *
+ * 가격: 토큰 기반 ($5/M text in, $10/M image in, $30/M image out — 장당 약 $0.05~$0.15)
+ * 강점: 텍스트/로고/브랜드 정확도, 사실적 묘사
+ * 단점: 평균 처리 시간 길음 (text-to-image ~40s, edit ~100s)
+ */
+export async function generateGptImageV2(options: EachlabsImageOptions): Promise<ImageData> {
+    const { apiKey, prompt, aspectRatio, referenceImages } = options;
+    const blobUrls: string[] = [];
+
+    try {
+        const hasRefs = !!(referenceImages && referenceImages.length > 0);
+        const eachLabsModel = hasRefs ? GPT_IMAGE_V2_EDIT_SLUG : GPT_IMAGE_V2_TEXT_TO_IMAGE_SLUG;
+        const size = GPT_IMAGE_V2_SIZE_MAP[aspectRatio || '1:1'];
+
+        const input: Record<string, unknown> = {
+            prompt,
+            num_images: 1,
+            quality: 'high',
+            background: 'auto',
+            moderation: 'low',
+            output_format: 'png',
+        };
+
+        if (hasRefs) {
+            // image-edit 모델은 image_urls 배열 + image_size 필드 사용
+            const urls: string[] = [];
+            for (const img of referenceImages!.slice(0, 16)) {
+                const url = await uploadImageToBlob(img);
+                blobUrls.push(url);
+                urls.push(url);
+            }
+            input.image_urls = urls;
+            input.image_size = size;
+        } else {
+            // text-to-image 모델은 size 필드 사용
+            input.size = size;
+        }
+
+        const predictionId = await createPrediction(apiKey, eachLabsModel, input);
+        const outputUrl = await pollPrediction(apiKey, predictionId, 'GPT-Image-v2');
+        return await downloadImageAsBase64(outputUrl);
+    } finally {
+        for (const url of blobUrls) {
+            try { await del(url); } catch (e) { console.warn('[GPT-Image-v2] Blob cleanup failed:', e); }
+        }
+    }
+}
+
+// =============================================
+// Eachlabs 이미지 모델 통합 디스패처
+// =============================================
+
+export interface EachlabsImageOptions {
+    apiKey: string;
+    model: string;
+    prompt: string;
+    aspectRatio?: '16:9' | '9:16' | '1:1';
+    referenceImages?: ImageData[];
+}
+
+/**
+ * Eachlabs 이미지 모델 통합 호출 엔트리.
+ * 모델 ID를 보고 FLUX / QWEN / GPT Image v2 등 적절한 어댑터로 라우팅.
+ * 호출부에서는 모델별 분기 없이 이 한 함수만 쓰면 됨.
+ */
+export async function generateEachlabsImage(options: EachlabsImageOptions): Promise<ImageData> {
+    if (isFluxModel(options.model)) {
+        return generateFluxImage(options);
+    }
+    if (isQwenImageModel(options.model)) {
+        return generateQwenImage(options);
+    }
+    if (isGptImageV2Model(options.model)) {
+        return generateGptImageV2(options);
+    }
+    throw new Error(`지원하지 않는 Eachlabs 이미지 모델입니다: ${options.model}`);
 }
 
 // =============================================
