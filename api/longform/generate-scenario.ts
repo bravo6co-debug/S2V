@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth } from '../lib/auth.js';
-import { getAIClientForUser, getUserTextModel, getThinkingConfig, sanitizePrompt, setCorsHeaders, Type } from '../lib/gemini.js';
+import { getAIClientForUser, getUserTextModel, getThinkingConfig, sanitizePrompt, setCorsHeaders, Type, callGeminiWithRetry, parseGeminiError } from '../lib/gemini.js';
 import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from '../lib/openai.js';
 
 interface GenerateLongformRequest {
@@ -190,28 +190,34 @@ const pass2Schema = {
 async function generateWithGemini(aiClient: any, textModel: string, topic: string, duration: number, totalScenes: number, reference: string) {
   // Pass 1: 나레이션 + 스토리 구조
   const pass1Prompt = buildPass1Prompt(topic, duration, totalScenes, reference);
-  const pass1Response = await aiClient.models.generateContent({
-    model: textModel,
-    contents: pass1Prompt,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: pass1Schema,
-      ...getThinkingConfig(textModel),
-    },
-  });
+  const pass1Response = await callGeminiWithRetry<any>(
+    () => aiClient.models.generateContent({
+      model: textModel,
+      contents: pass1Prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: pass1Schema,
+        ...getThinkingConfig(textModel),
+      },
+    }),
+    { label: 'longform-scenario-pass1' },
+  );
   const pass1Result = JSON.parse(pass1Response.text!);
 
   // Pass 2: 나레이션 기반 이미지 프롬프트 생성
   const pass2Prompt = buildPass2Prompt(pass1Result);
-  const pass2Response = await aiClient.models.generateContent({
-    model: textModel,
-    contents: pass2Prompt,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: pass2Schema,
-      ...getThinkingConfig(textModel),
-    },
-  });
+  const pass2Response = await callGeminiWithRetry<any>(
+    () => aiClient.models.generateContent({
+      model: textModel,
+      contents: pass2Prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: pass2Schema,
+        ...getThinkingConfig(textModel),
+      },
+    }),
+    { label: 'longform-scenario-pass2' },
+  );
   const pass2Result = JSON.parse(pass2Response.text!);
 
   return { pass1Result, pass2Result };
@@ -309,10 +315,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ scenario: result });
   } catch (e) {
     console.error('[longform/generate-scenario] Error:', e);
-    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-    return res.status(500).json({
-      error: `Longform scenario generation failed: ${errorMessage}`,
-      code: 'GENERATION_FAILED',
+    const detail = parseGeminiError(e);
+    const isTransient = detail.isRetryable;
+    const rawMessage = e instanceof Error ? e.message : 'Unknown error';
+
+    return res.status(isTransient ? 503 : 500).json({
+      error: isTransient
+        ? detail.userMessage
+        : `Longform scenario generation failed: ${rawMessage}`,
+      code: isTransient ? detail.code : 'GENERATION_FAILED',
+      retryable: isTransient,
     });
   }
 }

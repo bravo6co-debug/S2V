@@ -5,6 +5,7 @@
 
 import { GoogleGenAI, Modality, Part, Type } from "@google/genai";
 import { getSettings as getSettingsFromDB, findUserById, getUserSettings, type UserSettings } from './mongodb.js';
+import { createLogger } from './logger.js';
 
 // Default API key from environment
 const defaultApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
@@ -417,6 +418,144 @@ export const sanitizePrompt = (prompt: string, maxLength: number = 2000): string
 
     return cleaned;
 };
+
+// ============================================
+// GEMINI TRANSIENT ERROR RETRY
+// ============================================
+
+export type GeminiErrorCode =
+    | 'SERVICE_UNAVAILABLE'  // 503
+    | 'RATE_LIMITED'         // 429 / RESOURCE_EXHAUSTED
+    | 'TIMEOUT'              // 504 / DEADLINE_EXCEEDED
+    | 'INTERNAL'             // 500
+    | 'UNKNOWN';
+
+export interface GeminiErrorDetail {
+    status?: number;
+    isRetryable: boolean;
+    code: GeminiErrorCode;
+    userMessage: string;
+    rawMessage: string;
+}
+
+/**
+ * Gemini SDK가 던지는 에러를 분석해 재시도 가능 여부와 사용자 친화적 메시지를 산출.
+ * - 503 UNAVAILABLE / 429 RESOURCE_EXHAUSTED / 504 / 500 등 일시적 오류는 재시도 대상.
+ */
+export function parseGeminiError(error: unknown): GeminiErrorDetail {
+    const rawMessage = error instanceof Error ? error.message : String(error);
+
+    // HTTP status 추출: "code":503 (Google API JSON) 또는 4xx/5xx 패턴
+    const codeMatch = rawMessage.match(/"code"\s*:\s*(\d{3})/);
+    const statusMatch = codeMatch || rawMessage.match(/\b(4\d{2}|5\d{2})\b/);
+    const status = statusMatch ? parseInt(statusMatch[1], 10) : undefined;
+
+    const upper = rawMessage.toUpperCase();
+    const isUnavailable = status === 503 || upper.includes('UNAVAILABLE');
+    const isRateLimited = status === 429 || upper.includes('RESOURCE_EXHAUSTED') || upper.includes('QUOTA_EXCEEDED');
+    const isTimeout = status === 504 || upper.includes('DEADLINE_EXCEEDED');
+    const isInternal = status === 500 || (upper.includes('INTERNAL') && !upper.includes('INTERNAL_API_KEY'));
+
+    if (isUnavailable) {
+        return {
+            status,
+            isRetryable: true,
+            code: 'SERVICE_UNAVAILABLE',
+            userMessage: 'AI 서비스(Gemini)가 일시적으로 혼잡합니다. 잠시 후 다시 시도해 주세요.',
+            rawMessage,
+        };
+    }
+    if (isRateLimited) {
+        return {
+            status,
+            isRetryable: true,
+            code: 'RATE_LIMITED',
+            userMessage: 'AI 사용량 한도에 도달했습니다. 잠시 후 다시 시도하거나 설정에서 다른 API 키를 사용해 주세요.',
+            rawMessage,
+        };
+    }
+    if (isTimeout) {
+        return {
+            status,
+            isRetryable: true,
+            code: 'TIMEOUT',
+            userMessage: 'AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.',
+            rawMessage,
+        };
+    }
+    if (isInternal) {
+        return {
+            status,
+            isRetryable: true,
+            code: 'INTERNAL',
+            userMessage: 'AI 서비스에 일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+            rawMessage,
+        };
+    }
+
+    return {
+        status,
+        isRetryable: false,
+        code: 'UNKNOWN',
+        userMessage: rawMessage,
+        rawMessage,
+    };
+}
+
+interface RetryOptions {
+    maxAttempts?: number;
+    baseDelayMs?: number;
+    label?: string;
+}
+
+const retryLogger = createLogger('gemini-retry');
+
+/**
+ * Gemini API 호출을 일시적 오류(503/429/504/500) 발생 시 지수 백오프로 재시도.
+ * 기본: 최대 3회, 지연 ~0.5s → 1.5s → 4s (+ 0~300ms jitter)
+ */
+export async function callGeminiWithRetry<T>(
+    fn: () => Promise<T>,
+    options: RetryOptions = {},
+): Promise<T> {
+    const maxAttempts = options.maxAttempts ?? 3;
+    const baseDelayMs = options.baseDelayMs ?? 500;
+    const label = options.label ?? 'gemini-call';
+
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+            const detail = parseGeminiError(error);
+
+            if (!detail.isRetryable || attempt === maxAttempts) {
+                retryLogger.warn(`${label} failed after ${attempt} attempt(s)`, {
+                    attempt,
+                    code: detail.code,
+                    status: detail.status,
+                    retryable: detail.isRetryable,
+                });
+                throw error;
+            }
+
+            // 지수 백오프 + jitter
+            const delay = baseDelayMs * Math.pow(3, attempt - 1) + Math.random() * 300;
+            retryLogger.info(`${label} retrying`, {
+                attempt,
+                nextAttempt: attempt + 1,
+                maxAttempts,
+                code: detail.code,
+                status: detail.status,
+                delayMs: Math.round(delay),
+            });
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+
+    throw lastError;
+}
 
 // ============================================
 // CORS CONFIGURATION

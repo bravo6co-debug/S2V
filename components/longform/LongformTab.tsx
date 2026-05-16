@@ -21,6 +21,7 @@ export const LongformTab: React.FC = () => {
     scenario,
     isGenerating: isGeneratingScenario,
     error: scenarioError,
+    errorRetryable: scenarioErrorRetryable,
     generateScenario,
     updateScene,
     adjustNarration,
@@ -334,13 +335,23 @@ export const LongformTab: React.FC = () => {
       {/* 에러 표시 */}
       {displayError && (
         <div className="mx-4 mb-2 p-3 bg-red-900/30 border border-red-700/50 rounded-lg">
-          <p className="text-red-400 text-sm">{displayError}</p>
-          <button
-            onClick={() => { setError(null); clearError(); clearCharacterError(); }}
-            className="text-red-500 text-xs underline mt-1"
-          >
-            닫기
-          </button>
+          <p className="text-red-400 text-sm whitespace-pre-line">{displayError}</p>
+          <div className="flex items-center gap-3 mt-1.5">
+            {scenarioError && scenarioErrorRetryable && config && !isGeneratingScenario && (
+              <button
+                onClick={() => { clearError(); handleGenerateScenario(config); }}
+                className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded transition-colors"
+              >
+                다시 시도
+              </button>
+            )}
+            <button
+              onClick={() => { setError(null); clearError(); clearCharacterError(); }}
+              className="text-red-500 text-xs underline"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       )}
 

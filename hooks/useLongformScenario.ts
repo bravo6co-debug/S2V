@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
 import type { LongformConfig, LongformScenario, LongformScene } from '../types/longform';
-import { generateLongformScenario, validateNarration } from '../services/longformApiClient';
+import { generateLongformScenario, validateNarration, LongformApiError } from '../services/longformApiClient';
 
 interface UseLongformScenarioReturn {
   scenario: LongformScenario | null;
   isGenerating: boolean;
   error: string | null;
+  errorRetryable: boolean;
+  errorCode: string | null;
 
   setScenario: (scenario: LongformScenario | null) => void;
   generateScenario: (config: LongformConfig) => Promise<LongformScenario>;
@@ -24,19 +26,34 @@ export function useLongformScenario(): UseLongformScenarioReturn {
   const [scenario, setScenario] = useState<LongformScenario | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorRetryable, setErrorRetryable] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isAdjustingNarration, setIsAdjustingNarration] = useState<number | null>(null);
+
+  const applyError = (err: unknown, fallback: string) => {
+    const message = err instanceof Error ? err.message : fallback;
+    setError(message);
+    if (err instanceof LongformApiError) {
+      setErrorRetryable(err.retryable);
+      setErrorCode(err.code);
+    } else {
+      setErrorRetryable(false);
+      setErrorCode(null);
+    }
+  };
 
   const generateScenario = useCallback(async (config: LongformConfig): Promise<LongformScenario> => {
     setIsGenerating(true);
     setError(null);
+    setErrorRetryable(false);
+    setErrorCode(null);
 
     try {
       const result = await generateLongformScenario(config);
       setScenario(result);
       return result;
     } catch (err) {
-      const message = err instanceof Error ? err.message : '시나리오 생성에 실패했습니다.';
-      setError(message);
+      applyError(err, '시나리오 생성에 실패했습니다.');
       throw err;
     } finally {
       setIsGenerating(false);
@@ -77,18 +94,24 @@ export function useLongformScenario(): UseLongformScenarioReturn {
         narrationCharCount: result.charCount,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '나레이션 보정에 실패했습니다.');
+      applyError(err, '나레이션 보정에 실패했습니다.');
     } finally {
       setIsAdjustingNarration(null);
     }
   }, [scenario, updateScene]);
 
-  const clearError = useCallback(() => setError(null), []);
+  const clearError = useCallback(() => {
+    setError(null);
+    setErrorRetryable(false);
+    setErrorCode(null);
+  }, []);
 
   return {
     scenario,
     isGenerating,
     error,
+    errorRetryable,
+    errorCode,
     setScenario,
     generateScenario,
     updateScene,

@@ -3,6 +3,23 @@ import type { LongformConfig, LongformScenario, LongformScene, LongformCharacter
 const API_BASE = '';
 const TOKEN_KEY = 's2v_auth_token';
 
+export class LongformApiError extends Error {
+  code: string;
+  retryable: boolean;
+  status: number;
+
+  constructor(
+    message: string,
+    options: { code?: string; retryable?: boolean; status?: number } = {},
+  ) {
+    super(message);
+    this.name = 'LongformApiError';
+    this.code = options.code ?? 'UNKNOWN';
+    this.retryable = options.retryable ?? false;
+    this.status = options.status ?? 0;
+  }
+}
+
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TOKEN_KEY);
@@ -11,7 +28,14 @@ function getAuthToken(): string | null {
 async function handleResponse<T>(response: Response, context: string): Promise<T> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || `${context} failed: ${response.status}`);
+    throw new LongformApiError(
+      errorData.error || `${context} failed: ${response.status}`,
+      {
+        code: typeof errorData.code === 'string' ? errorData.code : undefined,
+        retryable: Boolean(errorData.retryable),
+        status: response.status,
+      },
+    );
   }
   return response.json();
 }
