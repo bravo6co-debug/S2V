@@ -30,6 +30,14 @@ export interface TtsConfig {
 // ─── 기본 설정 ────────────────────────────────────
 export type LongformDuration = 10 | 20 | 30 | 40 | 50 | 60;
 
+// 이미지 빈도 — 롱폼1: 1분당 1장, 롱폼2: 20초당 1장 (씬당 3장)
+export type ImageFrequency = 'per-minute' | 'per-20-seconds';
+
+export const SUB_IMAGES_PER_SCENE: Record<ImageFrequency, number> = {
+  'per-minute': 1,
+  'per-20-seconds': 3,
+};
+
 export interface LongformConfig {
   topic: string;
   referenceText?: string;
@@ -37,6 +45,7 @@ export interface LongformConfig {
   imageModel: LongformImageModel;
   textModel?: string;
   tts: TtsConfig;
+  imageFrequency?: ImageFrequency; // 미지정 시 기본값 'per-minute' (롱폼1)
 }
 
 // ─── 에셋 상태 ──────────────────────────────────
@@ -45,11 +54,21 @@ export type AssetStatus = 'pending' | 'generating' | 'completed' | 'failed';
 // ─── 본편 씬 ─────────────────────────────────────
 export type StoryPhase = '도입' | '전개' | '심화' | '절정' | '마무리';
 
+// ─── Sub-Scene (씬 내부의 단일 이미지 단위) ─────────────
+// 롱폼1: 씬당 sub-scene 1개 (60초 = 1장)
+// 롱폼2: 씬당 sub-scene 3개 (60초 = 20초×3장)
+export interface SubScene {
+  imagePrompt: string;
+  generatedImage?: ImageData;
+  imageStatus: AssetStatus;
+  imageError?: string;
+  userUploaded?: boolean;          // 사용자가 직접 업로드한 이미지면 true → AI 생성 스킵
+}
+
 export interface LongformScene {
   id: string;
   sceneNumber: number;
   timeRange: string;
-  imagePrompt: string;
   narrationKeywords: string[];     // 나레이션에서 추출한 시각화 핵심 키워드 (3~5개)
   narration: string;
   narrationCharCount: number;
@@ -57,12 +76,24 @@ export interface LongformScene {
   mood: string;
   cameraAngle?: string;            // 카메라 앵글 (예: "low angle", "bird's eye")
   lightingMood?: string;           // 조명/분위기 (예: "warm sunset glow")
-  generatedImage?: ImageData;
   narrationAudio?: NarrationAudio;
-  imageStatus: AssetStatus;
-  imageError?: string;             // 이미지 생성 실패 원인
   narrationStatus: AssetStatus;
-  userUploaded?: boolean;          // 사용자가 직접 업로드한 이미지 사용 시 true → AI 생성 스킵
+
+  // ─── 신규 모델 (배열 기반) ─────────────────────────
+  // 롱폼1 = 길이 1, 롱폼2 = 길이 3
+  subScenes: SubScene[];
+
+  // ─── Legacy 필드 (subScenes[0]과 동기화 유지, 점진 마이그레이션용) ────
+  // @deprecated subScenes[0].imagePrompt 사용 권장
+  imagePrompt: string;
+  // @deprecated subScenes[0].generatedImage 사용 권장
+  generatedImage?: ImageData;
+  // @deprecated subScenes[0].imageStatus 사용 권장
+  imageStatus: AssetStatus;
+  // @deprecated subScenes[0].imageError 사용 권장
+  imageError?: string;
+  // @deprecated subScenes[0].userUploaded 사용 권장
+  userUploaded?: boolean;
 }
 
 // ─── 캐릭터 ─────────────────────────────────────

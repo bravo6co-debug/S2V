@@ -60,6 +60,7 @@ export async function generateLongformScenario(config: LongformConfig): Promise<
     duration: config.duration,
     ...(config.textModel && { textModel: config.textModel }),
     ...(config.referenceText && { referenceText: config.referenceText }),
+    ...(config.imageFrequency && { imageFrequency: config.imageFrequency }),
   }, 'Generate Longform Scenario');
 
   return {

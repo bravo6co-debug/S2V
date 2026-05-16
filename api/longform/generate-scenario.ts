@@ -3,11 +3,18 @@ import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, getUserTextModel, getThinkingConfig, sanitizePrompt, setCorsHeaders, Type, callGeminiWithRetry, parseGeminiError } from '../lib/gemini.js';
 import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from '../lib/openai.js';
 
+type ImageFrequency = 'per-minute' | 'per-20-seconds';
+
 interface GenerateLongformRequest {
   topic: string;
   duration: number;
   textModel?: string;
   referenceText?: string;
+  imageFrequency?: ImageFrequency; // 'per-minute' = 씬당 1장(기본), 'per-20-seconds' = 씬당 3장
+}
+
+function subImagesPerScene(freq?: ImageFrequency): number {
+  return freq === 'per-20-seconds' ? 3 : 1;
 }
 
 // ─── Pass 1: 나레이션 + 스토리 구조 생성 ────────────
@@ -78,10 +85,10 @@ ${reference ? `\n## 참고 자료\n아래는 시나리오 작성에 참고할 �
 }
 
 // ─── Pass 2: 나레이션 기반 이미지 프롬프트 생성 ──────
-function buildPass2Prompt(pass1Result: any): string {
+function buildPass2Prompt(pass1Result: any, perScene: number): string {
   const sceneSummaries = pass1Result.scenes.map((s: any) =>
     `[씬 ${s.sceneNumber}]
-- 나레이션 요약: ${s.narration.substring(0, 100)}...
+- 나레이션 전문: ${s.narration}
 - 키워드: ${(s.narrationKeywords || []).join(', ')}
 - 스토리 단계: ${s.storyPhase}
 - 분위기: ${s.mood}
@@ -89,8 +96,21 @@ function buildPass2Prompt(pass1Result: any): string {
 - 조명: ${s.lightingMood || 'neutral'}`
   ).join('\n\n');
 
+  const countInstruction = perScene === 1
+    ? `각 씬마다 정확히 1개의 이미지 프롬프트를 생성하세요. 이 프롬프트는 씬 전체(60초)를 대표하는 시각적 핵심 순간을 담아야 합니다.`
+    : `각 씬마다 정확히 ${perScene}개의 이미지 프롬프트를 생성하세요. 이 ${perScene}개는 씬의 60초 나레이션을 ${Math.round(60 / perScene)}초씩 균등하게 시간순으로 나눈 각 구간의 시각적 핵심 순간을 담아야 합니다.
+
+⚠️ 중요 — ${perScene}개 프롬프트 작성 시 지킬 점:
+1. 시간 흐름: 1번째는 도입(처음 ${Math.round(60 / perScene)}초), 2번째는 전환(중간 ${Math.round(60 / perScene)}초), ${perScene === 3 ? '3번째는 마무리(마지막 20초)' : `${perScene}번째는 마무리`} — 나레이션 시간 흐름과 일치하도록 배치
+2. 시각적 연속성: 같은 씬의 ${perScene}장은 같은 환경/캐릭터/스타일을 유지하며, 카메라 위치·동작·표정·상황만 변화
+3. 다양성: ${perScene}장이 거의 동일하지 않도록 카메라 앵글, 동작, 표정, 시선 등에 변화를 두기
+4. 나레이션과 동기: 각 프롬프트는 해당 시간대의 나레이션 내용을 시각화해야 함`;
+
   return `당신은 AI 이미지 생성 전문가입니다.
 아래 시나리오의 각 씬에 대해 고품질 이미지 프롬프트를 생성하세요.
+
+## 생성 개수 규칙
+${countInstruction}
 
 ## 이미지 프롬프트 작성 필수 규칙
 
@@ -125,7 +145,11 @@ ${sceneSummaries}
   "scenePrompts": [
     {
       "sceneNumber": 1,
-      "imagePrompt": "상세한 이미지 프롬프트 (영어, 80~150단어, 위 구조 준수)"
+      "imagePrompts": [
+        "${perScene === 1 ? '씬 전체를 대표하는 1개 프롬프트 (영어, 80~150단어)' : `1번째 (0~${Math.round(60 / perScene)}초) 프롬프트 (영어, 80~150단어)`}"${perScene > 1 ? `,
+        "2번째 (${Math.round(60 / perScene)}~${Math.round(60 / perScene * 2)}초) 프롬프트 (영어, 80~150단어)"` : ''}${perScene > 2 ? `,
+        "3번째 (${Math.round(60 / perScene * 2)}~60초) 프롬프트 (영어, 80~150단어)"` : ''}
+      ]
     }
   ]
 }`;
@@ -177,9 +201,13 @@ const pass2Schema = {
         type: Type.OBJECT,
         properties: {
           sceneNumber: { type: Type.NUMBER, description: '씬 번호' },
-          imagePrompt: { type: Type.STRING, description: '상세 이미지 프롬프트 (영어, 80~150단어)' },
+          imagePrompts: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: '씬당 1개 또는 3개의 상세 이미지 프롬프트 (영어, 각 80~150단어). 시간 흐름순으로 배열',
+          },
         },
-        required: ['sceneNumber', 'imagePrompt'],
+        required: ['sceneNumber', 'imagePrompts'],
       },
     },
   },
@@ -187,7 +215,7 @@ const pass2Schema = {
 };
 
 // ─── Gemini 2-pass 실행 ─────────────────────────────
-async function generateWithGemini(aiClient: any, textModel: string, topic: string, duration: number, totalScenes: number, reference: string) {
+async function generateWithGemini(aiClient: any, textModel: string, topic: string, duration: number, totalScenes: number, reference: string, perScene: number) {
   // Pass 1: 나레이션 + 스토리 구조
   const pass1Prompt = buildPass1Prompt(topic, duration, totalScenes, reference);
   const pass1Response = await callGeminiWithRetry<any>(
@@ -204,8 +232,8 @@ async function generateWithGemini(aiClient: any, textModel: string, topic: strin
   );
   const pass1Result = JSON.parse(pass1Response.text!);
 
-  // Pass 2: 나레이션 기반 이미지 프롬프트 생성
-  const pass2Prompt = buildPass2Prompt(pass1Result);
+  // Pass 2: 나레이션 기반 이미지 프롬프트 생성 (씬당 perScene 개)
+  const pass2Prompt = buildPass2Prompt(pass1Result, perScene);
   const pass2Response = await callGeminiWithRetry<any>(
     () => aiClient.models.generateContent({
       model: textModel,
@@ -224,7 +252,7 @@ async function generateWithGemini(aiClient: any, textModel: string, topic: strin
 }
 
 // ─── OpenAI 2-pass 실행 ─────────────────────────────
-async function generateWithOpenAI(openaiKey: string, textModel: string, topic: string, duration: number, totalScenes: number, reference: string) {
+async function generateWithOpenAI(openaiKey: string, textModel: string, topic: string, duration: number, totalScenes: number, reference: string, perScene: number) {
   const systemPrompt = 'You are a professional YouTube video scenario writer. Always respond with valid JSON matching the requested structure. Write narrations in Korean and everything else in the specified language.';
 
   // Pass 1: 나레이션 + 스토리 구조
@@ -235,8 +263,8 @@ async function generateWithOpenAI(openaiKey: string, textModel: string, topic: s
   });
   const pass1Result = JSON.parse(pass1Text);
 
-  // Pass 2: 나레이션 기반 이미지 프롬프트 생성
-  const pass2Prompt = buildPass2Prompt(pass1Result);
+  // Pass 2: 나레이션 기반 이미지 프롬프트 생성 (씬당 perScene 개)
+  const pass2Prompt = buildPass2Prompt(pass1Result, perScene);
   const pass2Text = await generateTextWithOpenAI(openaiKey, textModel, pass2Prompt, {
     systemPrompt: 'You are an expert AI image prompt engineer. Always respond with valid JSON. Write all image prompts in English, following the exact structure and quality rules specified.',
     jsonMode: true,
@@ -247,30 +275,56 @@ async function generateWithOpenAI(openaiKey: string, textModel: string, topic: s
 }
 
 // ─── 결과 병합 ──────────────────────────────────────
-function mergeResults(pass1: any, pass2: any) {
-  // Pass2의 이미지 프롬프트를 씬 번호로 매핑
-  const promptMap = new Map<number, string>();
+function mergeResults(pass1: any, pass2: any, perScene: number) {
+  // Pass2의 이미지 프롬프트 배열을 씬 번호로 매핑
+  const promptMap = new Map<number, string[]>();
   for (const sp of (pass2.scenePrompts || [])) {
-    promptMap.set(sp.sceneNumber, sp.imagePrompt);
+    // imagePrompts 배열 우선, 구버전 호환 위해 imagePrompt(단수) 단일 값도 흡수
+    const prompts: string[] = Array.isArray(sp.imagePrompts)
+      ? sp.imagePrompts
+      : (typeof sp.imagePrompt === 'string' ? [sp.imagePrompt] : []);
+    promptMap.set(sp.sceneNumber, prompts);
   }
 
   return {
     id: crypto.randomUUID(),
-    scenes: pass1.scenes.map((scene: any, index: number) => ({
-      id: crypto.randomUUID(),
-      sceneNumber: scene.sceneNumber || index + 1,
-      timeRange: scene.timeRange || `${index}:00~${index + 1}:00`,
-      imagePrompt: promptMap.get(scene.sceneNumber || index + 1) || scene.narrationKeywords?.join(', ') || '',
-      narrationKeywords: scene.narrationKeywords || [],
-      narration: scene.narration,
-      narrationCharCount: scene.narration?.length || 0,
-      storyPhase: scene.storyPhase || '전개',
-      mood: scene.mood || '중립',
-      cameraAngle: scene.cameraAngle || 'medium shot',
-      lightingMood: scene.lightingMood || 'neutral ambient lighting',
-      imageStatus: 'pending',
-      narrationStatus: 'pending',
-    })),
+    scenes: pass1.scenes.map((scene: any, index: number) => {
+      const sceneNum = scene.sceneNumber || index + 1;
+      const keywordsFallback = scene.narrationKeywords?.join(', ') || '';
+      const rawPrompts = promptMap.get(sceneNum) || [];
+
+      // 정확히 perScene 개 보장 — 부족하면 마지막을 복제, 넘치면 자르기
+      const prompts: string[] = [];
+      for (let i = 0; i < perScene; i++) {
+        prompts.push(rawPrompts[i] || rawPrompts[rawPrompts.length - 1] || keywordsFallback);
+      }
+
+      const subScenes = prompts.map(prompt => ({
+        imagePrompt: prompt,
+        imageStatus: 'pending' as const,
+      }));
+
+      return {
+        id: crypto.randomUUID(),
+        sceneNumber: sceneNum,
+        timeRange: scene.timeRange || `${index}:00~${index + 1}:00`,
+        narrationKeywords: scene.narrationKeywords || [],
+        narration: scene.narration,
+        narrationCharCount: scene.narration?.length || 0,
+        storyPhase: scene.storyPhase || '전개',
+        mood: scene.mood || '중립',
+        cameraAngle: scene.cameraAngle || 'medium shot',
+        lightingMood: scene.lightingMood || 'neutral ambient lighting',
+        narrationStatus: 'pending',
+
+        // 신규 모델
+        subScenes,
+
+        // Legacy 동기화 (subScenes[0]과 매칭)
+        imagePrompt: subScenes[0].imagePrompt,
+        imageStatus: 'pending',
+      };
+    }),
     metadata: pass1.metadata,
     createdAt: Date.now(),
   };
@@ -288,7 +342,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { topic, duration, textModel: requestTextModel, referenceText } = req.body as GenerateLongformRequest;
+    const { topic, duration, textModel: requestTextModel, referenceText, imageFrequency } = req.body as GenerateLongformRequest;
 
     if (!topic || !duration) {
       return res.status(400).json({ error: 'topic and duration are required' });
@@ -298,19 +352,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sanitizedReference = referenceText ? sanitizePrompt(referenceText, 5000) : '';
     const totalScenes = duration;
     const textModel = requestTextModel || await getUserTextModel(auth.userId);
+    const perScene = subImagesPerScene(imageFrequency);
 
     let pass1Result: any;
     let pass2Result: any;
 
     if (isOpenAIModel(textModel)) {
       const openaiKey = await getOpenAIKeyForUser(auth.userId);
-      ({ pass1Result, pass2Result } = await generateWithOpenAI(openaiKey, textModel, sanitizedTopic, duration, totalScenes, sanitizedReference));
+      ({ pass1Result, pass2Result } = await generateWithOpenAI(openaiKey, textModel, sanitizedTopic, duration, totalScenes, sanitizedReference, perScene));
     } else {
       const aiClient = await getAIClientForUser(auth.userId);
-      ({ pass1Result, pass2Result } = await generateWithGemini(aiClient, textModel, sanitizedTopic, duration, totalScenes, sanitizedReference));
+      ({ pass1Result, pass2Result } = await generateWithGemini(aiClient, textModel, sanitizedTopic, duration, totalScenes, sanitizedReference, perScene));
     }
 
-    const result = mergeResults(pass1Result, pass2Result);
+    const result = mergeResults(pass1Result, pass2Result, perScene);
 
     return res.status(200).json({ scenario: result });
   } catch (e) {
