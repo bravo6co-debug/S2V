@@ -6,10 +6,19 @@ import { buildImagePrompt } from '../lib/imagePromptBuilder.js';
 
 interface SceneInput {
   sceneNumber: number;
+  subIndex?: number;          // 씬 내 sub-image 인덱스 (롱폼2 용, 미지정 시 0)
   imagePrompt: string;
   cameraAngle?: string;
   lightingMood?: string;
   mood?: string;
+}
+
+interface SceneResult {
+  sceneNumber: number;
+  subIndex: number;           // 항상 응답에 포함 — 프론트에서 매핑할 키
+  success: boolean;
+  image?: { mimeType: string; data: string };
+  error?: string;
 }
 
 const MAX_RETRIES = 3;
@@ -35,13 +44,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'scenes array is required' });
     }
 
-    const results: { sceneNumber: number; success: boolean; image?: any; error?: string }[] = [];
+    const results: SceneResult[] = [];
 
     // Process in batches
     for (let i = 0; i < scenes.length; i += batchSize) {
       const batch = scenes.slice(i, i + batchSize) as SceneInput[];
 
-      const batchPromises = batch.map(async (scene) => {
+      const batchPromises = batch.map(async (scene): Promise<SceneResult> => {
+        const subIndex = scene.subIndex ?? 0; // 미지정 시 0 (롱폼1 호환)
         let lastError = '';
 
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -56,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (isEachlabsImageModel(imageModel)) {
               const apiKey = await getEachLabsApiKey(auth.userId!);
               const result = await generateEachlabsImage({ apiKey, model: imageModel, prompt, aspectRatio: '16:9' });
-              return { sceneNumber: scene.sceneNumber, success: true, image: result };
+              return { sceneNumber: scene.sceneNumber, subIndex, success: true, image: result };
             }
 
             const aiClient = await getAIClientForUser(auth.userId!);
@@ -69,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // 안전 정책 위반 확인 — 재시도 불가 (즉시 실패)
             const safetyError = extractSafetyError(response as any);
             if (safetyError) {
-              return { sceneNumber: scene.sceneNumber, success: false, error: `[안전정책] ${safetyError.message}` };
+              return { sceneNumber: scene.sceneNumber, subIndex, success: false, error: `[안전정책] ${safetyError.message}` };
             }
 
             const parts = response.candidates?.[0]?.content?.parts || [];
@@ -77,8 +87,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               if (part.inlineData) {
                 return {
                   sceneNumber: scene.sceneNumber,
+                  subIndex,
                   success: true,
-                  image: { mimeType: part.inlineData.mimeType, data: part.inlineData.data },
+                  image: { mimeType: part.inlineData.mimeType!, data: part.inlineData.data! },
                 };
               }
             }
@@ -91,13 +102,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           // 마지막 시도가 아니면 대기 후 재시도
           if (attempt < MAX_RETRIES - 1) {
-            console.log(`[Scene ${scene.sceneNumber}] Retry ${attempt + 1}/${MAX_RETRIES - 1} after ${RETRY_DELAYS[attempt]}ms`);
+            console.log(`[Scene ${scene.sceneNumber} sub${subIndex}] Retry ${attempt + 1}/${MAX_RETRIES - 1} after ${RETRY_DELAYS[attempt]}ms`);
             await sleep(RETRY_DELAYS[attempt]);
           }
         }
 
         // 3회 모두 실패
-        return { sceneNumber: scene.sceneNumber, success: false, error: lastError };
+        return { sceneNumber: scene.sceneNumber, subIndex, success: false, error: lastError };
       });
 
       const batchResults = await Promise.all(batchPromises);

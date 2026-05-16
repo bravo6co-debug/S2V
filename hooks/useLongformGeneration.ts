@@ -52,10 +52,15 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
   ): Promise<LongformScenario> => {
     cancelledRef.current = false;
     setIsGenerating(true);
-    const sceneCount = scenario.scenes.length;
-    // 사용자가 직접 업로드한 씬은 이미지 생성 대상에서 제외 — 시작 시점부터 completed로 카운트
-    const userUploadedCount = scenario.scenes.filter(s => s.userUploaded).length;
-    setProgress(createInitialProgress(sceneCount, userUploadedCount));
+
+    // 전체 sub-image 카운트 계산 (롱폼1=씬당1, 롱폼2=씬당3)
+    const allSubImages = scenario.scenes.flatMap(scene =>
+      (scene.subScenes || [{ imagePrompt: scene.imagePrompt, imageStatus: scene.imageStatus, userUploaded: scene.userUploaded }])
+        .map((sub, subIndex) => ({ scene, sub, subIndex }))
+    );
+    const totalSubImages = allSubImages.length;
+    const userUploadedCount = allSubImages.filter(x => x.sub.userUploaded).length;
+    setProgress(createInitialProgress(totalSubImages, userUploadedCount));
 
     let updatedScenario = { ...scenario };
 
@@ -65,14 +70,14 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
 
       if (cancelledRef.current) throw new Error('Cancelled');
 
-      // 사용자가 업로드한 이미지가 있는 씬은 백엔드 호출에서 제외
-      const scenesNeedingImage = scenario.scenes.filter(s => !s.userUploaded);
+      // 사용자가 업로드하지 않은 sub-image만 백엔드 호출 대상
+      const subImagesToGenerate = allSubImages.filter(x => !x.sub.userUploaded);
 
       // Enrich scene image prompts with character descriptions + metadata for consistency
-      const sceneInputs = scenesNeedingImage.map(scene => {
+      const sceneInputs = subImagesToGenerate.map(({ scene, sub, subIndex }) => {
         const sceneChars = (scenario.characters || [])
           .filter(c => c.sceneNumbers.includes(scene.sceneNumber));
-        let imagePrompt = scene.imagePrompt;
+        let imagePrompt = sub.imagePrompt;
         if (sceneChars.length > 0) {
           const charDesc = sceneChars
             .map(c => `[${c.nameEn}: ${c.appearanceDescription}, wearing ${c.outfit}]`)
@@ -81,6 +86,7 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
         }
         return {
           sceneNumber: scene.sceneNumber,
+          subIndex,
           imagePrompt,
           cameraAngle: scene.cameraAngle,
           lightingMood: scene.lightingMood,
@@ -89,10 +95,10 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
       });
       const narrationInputs = scenario.scenes.map(s => ({ sceneNumber: s.sceneNumber, narration: s.narration }));
 
-      // 이미지 생성은 필요한 씬이 있을 때만 호출 (모두 사용자 업로드면 스킵)
+      // 이미지 생성은 필요한 sub-image가 있을 때만 호출
       const imagePromise = sceneInputs.length > 0
         ? generateSceneImages(sceneInputs, config.imageModel, 5)
-        : Promise.resolve({ results: [] as { sceneNumber: number; success: boolean; image?: any; error?: string }[] });
+        : Promise.resolve({ results: [] as Awaited<ReturnType<typeof generateSceneImages>>['results'] });
 
       const [imageResults, narrationResults] = await Promise.all([
         imagePromise,
@@ -105,19 +111,43 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
         ),
       ]);
 
-      // Apply image results (실패 원인도 저장) — 사용자 업로드 씬은 결과에 없으므로 그대로 유지
-      const updatedScenes = [...updatedScenario.scenes];
-      for (const r of imageResults.results) {
-        const idx = updatedScenes.findIndex(s => s.sceneNumber === r.sceneNumber);
-        if (idx >= 0) {
-          updatedScenes[idx] = {
-            ...updatedScenes[idx],
+      // sub-image 결과를 (sceneNumber, subIndex) 키로 씬에 적용 + legacy 필드 동기화 유지
+      const updatedScenes = updatedScenario.scenes.map(scene => {
+        const sceneResults = imageResults.results.filter(r => r.sceneNumber === scene.sceneNumber);
+        if (sceneResults.length === 0 && (!scene.subScenes || scene.subScenes.length === 0)) {
+          return scene;
+        }
+
+        // 기존 subScenes 복사 후 결과 적용 (사용자 업로드된 sub-image는 손대지 않음)
+        const existingSubs = scene.subScenes || [{
+          imagePrompt: scene.imagePrompt,
+          generatedImage: scene.generatedImage,
+          imageStatus: scene.imageStatus,
+          imageError: scene.imageError,
+          userUploaded: scene.userUploaded,
+        }];
+        const newSubs = existingSubs.map((sub, idx) => {
+          if (sub.userUploaded) return sub;
+          const r = sceneResults.find(res => res.subIndex === idx);
+          if (!r) return sub;
+          return {
+            ...sub,
             generatedImage: r.success ? r.image : undefined,
             imageStatus: (r.success ? 'completed' : 'failed') as AssetStatus,
             imageError: r.success ? undefined : r.error,
           };
-        }
-      }
+        });
+
+        // Legacy 필드는 subScenes[0]과 동기화
+        return {
+          ...scene,
+          subScenes: newSubs,
+          generatedImage: newSubs[0]?.generatedImage,
+          imageStatus: newSubs[0]?.imageStatus || 'pending',
+          imageError: newSubs[0]?.imageError,
+          userUploaded: newSubs[0]?.userUploaded,
+        };
+      });
 
       // Apply narration results
       for (const r of narrationResults.results) {

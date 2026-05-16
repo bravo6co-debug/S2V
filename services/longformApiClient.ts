@@ -88,18 +88,28 @@ export async function validateNarration(
 }
 
 // ─── 씬 이미지 일괄 생성 ─────────────────────────
+export interface SceneImageInput {
+  sceneNumber: number;
+  subIndex?: number;             // 씬 내 sub-image 인덱스 (롱폼2 용, 미지정 시 0)
+  imagePrompt: string;
+  cameraAngle?: string;
+  lightingMood?: string;
+  mood?: string;
+}
+
+export interface SceneImageResult {
+  sceneNumber: number;
+  subIndex: number;              // 백엔드가 항상 응답에 포함
+  success: boolean;
+  image?: { mimeType: string; data: string };
+  error?: string;
+}
+
 export async function generateSceneImages(
-  scenes: { sceneNumber: number; imagePrompt: string; cameraAngle?: string; lightingMood?: string; mood?: string }[],
+  scenes: SceneImageInput[],
   imageModel: string,
   batchSize: number = 5
-): Promise<{
-  results: {
-    sceneNumber: number;
-    success: boolean;
-    image?: { mimeType: string; data: string };
-    error?: string;
-  }[];
-}> {
+): Promise<{ results: SceneImageResult[] }> {
   return post('/api/longform/generate-scene-images', {
     scenes,
     imageModel,
