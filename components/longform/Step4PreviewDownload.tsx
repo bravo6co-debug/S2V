@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { LongformPlayer } from './LongformPlayer';
 import { splitScenesForExportMulti, longformScenesToRemotionScenes } from '../../services/longformVideoService';
-import { calculatePartRanges } from '../../types/longform';
-import type { LongformScenario, LongformConfig, LongformScene } from '../../types/longform';
+import { calculatePartRanges, IMAGE_MODEL_OPTIONS } from '../../types/longform';
+import type { LongformScenario, LongformConfig, LongformScene, LongformImageModel } from '../../types/longform';
 import type { PartExportState } from '../../hooks/useLongformExport';
 
 interface Step4PreviewDownloadProps {
@@ -14,7 +14,7 @@ interface Step4PreviewDownloadProps {
   onCancelExport: () => void;
   onDownloadPart: (partIndex: number) => void;
   onReset: () => void;
-  onRegenerateFailedScenes?: () => void;
+  onRegenerateFailedScenes?: (overrideImageModel?: string) => void;
   isRegenerating?: boolean;
 }
 
@@ -61,6 +61,8 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
   isRegenerating = false,
 }) => {
   const [showExportConfirm, setShowExportConfirm] = useState<number | null>(null);
+  // 실패 씬 재생성용 — 다른 모델로 재시도 가능
+  const [retryModel, setRetryModel] = useState<LongformImageModel>(config.imageModel);
 
   // 씬을 파트별로 분할
   const { parts, ranges } = useMemo(() => splitScenesForExportMulti(scenario), [scenario]);
@@ -145,28 +147,48 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
                 </ul>
               )}
               {onRegenerateFailedScenes && (
-                <button
-                  onClick={onRegenerateFailedScenes}
-                  disabled={isRegenerating || isExporting}
-                  className="mt-3 px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1.5"
-                >
-                  {isRegenerating ? (
-                    <>
-                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      재생성 중...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      실패 씬 재생성
-                    </>
-                  )}
-                </button>
+                <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                  <select
+                    value={retryModel}
+                    onChange={(e) => setRetryModel(e.target.value as LongformImageModel)}
+                    disabled={isRegenerating || isExporting}
+                    className="text-xs px-2 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-50 min-w-[200px]"
+                    title="재생성에 사용할 이미지 모델 선택"
+                  >
+                    {IMAGE_MODEL_OPTIONS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label} ({m.costPerImage}{m.value === config.imageModel ? ' · 원본' : ''})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => onRegenerateFailedScenes(retryModel)}
+                    disabled={isRegenerating || isExporting}
+                    className="px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1.5"
+                  >
+                    {isRegenerating ? (
+                      <>
+                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        재생성 중...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        선택한 모델로 재생성
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+              {retryModel !== config.imageModel && (
+                <p className="text-[10px] text-amber-300/60 mt-1.5">
+                  💡 다른 모델 선택 — 원본 모델이 타임아웃이거나 결과가 마음에 안 들 때 유용
+                </p>
               )}
             </div>
           </div>

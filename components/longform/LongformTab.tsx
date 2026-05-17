@@ -154,8 +154,8 @@ export const LongformTab: React.FC = () => {
     setCurrentStep(5);
   }, []);
 
-  // 실패한 씬 재생성 (Step5에서 호출)
-  const handleRegenerateFailedScenes = useCallback(async () => {
+  // 실패한 씬 재생성 (Step5에서 호출) — 다른 이미지 모델로 재시도 가능
+  const handleRegenerateFailedScenes = useCallback(async (overrideImageModel?: string) => {
     if (!scenario || !config) return;
 
     const failedScenes = scenario.scenes.filter(s => s.imageStatus === 'failed');
@@ -165,6 +165,16 @@ export const LongformTab: React.FC = () => {
     setError(null);
 
     try {
+      // 캐릭터 이미지 풀 빌드 (dedup)
+      const charImageMap = new Map<string, number>();
+      const characterImages: import('../../types').ImageData[] = [];
+      for (const char of (scenario.characters || [])) {
+        if (char.referenceImage && !charImageMap.has(char.id)) {
+          charImageMap.set(char.id, characterImages.length);
+          characterImages.push(char.referenceImage);
+        }
+      }
+
       const sceneInputs = failedScenes.map(scene => {
         const sceneChars = (scenario.characters || [])
           .filter(c => c.sceneNumbers.includes(scene.sceneNumber));
@@ -175,16 +185,29 @@ export const LongformTab: React.FC = () => {
             .join(' ');
           imagePrompt = `${charDesc} ${imagePrompt}`;
         }
+        const characterIndices = sceneChars
+          .map(c => charImageMap.get(c.id))
+          .filter((idx): idx is number => idx !== undefined)
+          .slice(0, 2);
         return {
           sceneNumber: scene.sceneNumber,
           imagePrompt,
           cameraAngle: scene.cameraAngle,
           lightingMood: scene.lightingMood,
           mood: scene.mood,
+          ...(characterIndices.length > 0 && { characterIndices }),
         };
       });
 
-      const imageResults = await generateSceneImages(sceneInputs, config.imageModel, 5);
+      const useImageModel = overrideImageModel || config.imageModel;
+      const imageResults = await generateSceneImages(
+        sceneInputs,
+        useImageModel,
+        5,
+        characterImages,
+        config.imageStyle,
+        config.aspectRatio,
+      );
 
       // 결과 적용
       const updatedScenes = [...scenario.scenes];

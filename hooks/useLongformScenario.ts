@@ -1,6 +1,58 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { LongformConfig, LongformScenario, LongformScene } from '../types/longform';
 import { generateLongformScenario, validateNarration, LongformApiError } from '../services/longformApiClient';
+
+const STORAGE_KEY = 's2v_longform_scenario_autosave';
+const STORAGE_VERSION = 2; // 모델 변경 시 bump
+
+interface AutosavePayload {
+  version: number;
+  savedAt: number;
+  scenario: LongformScenario;
+}
+
+function loadAutosave(): LongformScenario | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as AutosavePayload;
+    if (data.version !== STORAGE_VERSION) return null;
+    return data.scenario;
+  } catch {
+    return null;
+  }
+}
+
+function saveAutosave(scenario: LongformScenario | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!scenario) {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    const payload: AutosavePayload = { version: STORAGE_VERSION, savedAt: Date.now(), scenario };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (e) {
+    // 용량 초과 등 — base64 이미지 빼고 다시 시도
+    try {
+      const stripped: LongformScenario = {
+        ...scenario!,
+        scenes: scenario!.scenes.map(s => ({
+          ...s,
+          generatedImage: undefined,
+          narrationAudio: undefined,
+          subScenes: (s.subScenes || []).map(sub => ({ ...sub, generatedImage: undefined })),
+        })),
+        characters: (scenario!.characters || []).map(c => ({ ...c, referenceImage: undefined })),
+      };
+      const payload: AutosavePayload = { version: STORAGE_VERSION, savedAt: Date.now(), scenario: stripped };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      console.warn('[longform-autosave] 저장 실패', e);
+    }
+  }
+}
 
 interface UseLongformScenarioReturn {
   scenario: LongformScenario | null;
@@ -23,12 +75,21 @@ interface UseLongformScenarioReturn {
 }
 
 export function useLongformScenario(): UseLongformScenarioReturn {
-  const [scenario, setScenario] = useState<LongformScenario | null>(null);
+  // 마운트 시 localStorage에서 자동 복원 — 탭 이동/새로고침해도 시나리오 보존
+  const [scenario, setScenario] = useState<LongformScenario | null>(() => loadAutosave());
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorRetryable, setErrorRetryable] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isAdjustingNarration, setIsAdjustingNarration] = useState<number | null>(null);
+
+  // scenario 변경 시 디바운스로 localStorage 자동 저장
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveAutosave(scenario), 800);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [scenario]);
 
   const applyError = (err: unknown, fallback: string) => {
     const message = err instanceof Error ? err.message : fallback;
