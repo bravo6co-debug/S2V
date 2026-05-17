@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLongformScenario } from '../../hooks/useLongformScenario';
 import { useLongformGeneration } from '../../hooks/useLongformGeneration';
@@ -72,6 +72,19 @@ export const LongformTab: React.FC = () => {
   const [showKeyWarning, setShowKeyWarning] = useState(false);
   const [missingKeyMessage, setMissingKeyMessage] = useState('');
   const [isRegeneratingFailed, setIsRegeneratingFailed] = useState(false);
+
+  // autosave에서 복원된 시나리오에 config가 임베드되어 있으면 Step1 입력 자동 복원
+  // → 새로고침해도 Step 2부터 이어 작업 가능 + 재생성 시 동일 설정 사용
+  useEffect(() => {
+    if (!config && scenario?.config) {
+      setConfig(scenario.config);
+      // 시나리오가 이미 존재하면 Step 1은 완료된 상태로 간주, Step 2로 이동
+      setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1 as LongformStep]);
+      if (currentStep === 1) setCurrentStep(2);
+    }
+  // 첫 마운트 시점에만 동기화 (scenario는 안정적 복원 시점에 변경됨)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenario]);
 
   // 통합 에러
   const displayError = scenarioError || characterError || error;
