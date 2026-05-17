@@ -501,6 +501,7 @@ export interface AdScenarioConfigV2 {
   customTarget?: string;           // 타겟 고객 상세 설명 (수동 입력)
   tone: ScenarioTone;
   imageStyle: ImageStyle;
+  aspectRatio?: AspectRatio;       // 영상 비율 (기본 16:9)
   duration: AdDuration;
   referenceImages?: ImageData[]; // 참고 이미지 (최대 3장)
 

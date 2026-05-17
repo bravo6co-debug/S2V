@@ -223,6 +223,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             targetAudiences = ['all'],
             tone = 'inspirational',
             imageStyle = 'photorealistic',
+            aspectRatio = '16:9',
             duration = 30,
             // 제품 소개
             usps = [],
@@ -487,6 +488,7 @@ imagePrompt(정적 비주얼)와 완전히 다른 목적이므로 imagePrompt �
             tone: tone,
             mode: 'narration',
             imageStyle: imageStyle,
+            aspectRatio: aspectRatio,
             suggestedCharacters: [],
             scenes,
             scenarioType: 'ad',

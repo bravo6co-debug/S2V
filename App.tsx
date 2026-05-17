@@ -2,10 +2,10 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { TabNavigation, MobileBottomNav } from './components/common/TabNavigation';
-import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode, IMAGE_STYLE_OPTIONS, ImageStyle } from './types';
+import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode } from './types';
 import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
 import { ResultDisplay } from './components/ResultDisplay';
-import { IdIcon, LayersIcon, SparklesIcon, MagnifyingGlassPlusIcon, PlusCircleIcon, CheckCircleIcon, TrashIcon, ClearIcon, PencilIcon, AspectRatioHorizontalIcon, AspectRatioVerticalIcon } from './components/Icons';
+import { IdIcon, LayersIcon, SparklesIcon, MagnifyingGlassPlusIcon, PlusCircleIcon, CheckCircleIcon, TrashIcon, ClearIcon, PencilIcon } from './components/Icons';
 import { ChapterDisplay } from './components/ChapterDisplay';
 import { ScenarioGenerator } from './components/ScenarioGenerator';
 import { ScenarioEditor } from './components/ScenarioEditor';
@@ -206,95 +206,6 @@ const getFriendlyErrorMessage = (originalError: unknown): string => {
     return message;
 };
 
-// 프로젝트 설정 드롭다운
-const ProjectSettingsDropdown: React.FC = () => {
-    const { imageStyle, setImageStyle, aspectRatio, setAspectRatio } = useProject();
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = React.useRef<HTMLDivElement>(null);
-
-    const currentStyle = IMAGE_STYLE_OPTIONS.find(s => s.value === imageStyle);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    return (
-        <div className="relative" ref={dropdownRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg text-sm text-gray-300 transition-colors"
-                title="프로젝트 설정"
-            >
-                <span className="text-base">{currentStyle?.emoji}</span>
-                <span className="hidden sm:inline">{currentStyle?.label}</span>
-                <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-
-            {isOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 p-3">
-                    <div className="mb-2">
-                        <p className="text-xs font-medium text-gray-400 mb-2">이미지 스타일</p>
-                        <div className="grid grid-cols-2 gap-1.5">
-                            {IMAGE_STYLE_OPTIONS.map((option) => (
-                                <button
-                                    key={option.value}
-                                    onClick={() => {
-                                        setImageStyle(option.value);
-                                        setIsOpen(false);
-                                    }}
-                                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors ${
-                                        imageStyle === option.value
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                    }`}
-                                >
-                                    <span>{option.emoji}</span>
-                                    <span>{option.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-700">
-                        <p className="text-xs font-medium text-gray-400 mb-2">화면 비율</p>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setAspectRatio('16:9')}
-                                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors ${
-                                    aspectRatio === '16:9'
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                }`}
-                            >
-                                <AspectRatioHorizontalIcon className="w-4 h-4" />
-                                <span>16:9</span>
-                            </button>
-                            <button
-                                onClick={() => setAspectRatio('9:16')}
-                                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors ${
-                                    aspectRatio === '9:16'
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                }`}
-                            >
-                                <AspectRatioVerticalIcon className="w-4 h-4" />
-                                <span>9:16</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
 // 인증 버튼 컴포넌트
 const AuthButton: React.FC = () => {
     const { isAuthenticated, user, logout, openLoginModal, openSettingsModal, hasApiKey, isAdmin } = useAuth();
@@ -439,13 +350,11 @@ const AppContent: React.FC = () => {
                 <div className="hidden sm:flex items-center justify-center gap-3 px-4 py-2">
                     <TabNavigation currentTab={currentTab} onTabChange={setCurrentTab} />
                     <div className="flex items-center gap-2">
-                        <ProjectSettingsDropdown />
                         <AuthButton />
                     </div>
                 </div>
                 {/* 모바일: 액션 버튼만 상단 */}
                 <div className="flex sm:hidden items-center justify-end px-3 py-2 gap-2">
-                    <ProjectSettingsDropdown />
                     <AuthButton />
                 </div>
             </header>

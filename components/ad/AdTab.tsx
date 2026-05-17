@@ -11,6 +11,7 @@ import {
   AdDuration,
   AdEngine,
   ImageStyle,
+  AspectRatio,
   ScenarioTone,
   AD_TYPE_OPTIONS,
   INDUSTRY_OPTIONS,
@@ -188,6 +189,7 @@ const AdTab: React.FC = () => {
   // Step 3: 표현 스타일
   const [tone, setTone] = useState<ScenarioTone>('inspirational');
   const [imageStyle, setImageStyle] = useState<ImageStyle>(projectImageStyle);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [duration, setDuration] = useState<AdDuration>(30);
   const [engine, setEngine] = useState<AdEngine>('gemini');
 
@@ -232,6 +234,7 @@ const AdTab: React.FC = () => {
       targetAudiences: selectedTargets,
       customTarget: customTarget.trim() || undefined,
       tone,
+      aspectRatio,
       imageStyle,
       duration,
       // 유형별 고유 필드
@@ -814,6 +817,37 @@ const AdTab: React.FC = () => {
                       <option key={opt.value} value={opt.value}>{opt.emoji} {opt.label}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* 영상 비율 */}
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1.5 block">영상 비율</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAspectRatio('16:9')}
+                      className={`p-2.5 rounded-lg border text-left transition-all ${
+                        aspectRatio === '16:9'
+                          ? 'border-orange-500 bg-orange-900/30'
+                          : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-white">가로 16:9</div>
+                      <div className="text-[10px] text-gray-500">YouTube, PC</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAspectRatio('9:16')}
+                      className={`p-2.5 rounded-lg border text-left transition-all ${
+                        aspectRatio === '9:16'
+                          ? 'border-orange-500 bg-orange-900/30'
+                          : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-white">세로 9:16</div>
+                      <div className="text-[10px] text-gray-500">Shorts, Reels, TikTok</div>
+                    </button>
+                  </div>
                 </div>
 
                 {/* 영상 길이 */}

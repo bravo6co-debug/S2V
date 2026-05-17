@@ -78,8 +78,11 @@ export function useAdScenario(): UseAdScenarioReturn {
     adScenario,
     setAdScenario: contextSetAdScenario,
     updateAdScene,
-    aspectRatio,
+    aspectRatio: projectAspectRatio,
   } = useProject();
+
+  // 광고는 시나리오 자체의 aspectRatio 우선, 없으면 프로젝트 설정 폴백
+  const aspectRatio = adScenario?.aspectRatio || projectAspectRatio;
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingImageSceneId, setGeneratingImageSceneId] = useState<string | null>(null);
