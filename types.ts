@@ -1,4 +1,23 @@
-
+/**
+ * 점진적 분할 정책 (Progressive Splitting Policy)
+ *
+ * 이 파일은 675줄 가까이 커져 영역별 분할 진행 중입니다.
+ * 이미 분리된 영역: `types/longform.ts`
+ *
+ * 작업 규칙:
+ * 1. **새 타입은 영역별 모듈에 추가**: 시나리오 관련은 `types/scenario.ts`, 광고는 `types/ad.ts` 등 (없으면 신설)
+ * 2. **기존 타입 수정 시 같이 이동**: 어떤 영역의 타입을 손볼 일이 있으면, 그 김에 영역 모듈로 이동
+ * 3. **호환성 유지**: 이동 후 이 파일에서 `export * from './types/<영역>'`으로 재노출하여 기존 import 경로 깨지지 않게
+ * 4. **클라/서버 분리**: `api/lib/types.ts`(서버)와 중복되는 부분은 별도 작업으로 통합 예정
+ *
+ * 권장 분할 후보 (시간 날 때, 또는 해당 영역 작업 시):
+ * - `types/assets.ts` — Character, GeneratedItem, Chapter, CharacterAsset, PropAsset, BackgroundAsset
+ * - `types/scenario.ts` — Scenario, Scene, ScenarioConfig, ScenarioTone, ScenarioMode
+ * - `types/ad.ts` — AdScenarioConfigV2, AdType, IndustryCategory, AdEngine, AdDuration
+ * - `types/clip.ts` — ClipScenarioConfig, ClipDuration
+ * - `types/models.ts` — AVAILABLE_TEXT_MODELS, AVAILABLE_IMAGE_MODELS, AVAILABLE_TTS_MODELS, MODELS
+ * - `types/constants.ts` — TONE_OPTIONS, IMAGE_STYLE_OPTIONS, SCENARIO_MODE_OPTIONS 등 런타임 상수
+ */
 
 export interface ImageData {
   mimeType: string;
