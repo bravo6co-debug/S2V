@@ -126,11 +126,44 @@ export function useLongformScenario(): UseLongformScenarioReturn {
       if (!prev) return prev;
       return {
         ...prev,
-        scenes: prev.scenes.map(s =>
-          s.sceneNumber === sceneNumber
-            ? { ...s, ...updates, narrationCharCount: updates.narration !== undefined ? updates.narration.length : s.narrationCharCount }
-            : s
-        ),
+        scenes: prev.scenes.map(s => {
+          if (s.sceneNumber !== sceneNumber) return s;
+
+          const merged: LongformScene = { ...s, ...updates };
+          if (updates.narration !== undefined) {
+            merged.narrationCharCount = updates.narration.length;
+          }
+
+          // ─── Legacy ↔ subScenes[0] 자동 양방향 미러링 ───
+          // 외부 호출자가 한쪽만 업데이트해도 다른 쪽 자동 동기화 → drift 방지
+          const legacyKeys = ['imagePrompt', 'generatedImage', 'imageStatus', 'imageError', 'userUploaded'] as const;
+          const legacyTouched = legacyKeys.some(k => k in updates);
+          const subScenesTouched = 'subScenes' in updates;
+
+          if (legacyTouched && !subScenesTouched && merged.subScenes && merged.subScenes.length > 0) {
+            // Legacy 필드만 변경 → subScenes[0]에 미러링
+            const newSubs = [...merged.subScenes];
+            newSubs[0] = {
+              ...newSubs[0],
+              imagePrompt: merged.imagePrompt,
+              generatedImage: merged.generatedImage,
+              imageStatus: merged.imageStatus,
+              imageError: merged.imageError,
+              userUploaded: merged.userUploaded,
+            };
+            merged.subScenes = newSubs;
+          } else if (subScenesTouched && merged.subScenes && merged.subScenes.length > 0) {
+            // subScenes 변경 → legacy 필드를 subScenes[0]에서 동기화
+            const sub0 = merged.subScenes[0];
+            merged.imagePrompt = sub0.imagePrompt;
+            merged.generatedImage = sub0.generatedImage;
+            merged.imageStatus = sub0.imageStatus;
+            merged.imageError = sub0.imageError;
+            merged.userUploaded = sub0.userUploaded;
+          }
+
+          return merged;
+        }),
       };
     });
   }, []);

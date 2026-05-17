@@ -11,6 +11,7 @@ import { Step3CharacterSetup } from './Step3CharacterSetup';
 import { Step3AssetGeneration } from './Step3AssetGeneration';
 import { Step4PreviewDownload } from './Step4PreviewDownload';
 import { generateSceneImages } from '../../services/longformApiClient';
+import { buildCharacterImagePool, buildSceneImageInputs, applySceneImageResults, getFailedSubImages } from '../../services/longformSceneBuilder';
 import type { LongformStep, LongformConfig, LongformOutput, AssetStatus } from '../../types/longform';
 
 export const LongformTab: React.FC = () => {
@@ -154,50 +155,29 @@ export const LongformTab: React.FC = () => {
     setCurrentStep(5);
   }, []);
 
-  // 실패한 씬 재생성 (Step5에서 호출) — 다른 이미지 모델로 재시도 가능
+  // 실패한 sub-image 재생성 (Step5에서 호출) — 다른 이미지 모델로 재시도 가능
+  // 롱폼1: 씬당 1장 / 롱폼2: 씬당 3장 — 실패한 sub-image만 정확히 재생성
   const handleRegenerateFailedScenes = useCallback(async (overrideImageModel?: string) => {
     if (!scenario || !config) return;
 
-    const failedScenes = scenario.scenes.filter(s => s.imageStatus === 'failed');
-    if (failedScenes.length === 0) return;
+    // sub-image 단위로 실패 감지 (legacy scene.imageStatus만 보면 롱폼2 sub1/sub2 실패 누락)
+    const failedPairs = getFailedSubImages(scenario.scenes);
+    if (failedPairs.length === 0) return;
+    const failedSet = new Set(failedPairs.map(p => `${p.sceneNumber}:${p.subIndex}`));
 
     setIsRegeneratingFailed(true);
     setError(null);
 
     try {
-      // 캐릭터 이미지 풀 빌드 (dedup)
-      const charImageMap = new Map<string, number>();
-      const characterImages: import('../../types').ImageData[] = [];
-      for (const char of (scenario.characters || [])) {
-        if (char.referenceImage && !charImageMap.has(char.id)) {
-          charImageMap.set(char.id, characterImages.length);
-          characterImages.push(char.referenceImage);
-        }
-      }
+      const { characterImages, charImageMap } = buildCharacterImagePool(scenario.characters);
 
-      const sceneInputs = failedScenes.map(scene => {
-        const sceneChars = (scenario.characters || [])
-          .filter(c => c.sceneNumbers.includes(scene.sceneNumber));
-        let imagePrompt = scene.imagePrompt;
-        if (sceneChars.length > 0) {
-          const charDesc = sceneChars
-            .map(c => `[${c.nameEn}: ${c.appearanceDescription}, wearing ${c.outfit}]`)
-            .join(' ');
-          imagePrompt = `${charDesc} ${imagePrompt}`;
-        }
-        const characterIndices = sceneChars
-          .map(c => charImageMap.get(c.id))
-          .filter((idx): idx is number => idx !== undefined)
-          .slice(0, 2);
-        return {
-          sceneNumber: scene.sceneNumber,
-          imagePrompt,
-          cameraAngle: scene.cameraAngle,
-          lightingMood: scene.lightingMood,
-          mood: scene.mood,
-          ...(characterIndices.length > 0 && { characterIndices }),
-        };
-      });
+      // 실패한 (sceneNumber, subIndex) 쌍만 필터링해서 입력 구성
+      const sceneInputs = buildSceneImageInputs(
+        scenario.scenes,
+        scenario.characters,
+        charImageMap,
+        { filter: (scene, _sub, subIndex) => failedSet.has(`${scene.sceneNumber}:${subIndex}`) },
+      );
 
       const useImageModel = overrideImageModel || config.imageModel;
       const imageResults = await generateSceneImages(
@@ -209,20 +189,8 @@ export const LongformTab: React.FC = () => {
         config.aspectRatio,
       );
 
-      // 결과 적용
-      const updatedScenes = [...scenario.scenes];
-      for (const r of imageResults.results) {
-        const idx = updatedScenes.findIndex(s => s.sceneNumber === r.sceneNumber);
-        if (idx >= 0) {
-          updatedScenes[idx] = {
-            ...updatedScenes[idx],
-            generatedImage: r.success ? r.image : undefined,
-            imageStatus: (r.success ? 'completed' : 'failed') as AssetStatus,
-            imageError: r.success ? undefined : r.error,
-          };
-        }
-      }
-
+      // 결과 적용 — sub-image 단위 매핑 + legacy 자동 동기화
+      const updatedScenes = applySceneImageResults(scenario.scenes, imageResults.results);
       setScenario({ ...scenario, scenes: updatedScenes });
     } catch {
       setError('실패 씬 재생성 중 오류가 발생했습니다.');
