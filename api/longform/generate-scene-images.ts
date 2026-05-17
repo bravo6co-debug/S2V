@@ -3,7 +3,9 @@ import { requireAuth } from '../lib/auth.js';
 import { getAIClientForUser, setCorsHeaders, Modality, extractSafetyError } from '../lib/gemini.js';
 import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from '../lib/eachlabs.js';
 import { buildImagePrompt } from '../lib/imagePromptBuilder.js';
-import type { ImageData } from '../lib/types.js';
+import type { ImageData, ImageStyle } from '../lib/types.js';
+
+type AspectRatio = '16:9' | '9:16' | '1:1';
 
 interface SceneInput {
   sceneNumber: number;
@@ -49,11 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { scenes, imageModel = 'gemini-2.5-flash-image', batchSize = 5, characterImages = [] } = req.body as {
+    const { scenes, imageModel = 'gemini-2.5-flash-image', batchSize = 5, characterImages = [], imageStyle, aspectRatio = '16:9' } = req.body as {
       scenes: SceneInput[];
       imageModel?: string;
       batchSize?: number;
       characterImages?: ImageData[];
+      imageStyle?: ImageStyle;
+      aspectRatio?: AspectRatio;
     };
     if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
       return res.status(400).json({ error: 'scenes array is required' });
@@ -83,6 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               cameraAngle: scene.cameraAngle,
               lightingMood: scene.lightingMood,
               mood: scene.mood,
+              imageStyle,
             });
 
             if (isEachlabsImageModel(imageModel)) {
@@ -91,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 apiKey,
                 model: imageModel,
                 prompt,
-                aspectRatio: '16:9',
+                aspectRatio: aspectRatio === '1:1' ? '1:1' : aspectRatio,
                 ...(refs.length > 0 && { referenceImages: refs }),
               });
               return { sceneNumber: scene.sceneNumber, subIndex, success: true, image: result };

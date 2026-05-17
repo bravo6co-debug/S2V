@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { LongformScenario, LongformCharacter } from '../types/longform';
+import type { ImageStyle } from '../types';
 import { extractLongformCharacters, generateCharacterImage } from '../services/longformApiClient';
 
 export type CharacterExtractionStatus = 'idle' | 'extracting' | 'completed' | 'failed';
@@ -13,8 +14,8 @@ interface UseLongformCharactersReturn {
   updateCharacter: (characterId: string, updates: Partial<LongformCharacter>) => void;
   removeCharacter: (characterId: string) => void;
   addCharacter: () => void;
-  generateImage: (characterId: string, imageModel: string) => Promise<void>;
-  generateAllImages: (imageModel: string) => Promise<void>;
+  generateImage: (characterId: string, imageModel: string, imageStyle?: ImageStyle) => Promise<void>;
+  generateAllImages: (imageModel: string, imageStyle?: ImageStyle) => Promise<void>;
   setCharacters: (characters: LongformCharacter[]) => void;
   clearError: () => void;
 }
@@ -75,7 +76,7 @@ export function useLongformCharacters(): UseLongformCharactersReturn {
     setCharacters(prev => [...prev, newChar]);
   }, []);
 
-  const generateImage = useCallback(async (characterId: string, imageModel: string) => {
+  const generateImage = useCallback(async (characterId: string, imageModel: string, imageStyle?: ImageStyle) => {
     const char = charactersRef.current.find(c => c.id === characterId);
     if (!char) return;
 
@@ -89,6 +90,7 @@ export function useLongformCharacters(): UseLongformCharactersReturn {
         char.appearanceDescription,
         char.outfit,
         imageModel,
+        imageStyle,
       );
       setCharacters(prev => prev.map(c =>
         c.id === characterId
@@ -103,10 +105,10 @@ export function useLongformCharacters(): UseLongformCharactersReturn {
     }
   }, []);
 
-  const generateAllImages = useCallback(async (imageModel: string) => {
+  const generateAllImages = useCallback(async (imageModel: string, imageStyle?: ImageStyle) => {
     const pending = charactersRef.current.filter(c => c.imageStatus !== 'completed');
     for (let i = 0; i < pending.length; i++) {
-      await generateImage(pending[i].id, imageModel);
+      await generateImage(pending[i].id, imageModel, imageStyle);
       if (i < pending.length - 1) {
         await new Promise(r => setTimeout(r, 3000));
       }

@@ -46,6 +46,8 @@ export interface LongformConfig {
   textModel?: string;
   tts: TtsConfig;
   imageFrequency?: ImageFrequency; // 미지정 시 기본값 'per-minute' (롱폼1)
+  imageStyle?: import('../types').ImageStyle;     // 이미지 톤(애니/실사/시네마틱 등). 미지정 시 'animation'
+  aspectRatio?: import('../types').AspectRatio;   // 영상 비율. 미지정 시 '16:9'
 }
 
 // ─── 에셋 상태 ──────────────────────────────────

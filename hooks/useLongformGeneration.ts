@@ -113,9 +113,9 @@ export function useLongformGeneration(): UseLongformGenerationReturn {
       });
       const narrationInputs = scenario.scenes.map(s => ({ sceneNumber: s.sceneNumber, narration: s.narration }));
 
-      // 이미지 생성은 필요한 sub-image가 있을 때만 호출 (캐릭터 풀 함께 전달)
+      // 이미지 생성은 필요한 sub-image가 있을 때만 호출 (캐릭터 풀 + 스타일/비율 함께 전달)
       const imagePromise = sceneInputs.length > 0
-        ? generateSceneImages(sceneInputs, config.imageModel, 5, characterImages)
+        ? generateSceneImages(sceneInputs, config.imageModel, 5, characterImages, config.imageStyle, config.aspectRatio)
         : Promise.resolve({ results: [] as Awaited<ReturnType<typeof generateSceneImages>>['results'] });
 
       const [imageResults, narrationResults] = await Promise.all([

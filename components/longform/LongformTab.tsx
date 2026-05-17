@@ -269,8 +269,8 @@ export const LongformTab: React.FC = () => {
             onUpdateCharacter={updateCharacter}
             onRemoveCharacter={removeCharacter}
             onAddCharacter={addCharacter}
-            onGenerateImage={(id) => generateCharacterImage(id, config.imageModel)}
-            onGenerateAllImages={() => generateAllCharacterImages(config.imageModel)}
+            onGenerateImage={(id) => generateCharacterImage(id, config.imageModel, config.imageStyle)}
+            onGenerateAllImages={() => generateAllCharacterImages(config.imageModel, config.imageStyle)}
             onPrev={() => setCurrentStep(2)}
             onNext={handleProceedToGeneration}
           />

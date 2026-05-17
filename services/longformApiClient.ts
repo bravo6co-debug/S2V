@@ -1,5 +1,5 @@
 import type { LongformConfig, LongformScenario, LongformScene, LongformCharacter } from '../types/longform';
-import type { ImageData } from '../types';
+import type { ImageData, ImageStyle, AspectRatio } from '../types';
 
 const API_BASE = '';
 const TOKEN_KEY = 's2v_auth_token';
@@ -110,18 +110,24 @@ export interface SceneImageResult {
 /**
  * 씬 이미지 일괄 생성.
  * @param characterImages — 캐릭터 참조 이미지 풀 (deduplicated). 각 sceneInput.characterIndices가 이 배열을 인덱스로 참조
+ * @param imageStyle — 이미지 스타일 (포토리얼리즘/애니메이션 등)
+ * @param aspectRatio — 영상 비율 (16:9 / 9:16 / 1:1)
  */
 export async function generateSceneImages(
   scenes: SceneImageInput[],
   imageModel: string,
   batchSize: number = 5,
-  characterImages: ImageData[] = []
+  characterImages: ImageData[] = [],
+  imageStyle?: ImageStyle,
+  aspectRatio?: AspectRatio,
 ): Promise<{ results: SceneImageResult[] }> {
   return post('/api/longform/generate-scene-images', {
     scenes,
     imageModel,
     batchSize,
     characterImages,
+    ...(imageStyle && { imageStyle }),
+    ...(aspectRatio && { aspectRatio }),
   }, 'Generate Scene Images');
 }
 
@@ -143,12 +149,14 @@ export async function generateCharacterImage(
   characterName: string,
   appearanceDescription: string,
   outfit: string,
-  imageModel: string
+  imageModel: string,
+  imageStyle?: ImageStyle
 ): Promise<{ image: { mimeType: string; data: string } }> {
   return post('/api/longform/generate-character-image', {
     characterName,
     appearanceDescription,
     outfit,
+    ...(imageStyle && { imageStyle }),
     imageModel,
   }, 'Generate Character Image');
 }

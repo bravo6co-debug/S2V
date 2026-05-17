@@ -15,10 +15,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { visualDescription, imageModel = 'gemini-2.5-flash-image' } = req.body;
+    const { visualDescription, imageModel = 'gemini-2.5-flash-image', imageStyle, aspectRatio = '16:9' } = req.body;
     if (!visualDescription) return res.status(400).json({ error: 'visualDescription is required' });
 
-    const prompt = buildImagePrompt(imageModel, 'hook', { visualDescription });
+    const prompt = buildImagePrompt(imageModel, 'hook', { visualDescription, imageStyle });
 
     if (isEachlabsImageModel(imageModel)) {
       const apiKey = await getEachLabsApiKey(auth.userId);
@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         apiKey,
         model: imageModel,
         prompt,
-        aspectRatio: '16:9',
+        aspectRatio: aspectRatio === '1:1' ? '1:1' : aspectRatio,
       });
       return res.status(200).json({ image: result });
     }

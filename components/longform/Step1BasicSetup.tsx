@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import type { LongformConfig, LongformDuration, LongformImageModel, TtsProvider, OpenAiVoice, GeminiVoice, OpenAiTtsModel, ImageFrequency } from '../../types/longform';
 import { IMAGE_MODEL_OPTIONS, OPENAI_VOICE_OPTIONS, GEMINI_VOICE_OPTIONS, DURATION_OPTIONS, DEFAULT_TTS_CONFIG, DEFAULT_LONGFORM_CONFIG, calculateSceneCount, estimateImageCost, estimateTtsCost, SUB_IMAGES_PER_SCENE } from '../../types/longform';
-import { AVAILABLE_TEXT_MODELS } from '../../types';
+import { AVAILABLE_TEXT_MODELS, IMAGE_STYLE_OPTIONS } from '../../types';
+import type { ImageStyle, AspectRatio } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface Step1BasicSetupProps {
@@ -18,6 +19,8 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
   const [duration, setDuration] = useState<LongformDuration>(DEFAULT_LONGFORM_CONFIG.duration);
   const [imageFrequency, setImageFrequency] = useState<ImageFrequency>('per-minute');
   const [imageModel, setImageModel] = useState<LongformImageModel>(DEFAULT_LONGFORM_CONFIG.imageModel);
+  const [imageStyle, setImageStyle] = useState<ImageStyle>('animation');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [textModel, setTextModel] = useState<string>(settings?.textModel || 'gemini-3-flash-preview');
   const [ttsProvider, setTtsProvider] = useState<TtsProvider>(DEFAULT_TTS_CONFIG.provider);
   const [openaiModel, setOpenaiModel] = useState<OpenAiTtsModel>('tts-1');
@@ -47,6 +50,8 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
     duration,
     imageModel,
     imageFrequency,
+    imageStyle,
+    aspectRatio,
     textModel: overrideTextModel,
     tts: {
       provider: ttsProvider,
@@ -230,6 +235,62 @@ export const Step1BasicSetup: React.FC<Step1BasicSetupProps> = ({ onGenerate, is
           >
             <div className="font-medium">롱폼 2 · 20초당 1장</div>
             <div className="text-gray-400 mt-0.5">씬당 이미지 3배 · 더 풍부한 영상</div>
+          </button>
+        </div>
+      </div>
+
+      {/* 이미지 스타일 */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1.5">이미지 스타일</label>
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+          {IMAGE_STYLE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setImageStyle(opt.value)}
+              disabled={isGenerating}
+              className={`p-2 rounded-lg text-xs transition-all flex items-center gap-1.5 ${
+                imageStyle === opt.value
+                  ? 'bg-teal-600/20 border-2 border-teal-500 text-teal-300'
+                  : 'bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              <span>{opt.emoji}</span>
+              <span className="truncate">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 영상 비율 */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1.5">영상 비율</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setAspectRatio('16:9')}
+            disabled={isGenerating}
+            className={`p-2.5 rounded-lg text-left text-xs transition-all ${
+              aspectRatio === '16:9'
+                ? 'bg-teal-600/20 border-2 border-teal-500 text-teal-300'
+                : 'bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            <div className="font-medium">가로 16:9</div>
+            <div className="text-gray-400 mt-0.5">YouTube, PC</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAspectRatio('9:16')}
+            disabled={isGenerating}
+            className={`p-2.5 rounded-lg text-left text-xs transition-all ${
+              aspectRatio === '9:16'
+                ? 'bg-teal-600/20 border-2 border-teal-500 text-teal-300'
+                : 'bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            <div className="font-medium">세로 9:16</div>
+            <div className="text-gray-400 mt-0.5">Shorts, Reels, TikTok</div>
           </button>
         </div>
       </div>

@@ -15,13 +15,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { characterName, appearanceDescription, outfit, imageModel = 'gemini-2.5-flash-image' } = req.body;
+    const { characterName, appearanceDescription, outfit, imageModel = 'gemini-2.5-flash-image', imageStyle } = req.body;
 
     if (!appearanceDescription) {
       return res.status(400).json({ error: 'appearanceDescription is required' });
     }
 
-    const prompt = buildImagePrompt(imageModel, 'character', { characterName, appearanceDescription, outfit });
+    const prompt = buildImagePrompt(imageModel, 'character', { characterName, appearanceDescription, outfit, imageStyle });
 
     if (isEachlabsImageModel(imageModel)) {
       const apiKey = await getEachLabsApiKey(auth.userId);
