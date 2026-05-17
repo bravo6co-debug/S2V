@@ -66,8 +66,20 @@ interface ProjectContextValue {
   // UI 상태
   currentTab: AppMode;
   setCurrentTab: (tab: AppMode) => void;
+  /**
+   * @remarks
+   * 글로벌 fallback default. 시나리오/광고/클립/캐릭터 모달이 처음 열릴 때 디폴트값으로 사용됨.
+   * 각 시나리오는 생성 후 자기 `scenario.aspectRatio`를 영구 보유하므로 이 값은 새 시나리오 시작 시점에만 영향.
+   * 직접 동작 트리거가 아니라 시드 값으로만 동작. 새로고침 시 default ('16:9')로 리셋.
+   */
   aspectRatio: AspectRatio;
   setAspectRatio: (ratio: AspectRatio) => void;
+  /**
+   * @remarks
+   * 글로벌 fallback default. `useCharacters` / `useQuickCharacterGeneration`은 이 값을 직접 사용하지만,
+   * 시나리오/광고/클립 탭은 생성 모달의 초기 디폴트로만 받고 그 후엔 `scenario.imageStyle`을 사용.
+   * 새로고침 시 default ('photorealistic')로 리셋.
+   */
   imageStyle: ImageStyle;
   setImageStyle: (style: ImageStyle) => void;
 
@@ -439,6 +451,17 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   useEffect(() => {
     if (!project || !isDirty) return;
 
+    // 빈 프로젝트 가드: 의미 있는 컨텐츠가 하나라도 있을 때만 저장 (불필요한 직렬화 차단)
+    const hasContent =
+      characters.length > 0 ||
+      props.length > 0 ||
+      backgrounds.length > 0 ||
+      !!scenario ||
+      !!adScenario ||
+      !!clipScenario ||
+      !!timeline;
+    if (!hasContent) return;
+
     const timer = setTimeout(() => {
       const projectToSave: Project = {
         ...project,
@@ -455,7 +478,18 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       try {
         localStorage.setItem('image-gen-autosave', JSON.stringify(projectToSave));
       } catch (e) {
-        console.warn('Auto-save failed:', e);
+        // QuotaExceeded 등 — base64 이미지 빼고 텍스트 메타데이터만 저장 재시도
+        try {
+          const stripped: Project = {
+            ...projectToSave,
+            characters: projectToSave.characters.map(c => ({ ...c, image: undefined as any })),
+            props: projectToSave.props.map(p => ({ ...p, image: undefined as any })),
+            backgrounds: projectToSave.backgrounds.map(b => ({ ...b, image: undefined as any })),
+          };
+          localStorage.setItem('image-gen-autosave', JSON.stringify(stripped));
+        } catch {
+          console.warn('Auto-save failed:', e);
+        }
       }
     }, 2000); // 2초 디바운스
 
