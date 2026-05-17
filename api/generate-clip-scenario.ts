@@ -281,8 +281,8 @@ ${characterGuide}
 - suggestedCharacters: 등장인물 배열
 - scenes: ${structureConfig.sceneCount}개 씬 배열`;
 
-        // 사용자별 텍스트 모델 결정
-        const textModel = userId ? await getUserTextModel(userId) : MODELS.TEXT;
+        // 시나리오 생성은 항상 MODELS.TEXT (Gemini 3 Pro) 고정 — 사용자 설정 무시
+        const textModel = MODELS.TEXT;
         let parsed: any;
 
         if (isOpenAIModel(textModel) && userId) {

@@ -243,8 +243,9 @@ export async function getUserTTSVoice(userId: string): Promise<string> {
 // MODEL CONFIGURATION
 // ============================================
 export const MODELS = {
-    // Text/prompt generation model (Gemini 3 Flash - fast with Pro-grade reasoning)
-    TEXT: 'gemini-3-flash-preview',
+    // Text/prompt generation model — 시나리오 작성에 최적화된 단일 모델
+    // Gemini 3 Pro: 다국어 1위 (MMMLU 91.8%), MRCR 77% @ 128k, 구조화 JSON 안정, 한국어 톤 최적
+    TEXT: 'gemini-3-pro-preview',
 
     // Image generation models (Gemini native image generation)
     IMAGE_PORTRAIT: 'gemini-2.5-flash-image',  // Character/prop/background portraits
