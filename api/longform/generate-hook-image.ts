@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth } from '../lib/auth.js';
-import { getAIClientForUser, setCorsHeaders, Modality } from '../lib/gemini.js';
+import { getAIClientForUser, setCorsHeaders, Modality, callGeminiWithRetry } from '../lib/gemini.js';
 import { isEachlabsImageModel, getEachLabsApiKey, generateEachlabsImage } from '../lib/eachlabs.js';
 import { buildImagePrompt } from '../lib/imagePromptBuilder.js';
 
@@ -32,13 +32,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const aiClient = await getAIClientForUser(auth.userId);
-    const response = await aiClient.models.generateContent({
-      model: imageModel,
-      contents: prompt,
-      config: {
-        responseModalities: [Modality.IMAGE, Modality.TEXT],
-      },
-    });
+    const response = await callGeminiWithRetry<any>(
+      () => aiClient.models.generateContent({
+        model: imageModel,
+        contents: prompt,
+        config: {
+          responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
+      }),
+      { label: 'longform-hook-image' },
+    );
 
     const parts = response.candidates?.[0]?.content?.parts || [];
     for (const part of parts) {
