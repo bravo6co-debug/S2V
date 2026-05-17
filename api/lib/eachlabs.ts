@@ -76,17 +76,23 @@ export function isEachlabsImageModel(model: string): boolean {
 
 /**
  * 사용자별 EachLabs API 키 조회 (Hailuo와 동일한 키 사용)
+ * - 일반 사용자: 본인 설정 키만 사용
+ * - 관리자(isAdmin): 본인 키 없으면 환경변수(HAILUO_API_KEY) 폴백
  */
 export async function getEachLabsApiKey(userId: string): Promise<string> {
     const user = await findUserById(userId);
-    // 개인 설정 키 우선, 환경변수 폴백 (admin/일반 사용자 동일)
-    const apiKey = user?.settings?.hailuoApiKey || process.env.HAILUO_API_KEY;
+    const personalKey = user?.settings?.hailuoApiKey;
 
-    if (!apiKey) {
-        throw new Error('EachLabs API 키가 설정되지 않았습니다. 설정에서 EachLabs API 키를 입력해 주세요.');
+    if (personalKey) {
+        return personalKey;
     }
 
-    return apiKey;
+    // 환경변수 폴백은 admin만 허용 — 일반 사용자가 관리자 키로 자동 청구되는 비용 누수 차단
+    if (user?.isAdmin && process.env.HAILUO_API_KEY) {
+        return process.env.HAILUO_API_KEY;
+    }
+
+    throw new Error('EachLabs API 키가 설정되지 않았습니다. 설정에서 본인 EachLabs API 키를 입력해 주세요.');
 }
 
 /**

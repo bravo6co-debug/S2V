@@ -14,20 +14,23 @@ export function isOpenAIModel(model: string): boolean {
 
 /**
  * 사용자의 OpenAI API 키 가져오기
+ * - 일반 사용자: 본인 설정 키만 사용
+ * - 관리자(isAdmin): 환경변수(OPENAI_API_KEY) 우선, 없으면 본인 키
  */
 export async function getOpenAIKeyForUser(userId: string): Promise<string> {
     const user = await findUserById(userId);
     if (!user) throw new Error('사용자를 찾을 수 없습니다.');
 
-    // 어드민은 환경변수 키 우선 사용
+    // 어드민: 환경변수 키 우선
     if (user.isAdmin) {
         const key = process.env.OPENAI_API_KEY || user.settings?.openaiApiKey;
         if (!key) throw new Error('OpenAI API 키가 설정되지 않았습니다.');
         return key;
     }
 
-    const key = user.settings?.openaiApiKey || process.env.OPENAI_API_KEY;
-    if (!key) throw new Error('OpenAI API 키가 설정되지 않았습니다. 설정에서 OpenAI API 키를 입력해 주세요.');
+    // 일반 사용자: 본인 설정 키만 사용 (관리자 환경변수 키로 비용 누수 차단)
+    const key = user.settings?.openaiApiKey;
+    if (!key) throw new Error('OpenAI API 키가 설정되지 않았습니다. 설정에서 본인 OpenAI API 키를 입력해 주세요.');
     return key;
 }
 

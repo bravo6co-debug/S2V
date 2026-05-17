@@ -80,8 +80,10 @@ async function generateOpenAiTts(
   voice: string
 ) {
   const user = await findUserById(userId);
-  const openaiApiKey = user?.settings?.openaiApiKey || process.env.OPENAI_API_KEY;
-  if (!openaiApiKey) throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+  // 일반 사용자는 본인 키만, 관리자만 환경변수 폴백 허용 (비용 누수 차단)
+  const personalKey = user?.settings?.openaiApiKey;
+  const openaiApiKey = personalKey || (user?.isAdmin ? process.env.OPENAI_API_KEY : undefined);
+  if (!openaiApiKey) throw new Error('OpenAI API 키가 설정되지 않았습니다. 설정에서 본인 OpenAI API 키를 입력해 주세요.');
 
   const response = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',

@@ -86,3 +86,15 @@ jspm_packages/
 # DynamoDB Local files
 .dynamodb/
 .vercel
+
+# Test artifacts / ad-hoc local files
+test_screenshots/
+test_e2e.py
+test_tts.py
+nul
+c\357\200\272UsersadminServiec_Productimage-gen-mastertest_result.json
+KakaoTalk_*.jpg
+KakaoTalk_*.png
+
+# Claude Code local config
+.claude/

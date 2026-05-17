@@ -2,13 +2,8 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { TabNavigation, MobileBottomNav } from './components/common/TabNavigation';
-import { GeneratedItem, ImageData, Chapter, DragItem, Character, Scenario, ScenarioConfig, Scene, AppMode } from './types';
-import { generateImages, generateCharacterPortraits, editImage, extractCharacterData, generateScenario, regenerateScene, generateSceneImage } from './services/geminiService';
-import { ResultDisplay } from './components/ResultDisplay';
-import { IdIcon, LayersIcon, SparklesIcon, MagnifyingGlassPlusIcon, PlusCircleIcon, CheckCircleIcon, TrashIcon, ClearIcon, PencilIcon } from './components/Icons';
-import { ChapterDisplay } from './components/ChapterDisplay';
-import { ScenarioGenerator } from './components/ScenarioGenerator';
-import { ScenarioEditor } from './components/ScenarioEditor';
+import type { GeneratedItem } from './types';
+import { ClearIcon, TrashIcon } from './components/Icons';
 
 // ─── Lazy-loaded tab components (Rule 2.2: code-splitting) ──────
 const ScenarioTab = lazy(() => import('./components/scenario/ScenarioTab').then(m => ({ default: m.ScenarioTab })));
