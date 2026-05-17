@@ -63,6 +63,86 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
   const [showExportConfirm, setShowExportConfirm] = useState<number | null>(null);
   // 실패 씬 재생성용 — 다른 모델로 재시도 가능
   const [retryModel, setRetryModel] = useState<LongformImageModel>(config.imageModel);
+  // 이미지 ZIP 다운로드 상태
+  const [isZipping, setIsZipping] = useState(false);
+
+  // 이미지 ZIP 다운로드 핸들러
+  const handleDownloadAllImages = async () => {
+    if (isZipping) return;
+    setIsZipping(true);
+    try {
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      let count = 0;
+
+      // 캐릭터 참조 이미지 (Step 3 완료 시)
+      const charsWithImage = (scenario.characters || []).filter(c => c.referenceImage);
+      if (charsWithImage.length > 0) {
+        const charFolder = zip.folder('characters');
+        charsWithImage.forEach((c, i) => {
+          const safeName = (c.nameEn || c.name || `character_${i + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+          const ext = c.referenceImage!.mimeType.includes('png') ? 'png' : c.referenceImage!.mimeType.includes('webp') ? 'webp' : 'jpg';
+          charFolder?.file(`${String(i + 1).padStart(2, '0')}_${safeName}.${ext}`, c.referenceImage!.data, { base64: true });
+          count++;
+        });
+      }
+
+      // 씬 이미지 (subScenes 우선, 없으면 legacy generatedImage)
+      const scenesFolder = zip.folder('scenes');
+      for (const scene of scenario.scenes) {
+        const subs = (scene.subScenes && scene.subScenes.length > 0)
+          ? scene.subScenes
+          : [{ generatedImage: scene.generatedImage, imageStatus: scene.imageStatus, imagePrompt: scene.imagePrompt, imageError: scene.imageError, userUploaded: scene.userUploaded }];
+
+        const isMulti = subs.length > 1;
+        for (let i = 0; i < subs.length; i++) {
+          const img = subs[i].generatedImage;
+          if (!img) continue;
+          const ext = img.mimeType.includes('png') ? 'png' : img.mimeType.includes('webp') ? 'webp' : 'jpg';
+          const sceneNum = String(scene.sceneNumber).padStart(2, '0');
+          const filename = isMulti
+            ? `scene_${sceneNum}_sub_${i + 1}.${ext}`
+            : `scene_${sceneNum}.${ext}`;
+          scenesFolder?.file(filename, img.data, { base64: true });
+          count++;
+        }
+      }
+
+      if (count === 0) {
+        alert('다운로드할 이미지가 없습니다. 에셋 생성을 먼저 완료해 주세요.');
+        return;
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeTitle = (scenario.metadata?.title || 'longform').replace(/[^a-zA-Z0-9가-힣_-]/g, '_').slice(0, 40);
+      a.download = `${safeTitle}_images.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[Step4] 이미지 ZIP 다운로드 실패', e);
+      alert(`이미지 다운로드 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`);
+    } finally {
+      setIsZipping(false);
+    }
+  };
+
+  // 다운로드 가능한 이미지 수 (버튼 라벨용)
+  const downloadableImageCount = useMemo(() => {
+    let n = 0;
+    for (const s of scenario.scenes) {
+      const subs = (s.subScenes && s.subScenes.length > 0) ? s.subScenes : [{ generatedImage: s.generatedImage }];
+      for (const sub of subs) {
+        if (sub.generatedImage) n++;
+      }
+    }
+    n += (scenario.characters || []).filter(c => c.referenceImage).length;
+    return n;
+  }, [scenario]);
 
   // 씬을 파트별로 분할
   const { parts, ranges } = useMemo(() => splitScenesForExportMulti(scenario), [scenario]);
@@ -108,6 +188,29 @@ export const Step4PreviewDownload: React.FC<Step4PreviewDownloadProps> = ({
         <p className="text-sm text-gray-400 mt-1">
           총 {scenario.scenes.length}개 씬 · ~{config.duration}분 · {parts.length}개 파트
         </p>
+        {downloadableImageCount > 0 && (
+          <button
+            onClick={handleDownloadAllImages}
+            disabled={isZipping}
+            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="모든 씬·캐릭터 이미지를 ZIP으로 다운로드"
+          >
+            {isZipping ? (
+              <>
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                ZIP 준비 중...
+              </>
+            ) : (
+              <>
+                <DownloadIcon className="w-3.5 h-3.5" />
+                이미지 ZIP 다운로드 ({downloadableImageCount}장)
+              </>
+            )}
+          </button>
+        )}
         {partStates.length > 0 && (
           <div className="mt-2 flex items-center justify-center gap-2">
             <div className="w-32 h-1.5 bg-gray-700 rounded-full overflow-hidden">
