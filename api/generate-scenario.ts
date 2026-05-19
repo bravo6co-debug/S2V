@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders, STYLE_PROMPTS, getThinkingConfig } from './lib/gemini.js';
+import { ai, MODELS, Type, sanitizePrompt, setCorsHeaders, STYLE_PROMPTS, getThinkingConfig, getAIClientForUser, getUserTextModel } from './lib/gemini.js';
+import { getUserIdFromRequest } from './lib/auth.js';
+import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from './lib/openai.js';
 import type { GenerateScenarioRequest, Scenario, Scene, ScenarioTone, ScenarioMode, ImageStyle, StoryBeat, CameraAngle, ApiErrorResponse, ScenarioChapter } from './lib/types.js';
 
 const TONE_DESCRIPTIONS: Record<ScenarioTone, string> = {
@@ -224,6 +226,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' } as ApiErrorResponse);
     }
+
+    // 사용자 ID — 본인 Gemini/OpenAI 키 + 본인 선택 모델 사용
+    const userId = getUserIdFromRequest(req);
 
     try {
         const { config } = req.body as GenerateScenarioRequest;
@@ -548,66 +553,116 @@ ${chapterGuidelines}
             sceneRequired.push("chapterIndex", "chapterTitle");
         }
 
-        const response = await ai.models.generateContent({
-            model: MODELS.TEXT,
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: {
-                            type: Type.STRING,
-                            description: "시나리오의 제목",
-                        },
-                        synopsis: {
-                            type: Type.STRING,
-                            description: "시나리오의 한 줄 요약",
-                        },
-                        recommendedImageStyle: {
-                            type: Type.STRING,
-                            description: "AI가 추천하는 이미지 스타일 (photorealistic, animation, illustration, cinematic, watercolor, 3d_render 중 하나)",
-                        },
-                        recommendedImageStyleReason: {
-                            type: Type.STRING,
-                            description: "이미지 스타일 추천 이유 (한국어, 1-2문장)",
-                        },
-                        recommendedTone: {
-                            type: Type.STRING,
-                            description: "AI가 추천하는 톤/분위기 (emotional, dramatic, inspirational, romantic, comedic, mysterious, nostalgic, educational 중 하나)",
-                        },
-                        recommendedToneReason: {
-                            type: Type.STRING,
-                            description: "톤/분위기 추천 이유 (한국어, 1-2문장)",
-                        },
-                        suggestedCharacters: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    name: { type: Type.STRING, description: "캐릭터 이름" },
-                                    role: { type: Type.STRING, description: "역할 (주인공, 조연 등)" },
-                                    description: { type: Type.STRING, description: "외형과 성격 설명" },
-                                },
-                                required: ["name", "role", "description"],
-                            },
-                        },
-                        scenes: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: sceneProperties,
-                                required: sceneRequired,
-                            },
-                        },
-                    },
-                    required: ["title", "synopsis", "recommendedImageStyle", "recommendedImageStyleReason", "recommendedTone", "recommendedToneReason", "suggestedCharacters", "scenes"],
-                },
-                ...getThinkingConfig(MODELS.TEXT),
-            },
-        });
+        // 사용자가 선택한 텍스트 모델 사용 (없으면 MODELS.TEXT 기본값)
+        const textModel = userId ? await getUserTextModel(userId) : MODELS.TEXT;
+        let parsed: any;
+        let rawText: string;
 
-        const parsed = JSON.parse(response.text);
+        if (isOpenAIModel(textModel) && userId) {
+            // OpenAI 경로 — 사용자가 GPT 모델을 선택한 경우
+            const openaiKey = await getOpenAIKeyForUser(userId);
+            const jsonPrompt = `${prompt}\n\nRespond in strict JSON with this top-level shape: {"title": string, "synopsis": string, "recommendedImageStyle": string, "recommendedImageStyleReason": string, "recommendedTone": string, "recommendedToneReason": string, "suggestedCharacters": [{"name": string, "role": string, "description": string}], "scenes": [{"sceneNumber": number, "duration": number, "storyBeat": string, "visualDescription": string, "narration": string, "cameraAngle": string, "mood": string, "characters": string[], "imagePrompt": string${durationConfig.chapters > 1 ? ', "chapterIndex": number, "chapterTitle": string' : ''}}]}`;
+            rawText = await generateTextWithOpenAI(openaiKey, textModel, jsonPrompt, {
+                systemPrompt: 'You are a professional Korean short/mid-form video scenario writer. Always respond with valid JSON only.',
+                jsonMode: true,
+            });
+            parsed = JSON.parse(rawText);
+        } else {
+            // Gemini 경로 — 사용자 키가 있으면 사용자 키, 없으면 글로벌 ai
+            const aiClient = userId ? await getAIClientForUser(userId) : ai;
+            if (!aiClient) {
+                throw new Error('Gemini API 키가 설정되지 않았습니다. 설정에서 본인 Gemini API 키를 등록하거나, 관리자에게 문의해 주세요.');
+            }
+            const response = await aiClient.models.generateContent({
+                model: textModel,
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            title: {
+                                type: Type.STRING,
+                                description: "시나리오의 제목",
+                            },
+                            synopsis: {
+                                type: Type.STRING,
+                                description: "시나리오의 한 줄 요약",
+                            },
+                            recommendedImageStyle: {
+                                type: Type.STRING,
+                                description: "AI가 추천하는 이미지 스타일 (photorealistic, animation, illustration, cinematic, watercolor, 3d_render 중 하나)",
+                            },
+                            recommendedImageStyleReason: {
+                                type: Type.STRING,
+                                description: "이미지 스타일 추천 이유 (한국어, 1-2문장)",
+                            },
+                            recommendedTone: {
+                                type: Type.STRING,
+                                description: "AI가 추천하는 톤/분위기 (emotional, dramatic, inspirational, romantic, comedic, mysterious, nostalgic, educational 중 하나)",
+                            },
+                            recommendedToneReason: {
+                                type: Type.STRING,
+                                description: "톤/분위기 추천 이유 (한국어, 1-2문장)",
+                            },
+                            suggestedCharacters: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        name: { type: Type.STRING, description: "캐릭터 이름" },
+                                        role: { type: Type.STRING, description: "역할 (주인공, 조연 등)" },
+                                        description: { type: Type.STRING, description: "외형과 성격 설명" },
+                                    },
+                                    required: ["name", "role", "description"],
+                                },
+                            },
+                            scenes: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: sceneProperties,
+                                    required: sceneRequired,
+                                },
+                            },
+                        },
+                        required: ["title", "synopsis", "recommendedImageStyle", "recommendedImageStyleReason", "recommendedTone", "recommendedToneReason", "suggestedCharacters", "scenes"],
+                    },
+                    ...getThinkingConfig(textModel),
+                },
+            });
+
+            rawText = response.text ?? '';
+            if (!rawText.trim()) {
+                console.error('[generate-scenario] Empty response from Gemini', {
+                    model: textModel,
+                    finishReason: (response as any)?.candidates?.[0]?.finishReason,
+                    promptFeedback: (response as any)?.promptFeedback,
+                });
+                throw new Error('AI 모델이 빈 응답을 반환했습니다. 콘텐츠 안전 필터 또는 토큰 한도 문제일 수 있습니다. 다른 주제로 다시 시도하거나 모델을 변경해 주세요.');
+            }
+
+            try {
+                parsed = JSON.parse(rawText);
+            } catch (parseErr) {
+                console.error('[generate-scenario] JSON parse failed', {
+                    model: textModel,
+                    rawPreview: rawText.substring(0, 500),
+                });
+                throw new Error('AI 모델 응답이 유효한 JSON이 아닙니다. 다시 시도해 주세요.');
+            }
+        }
+
+        // 응답 형식 검증 — 빈 scenes 배열은 사실상 실패
+        if (!parsed || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
+            console.error('[generate-scenario] Invalid scenario shape', {
+                model: textModel,
+                hasScenes: Array.isArray(parsed?.scenes),
+                scenesCount: parsed?.scenes?.length,
+                title: parsed?.title,
+            });
+            throw new Error(`AI 모델이 씬을 생성하지 못했습니다. 주제를 더 구체적으로 입력하거나 모델을 변경해 주세요. (받은 씬 수: ${parsed?.scenes?.length ?? 0})`);
+        }
 
         // Transform scenes with IDs
         const scenes: Scene[] = parsed.scenes.map((scene: any, index: number) => ({
