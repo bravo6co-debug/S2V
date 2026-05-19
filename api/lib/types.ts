@@ -88,6 +88,10 @@ export interface Scenario {
     productName?: string;
     productFeatures?: string;
     productImage?: ImageData;
+    // 영상 생성 설정 (VideoTab의 영상 생성에 사용)
+    videoEngine?: VideoEngine;
+    videoResolution?: '480P' | '720P' | '1080P';
+    videoGenerateAudio?: boolean;
     createdAt: number;
     updatedAt: number;
 }
@@ -121,6 +125,10 @@ export interface AdScenarioConfigV2 {
     duration: AdDuration;
     priceOrPromotion?: string;
     referenceImages?: ImageData[];
+    // 영상 엔진 설정 — VideoTab에서 씬별 영상 생성에 사용
+    videoEngine?: VideoEngine;
+    resolution?: '480P' | '720P' | '1080P';
+    generateAudio?: boolean;
 }
 
 export interface GenerateAdScenarioV2Request {

@@ -5,8 +5,17 @@ import {
   VideoClip,
   Scene,
   ImageData,
+  VideoEngine,
+  VideoResolution,
 } from '../types';
 import { generateVideoFromImage } from '../services/geminiService';
+
+export interface ClipVideoGenerationOptions {
+  videoEngine?: VideoEngine;
+  resolution?: VideoResolution;
+  generateAudio?: boolean;
+  seed?: number;
+}
 
 interface UseVideoReturn {
   // 상태
@@ -30,8 +39,10 @@ interface UseVideoReturn {
   updateClip: (clipId: string, updates: Partial<VideoClip>) => void;
 
   // 영상 클립 생성 (AI)
-  generateClipVideo: (clipId: string, referenceImages?: ImageData[]) => Promise<void>;
-  generateAllClipVideos: (referenceImages?: ImageData[]) => Promise<void>;
+  generateClipVideo: (clipId: string, referenceImages?: ImageData[], options?: ClipVideoGenerationOptions) => Promise<void>;
+  generateAllClipVideos: (referenceImages?: ImageData[], options?: ClipVideoGenerationOptions) => Promise<void>;
+  // 동일 seed로 더 높은 해상도 재생성
+  upgradeClipResolution: (clipId: string, target: '720P' | '1080P') => Promise<void>;
 
   // 재생 컨트롤
   play: () => void;
@@ -199,7 +210,8 @@ export function useVideo(): UseVideoReturn {
 
   const generateClipVideo = useCallback(async (
     clipId: string,
-    referenceImages?: ImageData[]
+    referenceImages?: ImageData[],
+    options?: ClipVideoGenerationOptions,
   ): Promise<void> => {
     if (!timeline) return;
 
@@ -224,11 +236,12 @@ export function useVideo(): UseVideoReturn {
       };
       contextSetTimeline(currentTimeline);
 
-      // Generate video using Hailuo API
+      // Generate video — 엔진별 최대 15초 (HappyHorse/Seedance 공통)
       const result = await generateVideoFromImage(
         clip.sourceImage,
         clip.motionPrompt || 'Cinematic camera movement with subtle motion',
-        Math.min(clip.duration, 6) // Hailuo 클립 최대 6초
+        Math.min(clip.duration, 15),
+        options,
       );
 
       // Update with generated video (로컬 복사본 기반 업데이트)
@@ -243,6 +256,9 @@ export function useVideo(): UseVideoReturn {
                   url: result.videoUrl,
                   thumbnailUrl: result.thumbnailUrl,
                   duration: result.duration,
+                  seed: result.seed,
+                  resolution: result.resolution,
+                  videoEngine: result.videoEngine,
                 },
               }
             : c
@@ -270,7 +286,8 @@ export function useVideo(): UseVideoReturn {
   }, [timeline, contextSetTimeline]);
 
   const generateAllClipVideos = useCallback(async (
-    referenceImages?: ImageData[]
+    referenceImages?: ImageData[],
+    options?: ClipVideoGenerationOptions,
   ): Promise<void> => {
     if (!timeline) return;
 
@@ -303,7 +320,8 @@ export function useVideo(): UseVideoReturn {
         const result = await generateVideoFromImage(
           clip.sourceImage!,
           clip.motionPrompt || 'Cinematic camera movement with subtle motion',
-          Math.min(clip.duration, 6)
+          Math.min(clip.duration, 15),
+          options,
         );
 
         // 성공: 로컬 복사본에 누적 (이전 클립 결과 유지)
@@ -318,6 +336,9 @@ export function useVideo(): UseVideoReturn {
                     url: result.videoUrl,
                     thumbnailUrl: result.thumbnailUrl,
                     duration: result.duration,
+                    seed: result.seed,
+                    resolution: result.resolution,
+                    videoEngine: result.videoEngine,
                   },
                 }
               : c
@@ -346,6 +367,24 @@ export function useVideo(): UseVideoReturn {
     setGeneratingClipId(null);
     setIsGenerating(false);
   }, [timeline, contextSetTimeline]);
+
+  // 동일 seed로 더 높은 해상도 재생성 — clip의 generatedVideo에 저장된 seed/engine을 재사용
+  const upgradeClipResolution = useCallback(async (
+    clipId: string,
+    target: '720P' | '1080P',
+  ): Promise<void> => {
+    if (!timeline) return;
+
+    const clip = timeline.clips.find(c => c.id === clipId);
+    if (!clip || !clip.sourceImage || !clip.generatedVideo?.seed) return;
+
+    await generateClipVideo(clipId, undefined, {
+      videoEngine: clip.generatedVideo.videoEngine,
+      resolution: target,
+      generateAudio: clip.generatedVideo.videoEngine === 'seedance',
+      seed: clip.generatedVideo.seed,
+    });
+  }, [timeline, generateClipVideo]);
 
   // =============================================
   // 재생 컨트롤
@@ -403,6 +442,7 @@ export function useVideo(): UseVideoReturn {
     // 영상 클립 생성
     generateClipVideo,
     generateAllClipVideos,
+    upgradeClipResolution,
 
     // 재생 컨트롤
     play,

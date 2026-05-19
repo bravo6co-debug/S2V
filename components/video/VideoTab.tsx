@@ -95,6 +95,7 @@ export const VideoTab: React.FC = () => {
     reorderClip,
     generateClipVideo,
     generateAllClipVideos,
+    upgradeClipResolution,
     play,
     pause,
     stop,
@@ -443,12 +444,23 @@ export const VideoTab: React.FC = () => {
     }
   };
 
+  // 활성 시나리오에서 영상 엔진 설정 추출 (광고 시나리오는 AdTab에서 저장됨)
+  const videoGenOptions = {
+    videoEngine: activeScenario?.videoEngine,
+    resolution: activeScenario?.videoResolution,
+    generateAudio: activeScenario?.videoGenerateAudio,
+  };
+
   const handleGenerateClip = async (clipId: string) => {
-    await generateClipVideo(clipId, referenceImages);
+    await generateClipVideo(clipId, referenceImages, videoGenOptions);
   };
 
   const handleGenerateAllClips = async () => {
-    await generateAllClipVideos(referenceImages);
+    await generateAllClipVideos(referenceImages, videoGenOptions);
+  };
+
+  const handleUpgradeClipResolution = async (clipId: string, target: '720P' | '1080P') => {
+    await upgradeClipResolution(clipId, target);
   };
 
   const handleMoveClip = (clipId: string, direction: 'left' | 'right') => {
@@ -1021,7 +1033,7 @@ export const VideoTab: React.FC = () => {
                       {selectedClip.generatedVideo ? '비디오 생성 완료' : '대기 중'}
                     </p>
                   </div>
-                  <div className="flex items-end">
+                  <div className="flex items-end gap-2">
                     <button
                       onClick={() => handleGenerateClip(selectedClip.id)}
                       disabled={isGenerating || !selectedClip.sourceImage || videoApiStatus === 'unavailable'}
@@ -1030,8 +1042,48 @@ export const VideoTab: React.FC = () => {
                     >
                       {selectedClip.generatedVideo ? '재생성' : '비디오 생성'}
                     </button>
+                    {/* 고해상도 업그레이드 — 동일 seed로 재호출 */}
+                    {selectedClip.generatedVideo?.seed !== undefined && (() => {
+                      const cur = selectedClip.generatedVideo!.resolution;
+                      const eng = selectedClip.generatedVideo!.videoEngine;
+                      const target: '720P' | '1080P' | null =
+                        eng === 'seedance' && cur === '480P' ? '720P'
+                        : eng !== 'seedance' && cur === '720P' ? '1080P'
+                        : null;
+                      if (!target) return null;
+                      return (
+                        <button
+                          onClick={() => handleUpgradeClipResolution(selectedClip.id, target)}
+                          disabled={isGenerating || videoApiStatus === 'unavailable'}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 min-h-[44px]"
+                          title={`동일 seed로 ${target} 재생성`}
+                        >
+                          {target} 재생성
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
+                {/* 영상 메타 (생성된 경우) */}
+                {selectedClip.generatedVideo && (
+                  <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-gray-500">
+                    {selectedClip.generatedVideo.videoEngine && (
+                      <span className="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded">
+                        {selectedClip.generatedVideo.videoEngine === 'seedance' ? 'Seedance' : 'HappyHorse'}
+                      </span>
+                    )}
+                    {selectedClip.generatedVideo.resolution && (
+                      <span className="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded">
+                        {selectedClip.generatedVideo.resolution}
+                      </span>
+                    )}
+                    {selectedClip.generatedVideo.seed !== undefined && (
+                      <span className="px-1.5 py-0.5 bg-gray-700 text-gray-500 rounded">
+                        seed {selectedClip.generatedVideo.seed}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

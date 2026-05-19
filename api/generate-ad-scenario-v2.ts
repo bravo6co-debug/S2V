@@ -535,6 +535,10 @@ imagePrompt(정적 비주얼)와 완전히 다른 목적이므로 imagePrompt �
             scenarioType: 'ad',
             productName: productName,
             productFeatures: (usps || []).map((u: string) => sanitizePrompt(u, 200)).join(', '),
+            // 영상 엔진/해상도/오디오 설정 — VideoTab의 씬별 영상 생성에 사용
+            videoEngine: config.videoEngine,
+            videoResolution: config.resolution,
+            videoGenerateAudio: config.generateAudio,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };

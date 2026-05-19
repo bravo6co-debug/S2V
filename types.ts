@@ -188,6 +188,9 @@ export interface VideoClip {
     url: string;
     thumbnailUrl?: string;
     duration: number;
+    seed?: number;                  // 동일 결과 보장용 (고해상도 재생성에 재사용)
+    resolution?: VideoResolution;
+    videoEngine?: VideoEngine;
   };
   createdAt: number;
   status: 'pending' | 'generating' | 'complete' | 'error';
@@ -374,6 +377,10 @@ export interface Scenario {
   productName?: string;                   // 상품명
   productFeatures?: string;               // 상품 특징
   productImage?: ImageData;               // 상품 이미지 (참조용)
+  // 영상 생성 설정 (광고 시나리오 생성 시 저장 — VideoTab의 영상 생성에 사용)
+  videoEngine?: VideoEngine;              // HappyHorse / Seedance
+  videoResolution?: VideoResolution;      // 480P / 720P / 1080P
+  videoGenerateAudio?: boolean;           // Seedance 전용 — 네이티브 오디오
   createdAt: number;
   updatedAt: number;
 }
