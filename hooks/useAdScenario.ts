@@ -211,9 +211,10 @@ export function useAdScenario(): UseAdScenarioReturn {
 
     // 1. 이미지 생성
     if (hasImagesToGenerate) {
-      if (engine === 'flux') {
+      if (engine === 'gpt-image') {
         // =============================================
-        // FLUX 엔진: 3단계 파이프라인 (앵커 → 변형)
+        // GPT Image v2 엔진: 2단계 파이프라인 (앵커 → 변형)
+        // FLUX 대비: strength 미지원, 텍스트/로고 정확도 ↑
         // =============================================
         try {
           const refImages: ImageData[] = [];
@@ -227,7 +228,7 @@ export function useAdScenario(): UseAdScenarioReturn {
 
           // 1단계: 앵커 이미지 생성
           setGeneratingImageSceneId(anchorScene.id);
-          console.log(`[FLUX Pipeline] Generating anchor: scene ${anchorScene.sceneNumber} (${anchorScene.storyBeat})`);
+          console.log(`[GPT Pipeline] Generating anchor: scene ${anchorScene.sceneNumber} (${anchorScene.storyBeat})`);
 
           let anchorImage: ImageData;
 
@@ -258,7 +259,7 @@ export function useAdScenario(): UseAdScenarioReturn {
           for (const scene of remainingScenes) {
             setGeneratingImageSceneId(scene.id);
             const strength = getStrengthForBeat(scene.storyBeat);
-            console.log(`[FLUX Pipeline] Generating variation: scene ${scene.sceneNumber} (${scene.storyBeat}, strength: ${strength})`);
+            console.log(`[GPT Pipeline] Generating variation: scene ${scene.sceneNumber} (${scene.storyBeat}, strength: ${strength} — GPT는 무시)`);
 
             try {
               const imageData = await apiGenerateAdSceneImage({
@@ -284,9 +285,9 @@ export function useAdScenario(): UseAdScenarioReturn {
             }
           }
         } catch (e) {
-          console.error('FLUX pipeline anchor generation failed:', e);
+          console.error('GPT Image pipeline anchor generation failed:', e);
           const errorMessage = e instanceof Error ? e.message : '앵커 이미지 생성에 실패했습니다.';
-          setError(`FLUX 파이프라인 실패: ${errorMessage}`);
+          setError(`GPT Image 파이프라인 실패: ${errorMessage}`);
           imageGenerationFailed = true;
         }
         setGeneratingImageSceneId(null);

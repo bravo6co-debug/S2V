@@ -499,7 +499,8 @@ export const AD_DURATION_OPTIONS: {
 ];
 
 // 광고 이미지 생성 엔진
-export type AdEngine = 'gemini' | 'flux';
+// 광고 이미지 생성 엔진 — FLUX는 Eachlabs 측 장애가 잦아 GPT Image 2.0로 대체 (롱폼 서비스와 동일)
+export type AdEngine = 'gemini' | 'gpt-image';
 
 export const AD_ENGINE_OPTIONS: {
   value: AdEngine;
@@ -508,7 +509,7 @@ export const AD_ENGINE_OPTIONS: {
   cost: string;
 }[] = [
   { value: 'gemini', label: 'Gemini 엔진', description: '안정적, 참조 이미지 무제한', cost: '유료 (API 키)' },
-  { value: 'flux', label: 'FLUX 엔진', description: '고품질, 씬간 일관성 강화', cost: '~$0.12 / 5씬' },
+  { value: 'gpt-image', label: 'GPT Image 2.0', description: '텍스트/로고 정확, 씬간 일관성 강화', cost: '~$0.05~0.15/장' },
 ];
 
 // V2 광고 시나리오 설정

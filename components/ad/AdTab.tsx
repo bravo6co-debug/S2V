@@ -765,7 +765,7 @@ const AdTab: React.FC = () => {
                         onClick={() => setEngine(opt.value)}
                         className={`p-3 rounded-lg border text-left transition-all ${
                           engine === opt.value
-                            ? opt.value === 'flux'
+                            ? opt.value === 'gpt-image'
                               ? 'border-blue-500 bg-blue-900/30 ring-1 ring-blue-500'
                               : 'border-orange-500 bg-orange-900/30 ring-1 ring-orange-500'
                             : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'
@@ -773,13 +773,13 @@ const AdTab: React.FC = () => {
                       >
                         <div className="text-sm font-bold text-white">{opt.label}</div>
                         <div className="text-[10px] text-gray-400 mt-0.5">{opt.description}</div>
-                        <div className={`text-[10px] mt-1 ${opt.value === 'flux' ? 'text-blue-400' : 'text-green-400'}`}>{opt.cost}</div>
+                        <div className={`text-[10px] mt-1 ${opt.value === 'gpt-image' ? 'text-blue-400' : 'text-green-400'}`}>{opt.cost}</div>
                       </button>
                     ))}
                   </div>
-                  {engine === 'flux' && (
+                  {engine === 'gpt-image' && (
                     <p className="text-[10px] text-blue-300 mt-1.5 px-1">
-                      FLUX 엔진: 앵커 이미지 기반 3단계 파이프라인으로 씬간 일관성을 강화합니다. EachLabs API 키 필요.
+                      GPT Image 2.0: 앵커 이미지 기반 2단계 파이프라인으로 씬간 일관성 강화. 텍스트/로고 정확도 강점. EachLabs API 키 필요.
                     </p>
                   )}
                 </div>
@@ -884,7 +884,7 @@ const AdTab: React.FC = () => {
                     <span className="text-gray-500">길이</span>
                     <span className="text-gray-300">{duration}초 / {AD_DURATION_OPTIONS.find(o => o.value === duration)?.scenes}씬</span>
                     <span className="text-gray-500">이미지 엔진</span>
-                    <span className={engine === 'flux' ? 'text-blue-300' : 'text-gray-300'}>
+                    <span className={engine === 'gpt-image' ? 'text-blue-300' : 'text-gray-300'}>
                       {AD_ENGINE_OPTIONS.find(o => o.value === engine)?.label}
                     </span>
                   </div>
@@ -971,14 +971,14 @@ const AdTab: React.FC = () => {
                       onClick={() => setEngine(opt.value)}
                       className={`min-h-[36px] px-2 py-1.5 text-[10px] font-medium transition-colors ${
                         engine === opt.value
-                          ? opt.value === 'flux'
+                          ? opt.value === 'gpt-image'
                             ? 'bg-blue-600 text-white'
                             : 'bg-orange-600 text-white'
                           : 'text-gray-400 hover:text-gray-300'
                       }`}
                       title={opt.description}
                     >
-                      {opt.value === 'gemini' ? 'Gemini' : 'FLUX'}
+                      {opt.value === 'gemini' ? 'Gemini' : 'GPT Image'}
                     </button>
                   ))}
                 </div>

@@ -143,7 +143,7 @@ export interface GenerateClipScenarioRequest {
 }
 
 // 광고 이미지 생성 엔진
-export type AdEngine = 'gemini' | 'flux';
+export type AdEngine = 'gemini' | 'gpt-image';
 
 // 광고 씬 파이프라인 단계
 export type AdPipelineStep = 'anchor' | 'variation';

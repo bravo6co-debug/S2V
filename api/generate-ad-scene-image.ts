@@ -1,16 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
-import { getEachLabsApiKey, generateFlux2Edit, generateFluxI2I } from './lib/eachlabs.js';
+import { getEachLabsApiKey, generateGptImageV2 } from './lib/eachlabs.js';
 import type { GenerateAdSceneImageRequest, ImageData, ApiErrorResponse } from './lib/types.js';
 
 /**
  * POST /api/generate-ad-scene-image
- * 광고 씬 이미지 생성 (FLUX 파이프라인 전용)
+ * 광고 씬 이미지 생성 (GPT Image v2 — 롱폼 서비스와 동일 모델)
  *
- * pipelineStep:
- *   - 'anchor': flux-2-turbo-edit로 앵커 이미지 생성 (최대 4장 참조)
- *   - 'variation': flux-krea-image-to-image로 앵커 기반 변형 (strength 제어)
+ * pipelineStep (FLUX → GPT 전환으로 strength 제어는 사라지지만 의미상 2단계 유지):
+ *   - 'anchor': GPT Image v2 edit. 최대 16장 참조 이미지로 앵커 이미지 생성
+ *   - 'variation': GPT Image v2 edit. 앵커 이미지를 ref로 사용해 일관성 유지하며 변형
+ *
+ * FLUX 대비 차이:
+ *   - strength 파라미터 미지원 (자연스러운 변형은 GPT의 prompt 해석 능력에 의존)
+ *   - 텍스트/로고 정확도가 더 높음 (광고에 유리)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCorsHeaders(res, req.headers.origin as string);
@@ -40,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             pipelineStep,
             referenceImages,
             anchorImage,
-            strength,
+            // strength는 GPT Image v2에서 미지원 — 무시 (호환성 위해 수신만)
             aspectRatio,
             imageStyle,
         } = req.body as GenerateAdSceneImageRequest;
@@ -53,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'pipelineStep must be "anchor" or "variation"' } as ApiErrorResponse);
         }
 
-        // EachLabs API 키 확인
+        // EachLabs API 키 (GPT Image v2도 EachLabs 경유)
         const apiKey = await getEachLabsApiKey(auth.userId);
         const ratio = aspectRatio === '9:16' ? '9:16' : '16:9';
 
@@ -68,60 +72,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
         const stylePrefix = STYLE_PREFIXES[imageStyle || 'photorealistic'] || STYLE_PREFIXES.photorealistic;
 
-        // FLUX용 프롬프트 구성 (간결하고 명확하게)
         const moodPart = mood ? `, ${mood} mood` : '';
         const cameraPart = cameraAngle ? `, ${cameraAngle.toLowerCase()} shot` : '';
-        const fluxPrompt = `${stylePrefix}, absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, labels, and packaging, no watermarks${moodPart}${cameraPart}. ${imagePrompt}`;
+        const prompt = `${stylePrefix}, absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, labels, and packaging, no watermarks${moodPart}${cameraPart}. ${imagePrompt}`;
 
-        console.log(`[ad-scene-image] Step: ${pipelineStep}, Prompt (${fluxPrompt.length} chars): ${fluxPrompt.substring(0, 150)}...`);
-
-        let resultImage: ImageData;
-
+        // 참조 이미지 결정: anchor 단계는 referenceImages, variation 단계는 anchorImage 1장
+        let refs: ImageData[];
         if (pipelineStep === 'anchor') {
-            // =============================================
-            // 앵커 단계: flux-2-turbo-edit (최대 4장 참조)
-            // =============================================
             if (!referenceImages || referenceImages.length === 0) {
                 return res.status(400).json({
                     error: 'anchor 단계에는 최소 1장의 참조 이미지가 필요합니다.'
                 } as ApiErrorResponse);
             }
-
-            console.log(`[ad-scene-image] Generating anchor with ${referenceImages.length} reference images`);
-
-            resultImage = await generateFlux2Edit({
-                apiKey,
-                prompt: fluxPrompt,
-                referenceImages,
-                aspectRatio: ratio,
-                guidanceScale: 2.5,
-            });
-
+            refs = referenceImages.slice(0, 16); // GPT Image v2 한도
         } else {
-            // =============================================
-            // 변형 단계: flux-krea-image-to-image (앵커 기반)
-            // =============================================
             if (!anchorImage) {
                 return res.status(400).json({
                     error: 'variation 단계에는 앵커 이미지가 필요합니다.'
                 } as ApiErrorResponse);
             }
-
-            const variationStrength = typeof strength === 'number'
-                ? Math.max(0, Math.min(1, strength))
-                : 0.5;
-
-            console.log(`[ad-scene-image] Generating variation with strength ${variationStrength}`);
-
-            resultImage = await generateFluxI2I({
-                apiKey,
-                prompt: fluxPrompt,
-                sourceImage: anchorImage,
-                strength: variationStrength,
-                numInferenceSteps: 40,
-                guidanceScale: 4.5,
-            });
+            refs = [anchorImage];
         }
+
+        console.log(`[ad-scene-image] Step: ${pipelineStep}, refs: ${refs.length}, prompt (${prompt.length} chars): ${prompt.substring(0, 150)}...`);
+
+        // GPT Image v2 단일 호출 — 롱폼 서비스와 동일한 패턴
+        const resultImage = await generateGptImageV2({
+            apiKey,
+            model: 'gpt-image-2.0',
+            prompt,
+            aspectRatio: ratio,
+            referenceImages: refs,
+        });
 
         return res.status(200).json({ image: resultImage });
 
