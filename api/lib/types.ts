@@ -249,12 +249,28 @@ export interface GenerateSceneImageRequest {
     imageStyle?: ImageStyle;
 }
 
+export type VideoEngine = 'happyhorse' | 'seedance';
+
 export interface GenerateVideoRequest {
     sourceImage: ImageData;
     motionPrompt: string;
-    durationSeconds?: number;        // HappyHorse i2v: 3~15초 (기본 15)
-    resolution?: '720P' | '1080P';    // 기본 720P, 마음에 들면 1080P 재생성
-    seed?: number;                    // 1080P 재생성 시 동일 결과 보장용
+    durationSeconds?: number;        // HappyHorse: 3~15초 / Seedance: 4~15초 (기본 15)
+    resolution?: '480P' | '720P' | '1080P';    // 기본 720P (Seedance i2v는 480P 권장, 1080P 미지원)
+    seed?: number;                    // 동일 결과 보장용 (해상도 업그레이드 재생성에 사용)
+    videoEngine?: VideoEngine;        // 기본 'happyhorse'
+    generateAudio?: boolean;          // Seedance 전용 — 네이티브 오디오 동기화 (기본 true)
+    endFrame?: ImageData;             // Seedance i2v 전용 — 씬 끝 프레임 고정 (선택)
+}
+
+// 15초 광고 t2v 전용 (단일 호출, 멀티샷 prompt)
+export interface GenerateAdTextToVideoRequest {
+    prompt: string;                   // 멀티샷 프롬프트 ("Shot 1 (wide, 0-2s): ...")
+    durationSeconds?: number;        // 4~15초 (기본 15)
+    resolution?: '480P' | '720P' | '1080P';
+    aspectRatio: AspectRatio;
+    videoEngine?: VideoEngine;
+    generateAudio?: boolean;          // Seedance 전용
+    seed?: number;
 }
 
 export interface ApiErrorResponse {

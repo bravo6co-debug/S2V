@@ -503,11 +503,43 @@ export const AD_DURATION_OPTIONS: {
   { value: 60, label: '60초', scenes: 4, videoMode: 'image-to-video' },
 ];
 
-// 영상 해상도 (HappyHorse 1.0)
-export type VideoResolution = '720P' | '1080P';
+// 영상 해상도 — 480P는 Seedance i2v-fast 전용 (HappyHorse는 720P/1080P)
+export type VideoResolution = '480P' | '720P' | '1080P';
 export const VIDEO_RESOLUTION_OPTIONS: { value: VideoResolution; label: string; pricePerSec: string }[] = [
-  { value: '720P', label: '720P (기본)', pricePerSec: '$0.14/초' },
-  { value: '1080P', label: '1080P (고해상)', pricePerSec: '$0.24/초' },
+  { value: '480P', label: '480P (저비용)', pricePerSec: '$0.11/초' },
+  { value: '720P', label: '720P (기본)', pricePerSec: '$0.14/초~$0.24/초' },
+  { value: '1080P', label: '1080P (고해상)', pricePerSec: '$0.24/초~$0.30/초' },
+];
+
+// 영상 생성 엔진 — HappyHorse(기본/저비용/무음) vs Seedance(프리미엄/네이티브 오디오)
+// 가격(720p 기준, 초당): HappyHorse i2v ~$0.14, Seedance t2v $0.3024, Seedance i2v-fast $0.2419
+export type VideoEngine = 'happyhorse' | 'seedance';
+
+export const VIDEO_ENGINE_OPTIONS: {
+  value: VideoEngine;
+  label: string;
+  description: string;
+  cost: string;
+  supportsAudio: boolean;
+  supportedResolutions: VideoResolution[];
+}[] = [
+  {
+    value: 'happyhorse',
+    label: 'HappyHorse 1.0 (기본)',
+    description: '안정적·저비용. BGM/내레이션은 별도 합성 필요',
+    cost: '720P $0.14/초, 1080P $0.24/초',
+    supportsAudio: false,
+    supportedResolutions: ['720P', '1080P'],
+  },
+  {
+    value: 'seedance',
+    label: 'Seedance 2.0 (프리미엄)',
+    description: '네이티브 오디오·립싱크. 광고 대사/효과음 1패스 생성',
+    cost: 't2v 720p $0.3024/초, i2v 720p $0.2419/초, i2v 480p $0.1129/초',
+    supportsAudio: true,
+    supportedResolutions: ['480P', '720P', '1080P'],
+    // 비고: Seedance i2v-fast는 480P/720P만 지원, 1080P는 t2v만 가능
+  },
 ];
 
 // 광고 이미지 생성 엔진
@@ -535,7 +567,9 @@ export interface AdScenarioConfigV2 {
   imageStyle: ImageStyle;
   aspectRatio?: AspectRatio;       // 영상 비율 (기본 16:9)
   duration: AdDuration;
-  resolution?: VideoResolution;    // 영상 해상도 (기본 720P, 마음에 들면 1080P 재생성)
+  resolution?: VideoResolution;    // 영상 해상도. HappyHorse 기본 720P, Seedance 기본 480P. 만족 시 더 높은 해상도로 재생성
+  videoEngine?: VideoEngine;       // 영상 엔진 (기본 'happyhorse'). 'seedance'는 네이티브 오디오 지원
+  generateAudio?: boolean;         // Seedance 전용 — 네이티브 오디오 동기화 (기본 true)
   referenceImages?: ImageData[]; // 참고 이미지 (최대 3장)
 
   // 제품 소개 (product-intro)

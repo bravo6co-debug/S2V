@@ -600,3 +600,125 @@ export async function generateHappyhorseI2V(options: HappyhorseI2VOptions): Prom
         try { await del(frameUrl); } catch (e) { console.warn('[HappyHorse-I2V] Blob cleanup:', e); }
     }
 }
+
+// =============================================
+// Seedance 2.0 — Text-to-Video / Image-to-Video Fast (ByteDance)
+// 차별점: 네이티브 오디오 동기화 (HappyHorse는 무음)
+// 가격(720p): t2v $0.3024/s, i2v-fast $0.2419/s — HappyHorse 대비 ~2~3배
+// =============================================
+
+const SEEDANCE_T2V_SLUG = 'bytedance-seedance-2-0-text-to-video';
+const SEEDANCE_I2V_FAST_SLUG = 'bytedance-seedance-2-0-image-to-video-fast';
+const SEEDANCE_POLL_TIMEOUT_MS = 360_000; // Avg run 150s, 여유 6분
+
+// 사용자 노출 해상도는 HappyHorse와 동일한 대문자 형식을 유지하고,
+// 어댑터 내부에서 Seedance가 요구하는 소문자로 변환 (호출부 단순화).
+export type SeedanceResolution = '480P' | '720P' | '1080P';
+export type SeedanceAspectRatio = 'auto' | '16:9' | '9:16' | '4:3' | '3:4' | '21:9' | '1:1';
+
+export interface SeedanceT2VOptions {
+    apiKey: string;
+    prompt: string;
+    duration: number;                  // 4~15 (어댑터에서 string 변환)
+    resolution: SeedanceResolution;
+    aspectRatio?: SeedanceAspectRatio; // 기본 'auto'
+    generateAudio: boolean;            // 명시 필수 — 광고 톤 정책에 영향
+    seed?: number;
+}
+
+export interface SeedanceI2VOptions {
+    apiKey: string;
+    prompt: string;
+    firstFrame: ImageData;             // → image_url
+    endFrame?: ImageData;              // → end_image_url (선택)
+    duration: number | 'auto';         // 4~15 또는 'auto'
+    resolution: SeedanceResolution;
+    aspectRatio?: SeedanceAspectRatio;
+    generateAudio: boolean;
+    seed?: number;
+}
+
+export interface SeedanceVideoResult {
+    videoUrl: string;
+}
+
+function toSeedanceResolution(res: SeedanceResolution): string {
+    // Seedance는 소문자 ('720p') 요구
+    return res.toLowerCase();
+}
+
+/**
+ * Seedance 2.0 Text-to-Video — 광고/먹방/롱폼 훅에서 네이티브 오디오가 필요할 때 사용
+ */
+export async function generateSeedanceT2V(options: SeedanceT2VOptions): Promise<SeedanceVideoResult> {
+    const { apiKey, prompt, duration, resolution, aspectRatio = 'auto', generateAudio, seed } = options;
+
+    if (duration < 4 || duration > 15) {
+        throw new Error(`Seedance duration은 4~15초여야 합니다 (입력: ${duration})`);
+    }
+
+    const input: Record<string, unknown> = {
+        prompt,
+        duration: String(duration),                  // Seedance는 문자열 요구
+        resolution: toSeedanceResolution(resolution),
+        aspect_ratio: aspectRatio,
+        generate_audio: generateAudio,
+        enable_safety_checker: true,
+    };
+    if (typeof seed === 'number') input.seed = String(seed);
+
+    const predictionId = await createPrediction(apiKey, SEEDANCE_T2V_SLUG, input);
+    const videoUrl = await pollPrediction(apiKey, predictionId, 'Seedance-T2V', SEEDANCE_POLL_TIMEOUT_MS);
+    return { videoUrl };
+}
+
+/**
+ * Seedance 2.0 Image-to-Video Fast — 30초+ 광고용 씬별 i2v
+ * - image_url 단일 + end_image_url 선택 (HappyHorse i2v는 first_frame만 있음)
+ * - duration 'auto'면 모델이 입력 이미지/프롬프트 기준으로 결정
+ * - 해상도 지원: 480p ($0.1129/s), 720p ($0.2419/s) — 1080p 미지원
+ */
+export async function generateSeedanceI2V(options: SeedanceI2VOptions): Promise<SeedanceVideoResult> {
+    const { apiKey, prompt, firstFrame, endFrame, duration, resolution, aspectRatio = 'auto', generateAudio, seed } = options;
+
+    if (resolution === '1080P') {
+        throw new Error('Seedance i2v-fast는 1080p를 지원하지 않습니다. 480P 또는 720P를 사용하세요. 1080p가 필요하면 t2v 모델을 사용하세요.');
+    }
+
+    if (typeof duration === 'number' && (duration < 4 || duration > 15)) {
+        throw new Error(`Seedance duration은 4~15초여야 합니다 (입력: ${duration})`);
+    }
+
+    const blobUrls: string[] = [];
+
+    try {
+        const imageUrl = await uploadImageToBlob(firstFrame);
+        blobUrls.push(imageUrl);
+
+        const input: Record<string, unknown> = {
+            prompt,
+            image_url: imageUrl,
+            duration: typeof duration === 'number' ? String(duration) : duration,
+            resolution: toSeedanceResolution(resolution),
+            aspect_ratio: aspectRatio,
+            generate_audio: generateAudio,
+            enable_safety_checker: true,
+        };
+
+        if (endFrame) {
+            const endUrl = await uploadImageToBlob(endFrame);
+            blobUrls.push(endUrl);
+            input.end_image_url = endUrl;
+        }
+
+        if (typeof seed === 'number') input.seed = String(seed);
+
+        const predictionId = await createPrediction(apiKey, SEEDANCE_I2V_FAST_SLUG, input);
+        const videoUrl = await pollPrediction(apiKey, predictionId, 'Seedance-I2V-Fast', SEEDANCE_POLL_TIMEOUT_MS);
+        return { videoUrl };
+    } finally {
+        for (const url of blobUrls) {
+            try { await del(url); } catch (e) { console.warn('[Seedance-I2V] Blob cleanup:', e); }
+        }
+    }
+}

@@ -3,25 +3,28 @@ import { sanitizePrompt, setCorsHeaders } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
 import { findUserById } from './lib/mongodb.js';
 import {
-    generateHappyhorseI2V,
-    generateSeedanceI2V,
+    generateHappyhorseT2V,
+    generateSeedanceT2V,
     type HappyhorseResolution,
+    type HappyhorseRatio,
     type SeedanceResolution,
+    type SeedanceAspectRatio,
 } from './lib/eachlabs.js';
 import { createLogger } from './lib/logger.js';
-import type { GenerateVideoRequest, VideoGenerationResult, ApiErrorResponse } from './lib/types.js';
+import type { GenerateAdTextToVideoRequest, VideoGenerationResult, ApiErrorResponse } from './lib/types.js';
 
-const log = createLogger('generate-video');
+const log = createLogger('generate-ad-text-to-video');
 
 /**
- * POST /api/generate-video
- * Image-to-Video — 광고 30/45/60초 씬당 영상 생성 (15초/씬)
+ * POST /api/generate-ad-text-to-video
+ * Text-to-Video — 15초 광고 단일 호출 전용
  *
- * 엔진 선택:
- *   - 'happyhorse' (기본, 720P/1080P, 무음 — BGM/내레이션 별도 합성)
- *   - 'seedance'   (프리미엄, 480P/720P, 네이티브 오디오 동기화)
+ * 시나리오를 multi-shot prompt 1개로 통합하고 t2v 1콜로 영상 생성.
+ * (30/45/60초 광고는 씬당 i2v 호출이라 별도 엔드포인트 `/api/generate-video` 사용)
  *
- * 1080P가 필요하면 happyhorse만 가능 — Seedance i2v-fast는 1080P 미지원.
+ * 엔진:
+ *   - 'happyhorse' (기본, 무음)
+ *   - 'seedance'   (네이티브 오디오 동기화)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCorsHeaders(res, req.headers.origin as string);
@@ -34,7 +37,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' } as ApiErrorResponse);
     }
 
-    // 인증
     const auth = requireAuth(req);
     if (!auth.authenticated || !auth.userId) {
         return res.status(401).json({
@@ -45,44 +47,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         const {
-            sourceImage,
-            motionPrompt,
+            prompt,
             durationSeconds = 15,
+            aspectRatio,
             videoEngine = 'happyhorse',
             generateAudio = true,
-            endFrame,
             seed,
-        } = req.body as GenerateVideoRequest;
-        let { resolution } = req.body as GenerateVideoRequest;
+        } = req.body as GenerateAdTextToVideoRequest;
+        let { resolution } = req.body as GenerateAdTextToVideoRequest;
 
-        if (!sourceImage || !sourceImage.data) {
-            return res.status(400).json({ error: 'sourceImage is required' } as ApiErrorResponse);
+        if (!prompt) {
+            return res.status(400).json({ error: 'prompt is required' } as ApiErrorResponse);
+        }
+        if (!aspectRatio || (aspectRatio !== '16:9' && aspectRatio !== '9:16')) {
+            return res.status(400).json({ error: 'aspectRatio must be "16:9" or "9:16"' } as ApiErrorResponse);
         }
 
-        if (!motionPrompt) {
-            return res.status(400).json({ error: 'motionPrompt is required' } as ApiErrorResponse);
-        }
-
-        // 엔진별 해상도 기본값 — HappyHorse 720P, Seedance 480P (저비용 진입)
+        // 엔진별 기본 해상도 — HappyHorse 720P, Seedance 480P
         if (!resolution) {
             resolution = videoEngine === 'seedance' ? '480P' : '720P';
         }
 
-        // 엔진별 입력 검증
+        // t2v는 두 엔진 모두 1080P 지원 — i2v와 달리 480P/720P/1080P 모두 허용
         if (videoEngine === 'happyhorse' && resolution === '480P') {
             return res.status(400).json({
                 error: 'HappyHorse 엔진은 480P를 지원하지 않습니다. 720P 또는 1080P를 선택하세요.',
                 code: 'INVALID_RESOLUTION',
             } as ApiErrorResponse);
         }
-        if (videoEngine === 'seedance' && resolution === '1080P') {
-            return res.status(400).json({
-                error: 'Seedance i2v는 1080P를 지원하지 않습니다. 480P/720P 또는 HappyHorse 엔진을 선택하세요.',
-                code: 'INVALID_RESOLUTION',
-            } as ApiErrorResponse);
-        }
 
-        // 사용자별 EachLabs 키 조회 — 일반 사용자는 본인 키만, admin만 환경변수 폴백 (비용 누수 차단)
+        // 사용자별 EachLabs 키 조회 (비용 누수 차단: admin만 환경변수 폴백)
         const user = await findUserById(auth.userId);
         const personalKey = user?.settings?.hailuoApiKey;
         const apiKey = personalKey || (user?.isAdmin ? process.env.HAILUO_API_KEY : undefined);
@@ -94,61 +88,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             } as ApiErrorResponse);
         }
 
-        const sanitizedPrompt = sanitizePrompt(motionPrompt, 1000);
+        // multi-shot prompt는 길어질 수 있어 한도 넉넉히 (광고 1~5컷, 각 컷 timing 포함)
+        const sanitizedPrompt = sanitizePrompt(prompt, 3000);
 
-        // i2v용 motion-specific prompt 강화 (vague prompt 회피)
-        const enhancedPrompt = `${sanitizedPrompt}\n\nMotion: smooth, natural camera movement with realistic physics. Cinematic film-like aesthetics. Consistent lighting throughout. No sudden jumps or artifacts.`.trim();
-
-        // 엔진별 duration 범위 (HappyHorse 3~15, Seedance 4~15)
+        // duration — HappyHorse 3~15, Seedance 4~15
         const minDur = videoEngine === 'seedance' ? 4 : 3;
         const clampedDuration = Math.max(minDur, Math.min(15, Math.round(durationSeconds)));
 
-        log.info(`${videoEngine} i2v 호출`, {
+        log.info(`${videoEngine} t2v 호출`, {
             engine: videoEngine,
             duration: clampedDuration,
             resolution,
+            aspectRatio,
             audio: videoEngine === 'seedance' ? generateAudio : false,
-            promptChars: enhancedPrompt.length,
+            promptChars: sanitizedPrompt.length,
             seed: seed ?? '(none)',
-            hasEndFrame: !!endFrame,
         });
 
         let videoUrl: string;
 
         if (videoEngine === 'seedance') {
-            const result = await generateSeedanceI2V({
+            const result = await generateSeedanceT2V({
                 apiKey,
-                prompt: enhancedPrompt,
-                firstFrame: sourceImage,
-                ...(endFrame && { endFrame }),
+                prompt: sanitizedPrompt,
                 duration: clampedDuration,
                 resolution: resolution as SeedanceResolution,
-                aspectRatio: 'auto',
+                aspectRatio: aspectRatio as SeedanceAspectRatio,
                 generateAudio,
                 ...(typeof seed === 'number' && { seed }),
             });
             videoUrl = result.videoUrl;
         } else {
-            const result = await generateHappyhorseI2V({
+            const result = await generateHappyhorseT2V({
                 apiKey,
-                prompt: enhancedPrompt,
-                firstFrame: sourceImage,
+                prompt: sanitizedPrompt,
                 duration: clampedDuration,
                 resolution: resolution as HappyhorseResolution,
+                ratio: aspectRatio as HappyhorseRatio,
                 ...(typeof seed === 'number' && { seed }),
             });
             videoUrl = result.videoUrl;
         }
 
+        // t2v는 firstFrame 없음 → 썸네일도 비어둠 (클라이언트가 영상에서 추출 또는 미표시)
         const response: VideoGenerationResult = {
             videoUrl,
-            thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
+            thumbnailUrl: '',
             duration: clampedDuration,
         };
         return res.status(200).json(response);
 
     } catch (e) {
-        log.error('Video generation failed', { error: e instanceof Error ? e.message : String(e) });
+        log.error('t2v Video generation failed', { error: e instanceof Error ? e.message : String(e) });
 
         if (e instanceof Error) {
             const msg = e.message;
