@@ -103,13 +103,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const minDur = videoEngine === 'seedance' ? 4 : 3;
         const clampedDuration = Math.max(minDur, Math.min(15, Math.round(durationSeconds)));
 
+        // seed 미지정 시 자동 생성 — 응답에 포함해 클라이언트가 고해상도 재생성에 재사용
+        const effectiveSeed = typeof seed === 'number' ? seed : Math.floor(Math.random() * 2_147_483_647);
+
         log.info(`${videoEngine} i2v 호출`, {
             engine: videoEngine,
             duration: clampedDuration,
             resolution,
             audio: videoEngine === 'seedance' ? generateAudio : false,
             promptChars: enhancedPrompt.length,
-            seed: seed ?? '(none)',
+            seed: effectiveSeed,
             hasEndFrame: !!endFrame,
         });
 
@@ -125,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 resolution: resolution as SeedanceResolution,
                 aspectRatio: 'auto',
                 generateAudio,
-                ...(typeof seed === 'number' && { seed }),
+                seed: effectiveSeed,
             });
             videoUrl = result.videoUrl;
         } else {
@@ -135,13 +138,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 firstFrame: sourceImage,
                 duration: clampedDuration,
                 resolution: resolution as HappyhorseResolution,
-                ...(typeof seed === 'number' && { seed }),
+                seed: effectiveSeed,
             });
             videoUrl = result.videoUrl;
         }
 
         const response: VideoGenerationResult = {
             videoUrl,
+            seed: effectiveSeed,
+            resolution,
+            videoEngine,
             thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
             duration: clampedDuration,
         };

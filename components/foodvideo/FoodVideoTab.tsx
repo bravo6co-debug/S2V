@@ -289,6 +289,28 @@ export const FoodVideoTab: React.FC = () => {
     if (isTranslated) { setIsTranslated(false); setEnglishPrompt(''); setKoreanDescription(''); }
   }, [isTranslated]);
 
+  // 기본 모드: 고해상도 업그레이드 — 동일 seed + 더 높은 해상도로 재호출
+  const handleUpgradeResolution = useCallback(async (target: '720P' | '1080P') => {
+    if (!foodUpload.image || !englishPrompt.trim() || !result?.seed || !checkAuth()) return;
+
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      const videoResult = await generateFoodVideo(foodUpload.image, englishPrompt.trim(), 6, {
+        videoEngine: result.videoEngine,
+        resolution: target,
+        generateAudio: result.videoEngine === 'seedance',
+        seed: result.seed,
+      });
+      setResult(videoResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '고해상도 재생성에 실패했습니다.');
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [foodUpload.image, englishPrompt, result, checkAuth]);
+
   // =============================================
   // 먹방 모드 핸들러
   // =============================================
@@ -373,6 +395,28 @@ export const FoodVideoTab: React.FC = () => {
       setIsGeneratingMukbangVideo(false);
     }
   }, [mukbangComposite, mukbangVideoPrompt, checkAuth, videoEngine]);
+
+  // 먹방 모드: 고해상도 업그레이드
+  const handleUpgradeMukbangResolution = useCallback(async (target: '720P' | '1080P') => {
+    if (!mukbangComposite || !mukbangVideoPrompt || !mukbangResult?.seed || !checkAuth()) return;
+
+    setIsGeneratingMukbangVideo(true);
+    setMukbangError(null);
+
+    try {
+      const videoResult = await generateFoodVideo(mukbangComposite, mukbangVideoPrompt, 6, {
+        videoEngine: mukbangResult.videoEngine,
+        resolution: target,
+        generateAudio: mukbangResult.videoEngine === 'seedance',
+        seed: mukbangResult.seed,
+      });
+      setMukbangResult(videoResult);
+    } catch (err) {
+      setMukbangError(err instanceof Error ? err.message : '고해상도 재생성에 실패했습니다.');
+    } finally {
+      setIsGeneratingMukbangVideo(false);
+    }
+  }, [mukbangComposite, mukbangVideoPrompt, mukbangResult, checkAuth]);
 
   // 영상 다운로드 (공통)
   const handleDownload = useCallback(async (videoUrl: string) => {
@@ -600,6 +644,8 @@ export const FoodVideoTab: React.FC = () => {
                   onDownload={() => handleDownload(result.videoUrl)}
                   onRegenerate={handleGenerate}
                   isRegenerating={isGenerating}
+                  result={result}
+                  onUpgradeResolution={handleUpgradeResolution}
                 />
               )}
 
@@ -901,6 +947,8 @@ export const FoodVideoTab: React.FC = () => {
                   onDownload={() => handleDownload(mukbangResult.videoUrl)}
                   onRegenerate={handleGenerateMukbangVideo}
                   isRegenerating={isGeneratingMukbangVideo}
+                  result={mukbangResult}
+                  onUpgradeResolution={handleUpgradeMukbangResolution}
                 />
               )}
 
@@ -953,48 +1001,80 @@ interface VideoResultAreaProps {
   onDownload: () => void;
   onRegenerate: () => void;
   isRegenerating: boolean;
+  result?: FoodVideoResult | null;
+  onUpgradeResolution?: (target: '720P' | '1080P') => void;
 }
 
-const VideoResultArea: React.FC<VideoResultAreaProps> = ({ videoUrl, onDownload, onRegenerate, isRegenerating }) => (
-  <div className="space-y-4">
-    <div className="border-t border-gray-700 pt-4">
-      <h3 className="text-sm sm:text-base font-bold text-white mb-3 flex items-center gap-2">
-        <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        생성된 영상
-      </h3>
-      <div className="rounded-xl overflow-hidden bg-black border border-gray-700 flex justify-center">
-        <video
-          src={videoUrl}
-          controls
-          autoPlay
-          loop
-          className="max-h-[480px] sm:max-h-[560px]"
-          style={{ aspectRatio: '9/16' }}
-        >
-          브라우저가 비디오 재생을 지원하지 않습니다.
-        </video>
-      </div>
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={onDownload}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-green-600 hover:bg-green-500 rounded-lg transition-colors min-h-[44px]"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-          다운로드
-        </button>
-        <button
-          onClick={onRegenerate}
-          disabled={isRegenerating}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-50 min-h-[44px]"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-          재생성
-        </button>
+// 엔진별 다음 단계 해상도 (현재 → 업그레이드 목표)
+function nextResolution(current: string | undefined, engine: string | undefined): '720P' | '1080P' | null {
+  if (engine === 'seedance') {
+    // Seedance i2v-fast: 480P → 720P만 (1080P 미지원)
+    if (current === '480P') return '720P';
+    return null;
+  }
+  // HappyHorse: 720P → 1080P
+  if (current === '720P') return '1080P';
+  return null;
+}
+
+const VideoResultArea: React.FC<VideoResultAreaProps> = ({ videoUrl, onDownload, onRegenerate, isRegenerating, result, onUpgradeResolution }) => {
+  const upgradeTarget = nextResolution(result?.resolution, result?.videoEngine);
+
+  return (
+    <div className="space-y-4">
+      <div className="border-t border-gray-700 pt-4">
+        <h3 className="text-sm sm:text-base font-bold text-white mb-3 flex items-center gap-2">
+          <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          생성된 영상
+          {result?.resolution && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded">{result.resolution}</span>
+          )}
+        </h3>
+        <div className="rounded-xl overflow-hidden bg-black border border-gray-700 flex justify-center">
+          <video
+            src={videoUrl}
+            controls
+            autoPlay
+            loop
+            className="max-h-[480px] sm:max-h-[560px]"
+            style={{ aspectRatio: '9/16' }}
+          >
+            브라우저가 비디오 재생을 지원하지 않습니다.
+          </video>
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={onDownload}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-green-600 hover:bg-green-500 rounded-lg transition-colors min-h-[44px]"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            다운로드
+          </button>
+          <button
+            onClick={onRegenerate}
+            disabled={isRegenerating}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-50 min-h-[44px]"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            재생성
+          </button>
+        </div>
+        {/* 고해상도 업그레이드 — 동일 seed로 더 높은 해상도 재호출 */}
+        {upgradeTarget && onUpgradeResolution && result?.seed !== undefined && (
+          <button
+            onClick={() => onUpgradeResolution(upgradeTarget)}
+            disabled={isRegenerating}
+            className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg transition-colors disabled:opacity-50 min-h-[44px]"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+            {upgradeTarget}로 재생성 (동일 seed)
+          </button>
+        )}
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default FoodVideoTab;

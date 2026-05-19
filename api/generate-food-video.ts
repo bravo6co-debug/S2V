@@ -60,6 +60,9 @@ interface GenerateFoodVideoRequest {
 interface FoodVideoResult {
     videoUrl: string;
     duration: number;
+    seed?: number;                                  // 동일 결과 보장용 (고해상도 재생성에 재사용)
+    resolution?: '480P' | '720P' | '1080P';
+    videoEngine?: VideoEngine;
 }
 
 /**
@@ -152,19 +155,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const minDur = videoEngine === 'seedance' ? 4 : 3;
         const clampedDuration = Math.max(minDur, Math.min(15, Math.round(durationSeconds)));
 
+        // seed 미지정 시 자동 생성 — 응답에 포함해 클라이언트가 고해상도 재생성에 재사용
+        const effectiveSeed = typeof seed === 'number' ? seed : Math.floor(Math.random() * 2_147_483_647);
+
         log.info(`${videoEngine} 먹방 영상 생성`, {
             engine: videoEngine,
             duration: clampedDuration,
             resolution,
             audio: videoEngine === 'seedance' ? generateAudio : false,
             promptChars: englishPrompt.length,
-            seed: seed ?? '(none)',
+            seed: effectiveSeed,
         });
 
         let videoUrl: string;
 
         if (videoEngine === 'seedance') {
-            const result = await generateSeedanceI2V({
+            const r = await generateSeedanceI2V({
                 apiKey,
                 prompt: englishPrompt,
                 firstFrame: foodImage,
@@ -172,24 +178,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 resolution: resolution as SeedanceResolution,
                 aspectRatio: 'auto',
                 generateAudio,
-                ...(typeof seed === 'number' && { seed }),
+                seed: effectiveSeed,
             });
-            videoUrl = result.videoUrl;
+            videoUrl = r.videoUrl;
         } else {
-            const result = await generateHappyhorseI2V({
+            const r = await generateHappyhorseI2V({
                 apiKey,
                 prompt: englishPrompt,
                 firstFrame: foodImage,
                 duration: clampedDuration,
                 resolution: resolution as HappyhorseResolution,
-                ...(typeof seed === 'number' && { seed }),
+                seed: effectiveSeed,
             });
-            videoUrl = result.videoUrl;
+            videoUrl = r.videoUrl;
         }
 
         const result: FoodVideoResult = {
             videoUrl,
             duration: clampedDuration,
+            seed: effectiveSeed,
+            resolution,
+            videoEngine,
         };
         return res.status(200).json(result);
 

@@ -504,21 +504,39 @@ ${charactersInScene}
 // VIDEO GENERATION
 // ============================================
 
+export type VideoEngine = 'happyhorse' | 'seedance';
+export type VideoResolution = '480P' | '720P' | '1080P';
+
 export interface VideoGenerationResult {
     videoUrl: string;
     thumbnailUrl: string;
     duration: number;
+    seed?: number;
+    resolution?: VideoResolution;
+    videoEngine?: VideoEngine;
+}
+
+export interface GenerateVideoOptions {
+    videoEngine?: VideoEngine;       // 기본 'happyhorse'
+    resolution?: VideoResolution;    // 엔진별 기본값 (HappyHorse 720P / Seedance 480P)
+    generateAudio?: boolean;         // Seedance 전용, 기본 true
+    seed?: number;                   // 고해상도 재생성 시 동일 결과 보장
 }
 
 export const generateVideoFromImage = async (
     sourceImage: ImageData,
     motionPrompt: string,
-    durationSeconds: number = 5
+    durationSeconds: number = 5,
+    options?: GenerateVideoOptions
 ): Promise<VideoGenerationResult> => {
     return post<VideoGenerationResult>('/api/generate-video', {
         sourceImage,
         motionPrompt,
         durationSeconds,
+        ...(options?.videoEngine && { videoEngine: options.videoEngine }),
+        ...(options?.resolution && { resolution: options.resolution }),
+        ...(options?.generateAudio !== undefined && { generateAudio: options.generateAudio }),
+        ...(typeof options?.seed === 'number' && { seed: options.seed }),
     }, 'video');
 };
 
@@ -558,6 +576,9 @@ export const translateFoodPrompt = async (
 export interface FoodVideoResult {
     videoUrl: string;
     duration: number;
+    seed?: number;
+    resolution?: VideoResolution;
+    videoEngine?: VideoEngine;
 }
 
 export interface FoodVideoOptions {

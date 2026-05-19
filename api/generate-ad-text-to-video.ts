@@ -95,6 +95,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const minDur = videoEngine === 'seedance' ? 4 : 3;
         const clampedDuration = Math.max(minDur, Math.min(15, Math.round(durationSeconds)));
 
+        // seed 미지정 시 자동 생성 — 응답에 포함해 클라이언트가 고해상도 재생성에 재사용
+        const effectiveSeed = typeof seed === 'number' ? seed : Math.floor(Math.random() * 2_147_483_647);
+
         log.info(`${videoEngine} t2v 호출`, {
             engine: videoEngine,
             duration: clampedDuration,
@@ -102,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             aspectRatio,
             audio: videoEngine === 'seedance' ? generateAudio : false,
             promptChars: sanitizedPrompt.length,
-            seed: seed ?? '(none)',
+            seed: effectiveSeed,
         });
 
         let videoUrl: string;
@@ -115,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 resolution: resolution as SeedanceResolution,
                 aspectRatio: aspectRatio as SeedanceAspectRatio,
                 generateAudio,
-                ...(typeof seed === 'number' && { seed }),
+                seed: effectiveSeed,
             });
             videoUrl = result.videoUrl;
         } else {
@@ -125,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 duration: clampedDuration,
                 resolution: resolution as HappyhorseResolution,
                 ratio: aspectRatio as HappyhorseRatio,
-                ...(typeof seed === 'number' && { seed }),
+                seed: effectiveSeed,
             });
             videoUrl = result.videoUrl;
         }
@@ -133,6 +136,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // t2v는 firstFrame 없음 → 썸네일도 비어둠 (클라이언트가 영상에서 추출 또는 미표시)
         const response: VideoGenerationResult = {
             videoUrl,
+            seed: effectiveSeed,
+            resolution,
+            videoEngine,
             thumbnailUrl: '',
             duration: clampedDuration,
         };

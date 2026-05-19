@@ -165,6 +165,9 @@ export interface VideoGenerationResult {
     videoUrl: string;
     thumbnailUrl: string;
     duration: number;
+    seed?: number;                     // 사용된 seed (재생성 시 동일 결과 보장용)
+    resolution?: '480P' | '720P' | '1080P';  // 사용된 해상도 (업그레이드 UI 노출용)
+    videoEngine?: VideoEngine;         // 사용된 엔진
 }
 
 // API Request/Response types
