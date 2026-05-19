@@ -1,3 +1,4 @@
+import React from 'react';
 import { Composition } from 'remotion';
 import { ShortFormVideo, ShortFormVideoProps } from './ShortFormVideo';
 import { LongformVideo, LongformVideoProps } from './LongformVideo';

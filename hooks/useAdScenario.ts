@@ -54,6 +54,9 @@ interface UseAdScenarioReturn {
   // 이미지 교체
   replaceSceneImage: (sceneId: string, newImage: ImageData) => void;
 
+  // 씬 업데이트 (광고 시나리오)
+  updateAdScene: (sceneId: string, updates: Partial<Scene>) => void;
+
   // 저장/불러오기 (파일)
   saveAdScenarioToFile: () => void;
   loadAdScenarioFromFile: (file: File) => Promise<void>;

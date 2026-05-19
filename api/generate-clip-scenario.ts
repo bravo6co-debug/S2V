@@ -452,6 +452,7 @@ ${characterGuide}
             tone: tone,
             mode: mode,
             imageStyle: imageStyle,
+            aspectRatio: '9:16',  // 클립은 숏폼(세로) 전용
             suggestedCharacters: parsed.suggestedCharacters || [],
             scenes,
             scenarioType: 'clip',

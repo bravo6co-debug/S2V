@@ -96,6 +96,10 @@ interface ProjectContextValue {
   // 유틸리티
   isDirty: boolean;
   setIsDirty: (dirty: boolean) => void;
+
+  // 캐릭터 생성 큐 (AssetTab으로 전달되는 사전 입력)
+  pendingCharacterCreation: { name: string; description: string } | null;
+  setPendingCharacterCreation: (v: { name: string; description: string } | null) => void;
 }
 
 // =============================================
@@ -116,6 +120,9 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   // 프로젝트 상태
   const [project, setProject] = useState<Project | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+
+  // 캐릭터 생성 큐 — AssetTab이 처리할 사전 입력
+  const [pendingCharacterCreation, setPendingCharacterCreation] = useState<{ name: string; description: string } | null>(null);
 
   // 에셋 상태
   const [characters, setCharacters] = useState<CharacterAsset[]>([]);
@@ -568,6 +575,10 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     // 유틸리티
     isDirty,
     setIsDirty,
+
+    // 캐릭터 생성 큐
+    pendingCharacterCreation,
+    setPendingCharacterCreation,
   };
 
   return (

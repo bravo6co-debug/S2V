@@ -118,17 +118,51 @@ export interface AdScenarioConfigV2 {
     adType: AdType;
     industry: IndustryCategory;
     productName: string;
-    usps: string[];
     targetAudiences: TargetAudience[];
+    customTarget?: string;
     tone: ScenarioTone;
     imageStyle: ImageStyle;
+    aspectRatio?: AspectRatio;
     duration: AdDuration;
-    priceOrPromotion?: string;
     referenceImages?: ImageData[];
+
     // 영상 엔진 설정 — VideoTab에서 씬별 영상 생성에 사용
     videoEngine?: VideoEngine;
     resolution?: '480P' | '720P' | '1080P';
     generateAudio?: boolean;
+
+    // 제품 소개 (product-intro)
+    usps?: string[];
+    launchReason?: string;
+    priceInfo?: string;
+
+    // 문제 해결 (problem-solution)
+    painPoint?: string;
+    solution?: string;
+    effectResult?: string;
+
+    // 라이프스타일 (lifestyle)
+    brandMood?: string;
+    usageScene?: string;
+    stylingKeywords?: string;
+
+    // 후기/체험 (testimonial)
+    beforeState?: string;
+    afterChange?: string;
+    experienceHighlight?: string;
+
+    // 이벤트/혜택 (promotion)
+    offerDetails?: string;
+    periodCondition?: string;
+    discountInfo?: string;
+
+    // 브랜드 스토리 (brand-story)
+    brandPhilosophy?: string;
+    originStory?: string;
+    coreMessage?: string;
+
+    // 하위 호환
+    priceOrPromotion?: string;
 }
 
 export interface GenerateAdScenarioV2Request {

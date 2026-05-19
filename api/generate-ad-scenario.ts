@@ -177,6 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             tone: tone,
             mode: 'narration', // 광고는 나레이션 중심
             imageStyle: imageStyle,
+            aspectRatio: '16:9',  // 레거시 v1: 기본값
             suggestedCharacters: [],
             scenes,
             scenarioType: 'ad',

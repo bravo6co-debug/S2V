@@ -38,6 +38,10 @@ import {
   ClearIcon,
   PlusCircleIcon,
   UploadIcon,
+  LayersIcon,
+  DownloadIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '../Icons';
 
 // 분리된 컴포넌트 import

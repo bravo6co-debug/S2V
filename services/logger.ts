@@ -33,8 +33,8 @@ function isEnabled(): boolean {
   return true;
 }
 
-// Format message with context
-function formatMessage(scope: string, message: string, context?: LogContext): string[] {
+// Format message with context — 마지막 항목은 LogContext일 수 있어 unknown[] 반환
+function formatMessage(scope: string, message: string, context?: LogContext): unknown[] {
   const prefix = `[${scope}]`;
   if (context && Object.keys(context).length > 0) {
     return [prefix, message, context];

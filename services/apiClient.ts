@@ -6,6 +6,9 @@
 
 import { Character, ImageData, AspectRatio, ScenarioConfig, AdScenarioConfig, AdScenarioConfigV2, ClipScenarioConfig, Scenario, Scene, ImageStyle, NarrationAudio, StoryBeat } from '../types';
 
+// FoodVideoTab 등이 type-only로 재import할 수 있도록 re-export
+export type { ImageData };
+
 // ============================================
 // CLOUD PROJECT TYPES
 // ============================================
