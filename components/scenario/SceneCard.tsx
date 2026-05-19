@@ -43,6 +43,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [editedNarration, setEditedNarration] = useState(scene.narration);
   const [editedVisual, setEditedVisual] = useState(scene.visualDescription);
+  const [editedImagePrompt, setEditedImagePrompt] = useState(scene.imagePrompt);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const storyBeatColors: Record<string, string> = {
@@ -53,8 +54,9 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     Resolution: 'bg-purple-600',
   };
 
-  // 시각적 묘사가 변경되었는지 확인
+  // 변경 여부 확인
   const visualDescriptionChanged = editedVisual !== scene.visualDescription;
+  const imagePromptChanged = editedImagePrompt !== scene.imagePrompt;
 
   // 전체 작업 진행 중 여부 (편집 불가)
   const isBusy = isGeneratingImage || isGeneratingAllImages || isUpdatingPrompt || isSaving;
@@ -65,8 +67,11 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       await onEditScene(scene.id, {
         narration: editedNarration,
         visualDescription: editedVisual,
-        // 시각적 묘사가 변경되면 플래그 설정 (부모에서 imagePrompt 업데이트 처리)
-        ...(visualDescriptionChanged && { needsPromptUpdate: true }),
+        // imagePrompt 수동 편집 시 그대로 저장
+        ...(imagePromptChanged && { imagePrompt: editedImagePrompt }),
+        // 시각적 묘사가 변경되었으나 imagePrompt는 수동 편집 안 했으면 자동 업데이트 트리거
+        // (수동 편집 시 사용자 의도 존중 — 자동 덮어쓰기 금지)
+        ...(visualDescriptionChanged && !imagePromptChanged && { needsPromptUpdate: true }),
       });
       setIsEditing(false);
     } catch (error) {
@@ -153,6 +158,21 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                       className="w-full h-20 p-2 sm:p-3 text-[16px] sm:text-sm bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     />
                   </div>
+                  <div>
+                    <label className="text-xs sm:text-sm font-medium text-gray-400 mb-1 block flex items-center gap-2">
+                      <span>이미지 프롬프트</span>
+                      <span className="text-[10px] text-gray-500 font-normal">영어 권장 · 한국어도 가능</span>
+                      {imagePromptChanged && (
+                        <span className="text-[10px] text-amber-400 font-normal">수정됨 — 시각적 묘사 변경 시 자동 업데이트 안 됨</span>
+                      )}
+                    </label>
+                    <textarea
+                      value={editedImagePrompt}
+                      onChange={(e) => setEditedImagePrompt(e.target.value)}
+                      className="w-full h-32 p-2 sm:p-3 text-[16px] sm:text-sm bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                      placeholder="이미지 생성 모델에 전달될 프롬프트. 영어가 일반적으로 더 정확하지만 한국어도 가능합니다."
+                    />
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={handleSaveEdit}
@@ -166,6 +186,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                         setIsEditing(false);
                         setEditedNarration(scene.narration);
                         setEditedVisual(scene.visualDescription);
+                        setEditedImagePrompt(scene.imagePrompt);
                       }}
                       disabled={isSaving}
                       className="min-h-[44px] px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-300 bg-gray-600 rounded hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -237,15 +258,17 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             </div>
           </div>
 
-          {/* Image Prompt (collapsible) */}
-          <details className="text-xs">
-            <summary className="cursor-pointer text-gray-400 hover:text-gray-300 min-h-[44px] flex items-center">
-              이미지 프롬프트 보기 (영어)
-            </summary>
-            <pre className="mt-2 p-2 sm:p-3 bg-gray-900 rounded text-gray-300 whitespace-pre-wrap text-xs overflow-x-auto">
-              {scene.imagePrompt}
-            </pre>
-          </details>
+          {/* Image Prompt (collapsible) — 편집 모드에서는 위에 textarea로 노출됨 */}
+          {!isEditing && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-gray-400 hover:text-gray-300 min-h-[44px] flex items-center">
+                이미지 프롬프트 보기
+              </summary>
+              <pre className="mt-2 p-2 sm:p-3 bg-gray-900 rounded text-gray-300 whitespace-pre-wrap text-xs overflow-x-auto">
+                {scene.imagePrompt}
+              </pre>
+            </details>
+          )}
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-700">
