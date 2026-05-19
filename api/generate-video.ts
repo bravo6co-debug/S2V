@@ -1,21 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { put, del } from '@vercel/blob';
 import { sanitizePrompt, setCorsHeaders } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
 import { findUserById } from './lib/mongodb.js';
+import { generateHappyhorseI2V, type HappyhorseResolution } from './lib/eachlabs.js';
 import { createLogger } from './lib/logger.js';
 import type { GenerateVideoRequest, VideoGenerationResult, ApiErrorResponse } from './lib/types.js';
 
 const log = createLogger('generate-video');
 
-// Hailuo V2.3 via eachlabs.ai
-const HAILUO_API_URL = 'https://api.eachlabs.ai/v1/prediction';
-const HAILUO_MODEL = 'minimax-hailuo-v2-3-fast-standard-image-to-video';
-const HAILUO_VERSION = '0.0.1';
-
 /**
  * POST /api/generate-video
- * Generates a video from an image using Hailuo V2.3 (eachlabs.ai)
+ * Image-to-Video — HappyHorse 1.0 via Eachlabs
+ *
+ * 광고 시나리오의 30/45/60초 씬당 영상 생성에 사용 (15초/씬, t2v는 별도 엔드포인트).
+ * 입력: sourceImage + motionPrompt → 출력: videoUrl
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCorsHeaders(res, req.headers.origin as string);
@@ -28,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' } as ApiErrorResponse);
     }
 
-    // 인증 체크
+    // 인증
     const auth = requireAuth(req);
     if (!auth.authenticated || !auth.userId) {
         return res.status(401).json({
@@ -37,10 +35,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    let blobUrl: string | null = null;
-
     try {
-        const { sourceImage, motionPrompt, durationSeconds = 5 } = req.body as GenerateVideoRequest;
+        const { sourceImage, motionPrompt, durationSeconds = 15, resolution = '720P', seed } = req.body as GenerateVideoRequest;
 
         if (!sourceImage || !sourceImage.data) {
             return res.status(400).json({ error: 'sourceImage is required' } as ApiErrorResponse);
@@ -50,170 +46,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'motionPrompt is required' } as ApiErrorResponse);
         }
 
-        // 사용자별 Hailuo API 키 조회 (개인 설정 키 우선, 환경변수 폴백)
+        // 사용자별 Hailuo/EachLabs 키 조회 — 일반 사용자는 본인 키만, admin만 환경변수 폴백 허용 (비용 누수 차단)
         const user = await findUserById(auth.userId);
-        const apiKey = user?.settings?.hailuoApiKey || process.env.HAILUO_API_KEY;
+        const personalKey = user?.settings?.hailuoApiKey;
+        const apiKey = personalKey || (user?.isAdmin ? process.env.HAILUO_API_KEY : undefined);
 
         if (!apiKey) {
             return res.status(400).json({
-                error: 'Hailuo API 키가 설정되지 않았습니다. 설정에서 Hailuo API 키를 입력해 주세요.',
+                error: 'EachLabs API 키가 설정되지 않았습니다. 설정에서 본인 EachLabs(Hailuo) API 키를 입력해 주세요.',
                 code: 'API_KEY_MISSING'
             } as ApiErrorResponse);
         }
 
         const sanitizedPrompt = sanitizePrompt(motionPrompt, 1000);
 
-        // Prepare the enhanced prompt for video generation
-        const enhancedPrompt = `
-Cinematic video generation from reference image:
-${sanitizedPrompt}
+        // HappyHorse i2v용 motion-specific prompt 강화 (vague prompt 회피)
+        const enhancedPrompt = `${sanitizedPrompt}\n\nMotion: smooth, natural camera movement with realistic physics. Cinematic film-like aesthetics. Consistent lighting throughout. No sudden jumps or artifacts.`.trim();
 
-Motion & Camera Requirements:
-- Smooth, natural camera movements
-- Realistic motion physics
-- Cinematic quality, film-like aesthetics
+        // duration 범위 검증 + 기본값 클램프 (HappyHorse 3~15초)
+        const clampedDuration = Math.max(3, Math.min(15, Math.round(durationSeconds)));
 
-Technical Requirements:
-- High quality video output
-- Consistent lighting throughout
-- No sudden jumps or artifacts
-`.trim();
+        // 영상 비율은 firstFrame 이미지에 자동 매칭 — API 파라미터 없음
+        log.info('HappyHorse i2v 호출', {
+            duration: clampedDuration,
+            resolution,
+            promptChars: enhancedPrompt.length,
+            seed: seed ?? '(none)',
+        });
 
-        // 이미지를 Vercel Blob에 업로드 (eachlabs.ai는 HTTPS URL 필요, data URL 불가)
-        let imageUrl: string;
-        try {
-            const buffer = Buffer.from(sourceImage.data, 'base64');
-            const ext = sourceImage.mimeType === 'image/png' ? 'png' : sourceImage.mimeType === 'image/webp' ? 'webp' : 'jpg';
-            const blob = await put(`video/${Date.now()}.${ext}`, buffer, {
-                access: 'public',
-                contentType: sourceImage.mimeType,
-            });
-            imageUrl = blob.url;
-            blobUrl = blob.url;
-        } catch (uploadError) {
-            log.error('Blob upload failed', { error: uploadError instanceof Error ? uploadError.message : String(uploadError) });
-            const msg = uploadError instanceof Error ? uploadError.message : String(uploadError);
-            return res.status(500).json({
-                error: `이미지 업로드 실패: ${msg}`,
-                code: 'IMAGE_UPLOAD_FAILED'
-            } as ApiErrorResponse);
-        }
+        const result = await generateHappyhorseI2V({
+            apiKey,
+            prompt: enhancedPrompt,
+            firstFrame: sourceImage,
+            duration: clampedDuration,
+            resolution: resolution as HappyhorseResolution,
+            ...(typeof seed === 'number' && { seed }),
+        });
 
-        // Hailuo API로 prediction 생성
-        let predictionId: string;
-        try {
-            const createResponse = await fetch(`${HAILUO_API_URL}/`, {
-                method: 'POST',
-                headers: {
-                    'X-API-Key': apiKey,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: HAILUO_MODEL,
-                    version: HAILUO_VERSION,
-                    input: {
-                        prompt: enhancedPrompt,
-                        prompt_optimizer: true,
-                        image_url: imageUrl,
-                        duration: String(durationSeconds <= 6 ? 6 : 10),
-                    },
-                    webhook_url: '',
-                }),
-            });
-
-            const createResult = await createResponse.json() as any;
-
-            if (createResult.status !== 'success' || !createResult.predictionID) {
-                const errMsg = createResult.error || createResult.message || JSON.stringify(createResult);
-                throw new Error(errMsg);
-            }
-
-            predictionId = createResult.predictionID;
-        } catch (initError) {
-            const errorMsg = initError instanceof Error ? initError.message : String(initError);
-
-            if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
-                return res.status(403).json({
-                    error: 'Hailuo API 키가 유효하지 않습니다. 키를 확인하세요.',
-                    code: 'PERMISSION_DENIED'
-                } as ApiErrorResponse);
-            }
-
-            throw new Error(`Hailuo API 호출 실패: ${errorMsg}`);
-        }
-
-        // Poll until video generation is complete (max 5 minutes timeout)
-        const maxPollingTime = 300000; // 5 minutes
-        const pollInterval = 5000; // 5초 간격
-        const startTime = Date.now();
-        let pollCount = 0;
-
-        while (true) {
-            pollCount++;
-            const elapsed = Math.round((Date.now() - startTime) / 1000);
-
-            if (Date.now() - startTime > maxPollingTime) {
-                throw new Error(`비디오 생성 시간 초과 (${elapsed}초 경과). 나중에 다시 시도하세요.`);
-            }
-
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
-
-            try {
-                const pollResponse = await fetch(`${HAILUO_API_URL}/${predictionId}`, {
-                    headers: {
-                        'X-API-Key': apiKey,
-                    },
-                });
-                const pollResult = await pollResponse.json() as any;
-
-                if (pollResult.status === 'success' && pollResult.output) {
-                    const videoUrl = pollResult.output;
-
-                    // Blob 정리
-                    if (blobUrl) {
-                        try { await del(blobUrl); } catch (delErr) { log.warn('Blob cleanup failed', {}, delErr instanceof Error ? delErr : undefined); }
-                    }
-
-                    const result: VideoGenerationResult = {
-                        videoUrl: videoUrl,
-                        thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
-                        duration: durationSeconds,
-                    };
-                    return res.status(200).json(result);
-                }
-
-                if (pollResult.status === 'error') {
-                    const errDetail = pollResult.error || pollResult.message || '알 수 없는 오류';
-                    throw new Error(`비디오 생성 실패: ${errDetail}`);
-                }
-
-                // 아직 처리 중 (processing/pending) → 계속 폴링
-            } catch (pollError) {
-                // 비디오 생성 관련 에러는 바로 throw
-                if (pollError instanceof Error && pollError.message.includes('비디오')) {
-                    throw pollError;
-                }
-                // 네트워크 에러 등은 재시도 허용 (최대 3회 연속 실패 시 중단)
-                if (pollCount > 3) {
-                    throw new Error('비디오 생성 상태 확인이 반복 실패했습니다.');
-                }
-            }
-        }
+        const response: VideoGenerationResult = {
+            videoUrl: result.videoUrl,
+            thumbnailUrl: `data:${sourceImage.mimeType};base64,${sourceImage.data}`,
+            duration: clampedDuration,
+        };
+        return res.status(200).json(response);
 
     } catch (e) {
-        // Blob 정리
-        if (blobUrl) {
-            try { await del(blobUrl); } catch (delErr) { log.warn('Blob cleanup failed', {}, delErr instanceof Error ? delErr : undefined); }
-        }
-
         log.error('Video generation failed', { error: e instanceof Error ? e.message : String(e) });
 
         if (e instanceof Error) {
             const msg = e.message;
 
-            if (msg.includes('PERMISSION_DENIED') || msg.includes('403') || msg.includes('Forbidden') || msg.includes('Unauthorized')) {
+            if (msg.includes('401') || msg.includes('Unauthorized') || msg.includes('PERMISSION_DENIED') || msg.includes('403')) {
                 return res.status(403).json({
-                    error: 'Hailuo API 접근 권한이 없습니다. API 키를 확인하세요.',
+                    error: 'EachLabs API 키가 유효하지 않거나 권한이 없습니다.',
                     code: 'PERMISSION_DENIED'
                 } as ApiErrorResponse);
             }
@@ -221,12 +106,6 @@ Technical Requirements:
                 return res.status(429).json({
                     error: 'API 할당량을 초과했습니다. 잠시 후 다시 시도하세요.',
                     code: 'QUOTA_EXCEEDED'
-                } as ApiErrorResponse);
-            }
-            if (msg.includes('비디오') || msg.includes('Hailuo')) {
-                return res.status(500).json({
-                    error: msg,
-                    code: 'VIDEO_GENERATION_FAILED'
                 } as ApiErrorResponse);
             }
 

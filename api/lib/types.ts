@@ -252,7 +252,9 @@ export interface GenerateSceneImageRequest {
 export interface GenerateVideoRequest {
     sourceImage: ImageData;
     motionPrompt: string;
-    durationSeconds?: number;
+    durationSeconds?: number;        // HappyHorse i2v: 3~15초 (기본 15)
+    resolution?: '720P' | '1080P';    // 기본 720P, 마음에 들면 1080P 재생성
+    seed?: number;                    // 1080P 재생성 시 동일 결과 보장용
 }
 
 export interface ApiErrorResponse {

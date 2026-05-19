@@ -487,15 +487,27 @@ export type HDSERBeat = 'Hook' | 'Discovery' | 'Story' | 'Experience' | 'Reason'
 // 광고 영상 길이
 export type AdDuration = 15 | 30 | 45 | 60;
 
+// 영상 길이 → 씬 수 매핑 (HappyHorse 채택 후, 씬당 15초)
+// 15초는 t2v 1콜로 처리 (시나리오상 1씬으로 통합 multi-shot prompt 작성)
+// 30~60초는 i2v 다중 호출 (씬당 15초)
 export const AD_DURATION_OPTIONS: {
   value: AdDuration;
   label: string;
   scenes: number;
+  /** 영상 생성 방식: t2v (단일 호출) 또는 i2v (씬별 이미지 → 영상) */
+  videoMode: 'text-to-video' | 'image-to-video';
 }[] = [
-  { value: 15, label: '15초', scenes: 3 },
-  { value: 30, label: '30초', scenes: 5 },
-  { value: 45, label: '45초', scenes: 5 },
-  { value: 60, label: '60초', scenes: 6 },
+  { value: 15, label: '15초', scenes: 1, videoMode: 'text-to-video' },
+  { value: 30, label: '30초', scenes: 2, videoMode: 'image-to-video' },
+  { value: 45, label: '45초', scenes: 3, videoMode: 'image-to-video' },
+  { value: 60, label: '60초', scenes: 4, videoMode: 'image-to-video' },
+];
+
+// 영상 해상도 (HappyHorse 1.0)
+export type VideoResolution = '720P' | '1080P';
+export const VIDEO_RESOLUTION_OPTIONS: { value: VideoResolution; label: string; pricePerSec: string }[] = [
+  { value: '720P', label: '720P (기본)', pricePerSec: '$0.14/초' },
+  { value: '1080P', label: '1080P (고해상)', pricePerSec: '$0.24/초' },
 ];
 
 // 광고 이미지 생성 엔진
@@ -523,6 +535,7 @@ export interface AdScenarioConfigV2 {
   imageStyle: ImageStyle;
   aspectRatio?: AspectRatio;       // 영상 비율 (기본 16:9)
   duration: AdDuration;
+  resolution?: VideoResolution;    // 영상 해상도 (기본 720P, 마음에 들면 1080P 재생성)
   referenceImages?: ImageData[]; // 참고 이미지 (최대 3장)
 
   // 제품 소개 (product-intro)

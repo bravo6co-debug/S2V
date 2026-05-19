@@ -160,11 +160,12 @@ async function createPrediction(apiKey: string, modelName: string, input: Record
 }
 
 /**
- * EachLabs Prediction 결과 폴링 (공통, 최대 2분)
- * 성공 시 출력 이미지 URL 반환
+ * EachLabs Prediction 결과 폴링 (공통)
+ * 성공 시 출력 URL 반환 (이미지/영상 공용)
+ * @param maxPollingTimeMs 기본 120초 (이미지), 영상은 300초 권장
  */
-async function pollPrediction(apiKey: string, predictionId: string, modelName: string): Promise<string> {
-    const maxPollingTime = 120000;
+async function pollPrediction(apiKey: string, predictionId: string, modelName: string, maxPollingTimeMs: number = 120000): Promise<string> {
+    const maxPollingTime = maxPollingTimeMs;
     const pollInterval = 3000;
     const startTime = Date.now();
     let pollCount = 0;
@@ -507,5 +508,95 @@ export async function generateFluxI2I(options: FluxI2IOptions): Promise<ImageDat
         for (const url of blobUrls) {
             try { await del(url); } catch (e) { console.warn('[FLUX-I2I] Blob cleanup:', e); }
         }
+    }
+}
+
+// =============================================
+// HappyHorse 1.0 — Text-to-Video / Image-to-Video (Alibaba)
+// =============================================
+
+const HAPPYHORSE_T2V_SLUG = 'alibaba-happyhorse-1-0-text-to-video';
+const HAPPYHORSE_I2V_SLUG = 'alibaba-happyhorse-1-0-image-to-video';
+// 영상 생성은 보통 200~220초 소요 — 폴링 한도를 5분으로
+const HAPPYHORSE_POLL_TIMEOUT_MS = 300_000;
+
+export type HappyhorseResolution = '720P' | '1080P';
+export type HappyhorseRatio = '16:9' | '9:16' | '1:1';
+
+export interface HappyhorseT2VOptions {
+    apiKey: string;
+    prompt: string;
+    duration: number;            // 3~15 초
+    resolution: HappyhorseResolution;
+    ratio: HappyhorseRatio;
+    seed?: number;               // 같은 seed로 재현 가능 (1080P 업그레이드용)
+}
+
+export interface HappyhorseI2VOptions {
+    apiKey: string;
+    prompt: string;
+    firstFrame: ImageData;       // 첫 프레임 이미지 — Vercel Blob 업로드 후 URL로 전달
+    duration: number;            // 3~15 초
+    resolution: HappyhorseResolution;
+    seed?: number;
+    // 비고: i2v는 aspect ratio가 firstFrame 이미지에 자동 매칭 (API 파라미터 없음)
+}
+
+export interface HappyhorseVideoResult {
+    videoUrl: string;            // 외부 CDN URL (다운로드 또는 클라이언트가 바로 사용)
+}
+
+/**
+ * HappyHorse Text-to-Video — 15초 광고 단일 호출용
+ * 사용자 multi-shot prompt를 그대로 전달
+ */
+export async function generateHappyhorseT2V(options: HappyhorseT2VOptions): Promise<HappyhorseVideoResult> {
+    const { apiKey, prompt, duration, resolution, ratio, seed } = options;
+
+    if (duration < 3 || duration > 15) {
+        throw new Error(`HappyHorse duration은 3~15초여야 합니다 (입력: ${duration})`);
+    }
+
+    const input: Record<string, unknown> = {
+        prompt,
+        duration,
+        resolution,
+        ratio,
+    };
+    if (typeof seed === 'number') input.seed = seed;
+
+    const predictionId = await createPrediction(apiKey, HAPPYHORSE_T2V_SLUG, input);
+    const videoUrl = await pollPrediction(apiKey, predictionId, 'HappyHorse-T2V', HAPPYHORSE_POLL_TIMEOUT_MS);
+    return { videoUrl };
+}
+
+/**
+ * HappyHorse Image-to-Video — 30초+ 광고용. 씬 이미지를 첫 프레임으로 사용
+ * aspectRatio는 firstFrame 이미지의 비율을 자동 매칭 (API 파라미터 미존재)
+ */
+export async function generateHappyhorseI2V(options: HappyhorseI2VOptions): Promise<HappyhorseVideoResult> {
+    const { apiKey, prompt, firstFrame, duration, resolution, seed } = options;
+
+    if (duration < 3 || duration > 15) {
+        throw new Error(`HappyHorse duration은 3~15초여야 합니다 (입력: ${duration})`);
+    }
+
+    // first_frame 이미지를 Vercel Blob에 업로드해 공개 URL 확보
+    const frameUrl = await uploadImageToBlob(firstFrame);
+
+    try {
+        const input: Record<string, unknown> = {
+            prompt,
+            duration,
+            resolution,
+            first_frame: frameUrl,
+        };
+        if (typeof seed === 'number') input.seed = seed;
+
+        const predictionId = await createPrediction(apiKey, HAPPYHORSE_I2V_SLUG, input);
+        const videoUrl = await pollPrediction(apiKey, predictionId, 'HappyHorse-I2V', HAPPYHORSE_POLL_TIMEOUT_MS);
+        return { videoUrl };
+    } finally {
+        try { await del(frameUrl); } catch (e) { console.warn('[HappyHorse-I2V] Blob cleanup:', e); }
     }
 }
