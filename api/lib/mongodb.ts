@@ -78,7 +78,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
     openaiApiKey: undefined,
     textModel: 'gemini-3-flash-preview',
     imageModel: 'gemini-2.5-flash-image',
-    videoModel: 'minimax-hailuo-v2-3-fast-standard-image-to-video',
+    videoModel: 'alibaba-happyhorse-1-0-image-to-video',
     ttsModel: 'gemini-2.5-flash-preview-tts',
     ttsVoice: 'Kore',
 };

@@ -251,8 +251,9 @@ export const MODELS = {
     IMAGE_PORTRAIT: 'gemini-2.5-flash-image',  // Character/prop/background portraits
     IMAGE_SCENE: 'gemini-2.5-flash-image',     // Scene images (with references)
 
-    // Video generation model (Hailuo V2.3 via eachlabs.ai)
-    VIDEO: 'minimax-hailuo-v2-3-fast-standard-image-to-video',
+    // Video generation model — 기본 i2v 슬러그 (eachlabs.ai)
+    // 광고/먹방은 엔드포인트 단에서 엔진 선택(videoEngine) 분기. 사용자 설정 폴백용 기본값
+    VIDEO: 'alibaba-happyhorse-1-0-image-to-video',
 
     // Text-to-Speech (TTS) model for narration
     TTS: 'gemini-2.5-flash-preview-tts',

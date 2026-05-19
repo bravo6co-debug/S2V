@@ -345,7 +345,7 @@ export const FoodVideoTab: React.FC = () => {
     }
   }, [mukFoodUpload.image, foodName, personSource, mukPersonUpload.image, personType, personGenMode, customPersonDesc, customScenePrompt, checkAuth]);
 
-  // Step 2: 먹방 영상 생성 (Hailuo)
+  // Step 2: 먹방 영상 생성 (Seedance 기본)
   const handleGenerateMukbangVideo = useCallback(async () => {
     if (!mukbangComposite) { setMukbangError('먼저 먹방 이미지를 생성해 주세요.'); return; }
     if (!checkAuth()) return;
@@ -528,7 +528,7 @@ export const FoodVideoTab: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold flex-shrink-0">2</span>
                     <h3 className="text-sm font-bold text-white">영상 생성</h3>
-                    <span className="text-xs text-gray-500">Hailuo AI로 영상 제작</span>
+                    <span className="text-xs text-gray-500">Seedance AI로 영상 제작 (ASMR 사운드)</span>
                   </div>
                   <button
                     onClick={handleGenerate}
@@ -572,7 +572,7 @@ export const FoodVideoTab: React.FC = () => {
                   </ol>
                   <div className="mt-3 p-2.5 bg-amber-900/20 border border-amber-700/30 rounded-lg">
                     <p className="text-xs text-amber-400">
-                      Gemini API 키 (프롬프트 변환)와 Hailuo API 키 (영상 생성)가 모두 필요합니다. 설정에서 API 키를 등록하세요.
+                      Gemini API 키 (프롬프트 변환)와 EachLabs API 키 (영상 생성)가 모두 필요합니다. 설정에서 API 키를 등록하세요.
                     </p>
                   </div>
                 </div>
@@ -830,7 +830,7 @@ export const FoodVideoTab: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold flex-shrink-0">4</span>
                     <h3 className="text-sm font-bold text-white">영상 생성</h3>
-                    <span className="text-xs text-gray-500">Hailuo AI로 먹방 영상 제작</span>
+                    <span className="text-xs text-gray-500">Seedance AI로 먹방 영상 제작 (ASMR 사운드)</span>
                   </div>
                   <button
                     onClick={handleGenerateMukbangVideo}
@@ -872,8 +872,8 @@ export const FoodVideoTab: React.FC = () => {
                   </ol>
                   <div className="mt-3 p-2.5 bg-pink-900/20 border border-pink-700/30 rounded-lg">
                     <p className="text-xs text-pink-400">
-                      먹방 모드는 FLUX AI (이미지 합성)와 Hailuo AI (영상 생성)를 사용합니다.
-                      EachLabs(Hailuo) API 키가 필요합니다. 프롬프트는 자동 생성됩니다.
+                      먹방 모드는 GPT Image v2 (이미지 합성)와 Seedance AI (영상 생성 · 네이티브 ASMR)를 사용합니다.
+                      EachLabs API 키가 필요합니다. 프롬프트는 자동 생성됩니다.
                     </p>
                   </div>
                 </div>

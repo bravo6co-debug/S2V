@@ -164,10 +164,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             </a>
           </div>
 
-          {/* EachLabs API 키 (Hailuo + FLUX) */}
+          {/* EachLabs API 키 — GPT Image v2 / QWEN 이미지 / HappyHorse / Seedance 통합 */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              EachLabs API 키 (FLUX 이미지 / 동영상)
+              EachLabs API 키 (이미지 / 동영상 통합)
               {hasHailuoApiKey && (
                 <span className="ml-2 text-xs text-green-400">(설정됨)</span>
               )}
@@ -198,7 +198,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               </button>
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              FLUX 이미지 생성 및 Hailuo 동영상 생성에 사용됩니다
+              GPT Image v2 · QWEN 이미지 · HappyHorse · Seedance 영상 생성에 사용됩니다
             </p>
             <a
               href="https://www.eachlabs.ai/"

@@ -228,7 +228,7 @@ const upscaleImage = async (
 
 /**
  * Compress an image for video generation (higher quality, larger dimensions).
- * Hailuo API requires minimum 300x300 pixels.
+ * Video APIs (HappyHorse / Seedance i2v) require minimum 300x300 pixels.
  * Small images (< 720px) are automatically upscaled.
  * Uses 1280px max dimension and 1MB target size.
  */

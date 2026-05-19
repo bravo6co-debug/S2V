@@ -67,7 +67,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // 유효성 검사
             const validTextModels = ['gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gpt-5.2', 'gpt-5-mini', 'o3-mini'];
             const validImageModels = ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image', 'imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001', 'qwen-image-2.0', 'gpt-image-2.0', 'flux-kontext-pro', 'flux-kontext-max'];
-            const validVideoModels = ['minimax-hailuo-v2-3-fast-standard-image-to-video'];
+            // 영상 모델 — HappyHorse 1.0 (기본/무음) + Seedance 2.0 (오디오)
+            // i2v-fast는 480P/720P, t2v는 480P/720P/1080P 지원
+            const validVideoModels = [
+                'alibaba-happyhorse-1-0-image-to-video',
+                'alibaba-happyhorse-1-0-text-to-video',
+                'bytedance-seedance-2-0-image-to-video-fast',
+                'bytedance-seedance-2-0-text-to-video',
+            ];
             const validTtsModels = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'];
             const validTtsVoices = ['Kore', 'Aoede', 'Charon', 'Fenrir', 'Puck'];
 
