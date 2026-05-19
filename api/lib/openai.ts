@@ -53,15 +53,20 @@ export async function generateTextWithOpenAI(
 ): Promise<string> {
     const { systemPrompt, jsonMode = true, maxTokens, temperature } = options;
 
-    const messages: { role: string; content: string }[] = [];
-
-    if (systemPrompt) {
-        messages.push({ role: 'system', content: systemPrompt });
-    } else if (jsonMode) {
-        messages.push({ role: 'system', content: 'You are a helpful assistant. Always respond with valid JSON.' });
+    if (!systemPrompt) {
+        // 기존 fallback('You are a helpful assistant')은 가드레일이 전혀 없어
+        // jailbreak/PII/유해 콘텐츠/prompt injection에 무방비. 명시 강제로 차단.
+        throw new Error(
+            '[openai.ts] systemPrompt is required. ' +
+            'Empty/default prompts produce unsafe outputs (no guardrails for jailbreak, PII, sensitive topics). ' +
+            'Pass a domain-specific systemPrompt via options.systemPrompt.'
+        );
     }
 
-    messages.push({ role: 'user', content: prompt });
+    const messages: { role: string; content: string }[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+    ];
 
     const body: Record<string, unknown> = { model, messages };
 
