@@ -34,19 +34,19 @@ import { SceneImportModal } from './SceneImportModal';
 // 비디오 소스 타입 (어떤 시나리오를 사용하는지)
 type VideoSource = 'scenario' | 'ad' | 'clip';
 
-// 비디오 생성 모드
-type VideoMode = 'remotion' | 'hailuo';
+// 비디오 생성 모드 — Remotion(무료/자체 합성) 또는 AI 영상(HappyHorse/Seedance via EachLabs)
+type VideoMode = 'remotion' | 'ai-video';
 
-// Hailuo API 상태 타입
-type HailuoApiStatus = 'unknown' | 'checking' | 'available' | 'unavailable';
+// AI 영상 API 상태 타입 (EachLabs 키 기반)
+type VideoApiStatus = 'unknown' | 'checking' | 'available' | 'unavailable';
 
 // API 상태 아이콘
-const ApiStatusIcon: React.FC<{ status: HailuoApiStatus; error?: string }> = ({ status, error }) => {
+const ApiStatusIcon: React.FC<{ status: VideoApiStatus; error?: string }> = ({ status, error }) => {
   const statusConfig = {
     unknown: { color: 'text-gray-400', bg: 'bg-gray-600', label: 'API 상태 확인 안됨' },
     checking: { color: 'text-blue-400', bg: 'bg-blue-600', label: 'API 확인 중...' },
-    available: { color: 'text-green-400', bg: 'bg-green-600', label: 'Hailuo API 사용 가능' },
-    unavailable: { color: 'text-red-400', bg: 'bg-red-600', label: error || 'Hailuo API 사용 불가' },
+    available: { color: 'text-green-400', bg: 'bg-green-600', label: 'AI 영상 API 사용 가능' },
+    unavailable: { color: 'text-red-400', bg: 'bg-red-600', label: error || 'AI 영상 API 사용 불가' },
   };
 
   const config = statusConfig[status];
@@ -107,7 +107,7 @@ export const VideoTab: React.FC = () => {
   const [playingVideoClip, setPlayingVideoClip] = useState<VideoClip | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // 비디오 생성 모드 (Remotion 또는 Hailuo AI)
+  // 비디오 생성 모드 (Remotion 또는 AI 영상 — HappyHorse/Seedance)
   const [videoMode, setVideoMode] = useState<VideoMode>('remotion');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
@@ -133,13 +133,13 @@ export const VideoTab: React.FC = () => {
       setPreviewAudios(new Map());
       prevSourceRef.current = videoSource;
     }
-    // 시나리오 소스일 때는 Remotion만 사용 (Hailuo 클립 길이가 맞지 않음)
+    // 시나리오 소스일 때는 Remotion만 사용 (AI 영상 모델의 클립 길이가 맞지 않음)
     if (videoSource === 'scenario') {
       setVideoMode('remotion');
     }
-    // 클립 소스일 때는 Hailuo만 사용 (6초 전용)
+    // 클립 소스일 때는 AI 영상만 사용 (씬당 15초)
     if (videoSource === 'clip') {
-      setVideoMode('hailuo');
+      setVideoMode('ai-video');
     }
   }, [videoSource]);
 
@@ -402,22 +402,22 @@ export const VideoTab: React.FC = () => {
     }
   };
 
-  // Hailuo API 상태
-  const [hailuoApiStatus, setHailuoApiStatus] = useState<HailuoApiStatus>('unknown');
-  const [hailuoApiError, setHailuoApiError] = useState<string | undefined>();
+  // AI 영상 API 상태 (EachLabs 키 기반)
+  const [videoApiStatus, setVideoApiStatus] = useState<VideoApiStatus>('unknown');
+  const [videoApiError, setVideoApiError] = useState<string | undefined>();
 
-  // Hailuo API 상태 체크
+  // AI 영상 API 상태 체크
   const checkApiStatus = async () => {
-    setHailuoApiStatus('checking');
-    setHailuoApiError(undefined);
+    setVideoApiStatus('checking');
+    setVideoApiError(undefined);
 
     const result = await checkVideoApiAvailability();
 
     if (result.available) {
-      setHailuoApiStatus('available');
+      setVideoApiStatus('available');
     } else {
-      setHailuoApiStatus('unavailable');
-      setHailuoApiError(result.error);
+      setVideoApiStatus('unavailable');
+      setVideoApiError(result.error);
     }
   };
 
@@ -503,7 +503,7 @@ export const VideoTab: React.FC = () => {
                 )}
                 <button
                   onClick={handleGenerateAllClips}
-                  disabled={isGenerating || clips.length === 0 || clips.every(c => c.generatedVideo) || hailuoApiStatus === 'unavailable'}
+                  disabled={isGenerating || clips.length === 0 || clips.every(c => c.generatedVideo) || videoApiStatus === 'unavailable'}
                   className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 min-h-[44px]"
                 >
                   <SparklesIcon className="w-4 h-4" />
@@ -519,7 +519,7 @@ export const VideoTab: React.FC = () => {
         {videoSource === 'clip' ? (
           <div className="mt-3 flex items-center gap-2">
             <span className="text-xs text-gray-500">생성 방식:</span>
-            <span className="text-xs text-cyan-400 font-medium">Hailuo AI (클립 전용 · 6초)</span>
+            <span className="text-xs text-cyan-400 font-medium">AI 영상 (HappyHorse / Seedance · 씬당 15초)</span>
           </div>
         ) : videoSource === 'ad' ? (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
@@ -536,14 +536,14 @@ export const VideoTab: React.FC = () => {
                 Remotion (무료)
               </button>
               <button
-                onClick={() => setVideoMode('hailuo')}
+                onClick={() => setVideoMode('ai-video')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-[44px] sm:min-h-0 ${
-                  videoMode === 'hailuo'
+                  videoMode === 'ai-video'
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                Hailuo AI
+                AI 영상
               </button>
             </div>
             {videoMode === 'remotion' && (
@@ -628,16 +628,16 @@ export const VideoTab: React.FC = () => {
           </>
         )}
 
-        {/* Hailuo API 상태 표시 (Hailuo 모드일 때) */}
-        {(videoSource === 'clip' || (videoSource === 'ad' && videoMode === 'hailuo')) && (
+        {/* AI 영상 API 상태 표시 (AI 영상 모드일 때) */}
+        {(videoSource === 'clip' || (videoSource === 'ad' && videoMode === 'ai-video')) && (
           <div className="mt-3 flex items-center justify-between bg-gray-900/50 rounded-lg px-3 py-2 flex-wrap gap-2">
-            <ApiStatusIcon status={hailuoApiStatus} error={hailuoApiError} />
+            <ApiStatusIcon status={videoApiStatus} error={videoApiError} />
             <button
               onClick={checkApiStatus}
-              disabled={hailuoApiStatus === 'checking'}
+              disabled={videoApiStatus === 'checking'}
               className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 min-h-[44px] flex items-center"
             >
-              {hailuoApiStatus === 'checking' ? '확인 중...' : 'API 상태 확인'}
+              {videoApiStatus === 'checking' ? '확인 중...' : 'API 상태 확인'}
             </button>
           </div>
         )}
@@ -652,7 +652,7 @@ export const VideoTab: React.FC = () => {
               </button>
             </div>
             <p className="text-xs">{error}</p>
-            {hailuoApiStatus === 'unknown' && (
+            {videoApiStatus === 'unknown' && (
               <button
                 onClick={checkApiStatus}
                 className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline min-h-[44px] flex items-center"
@@ -664,12 +664,12 @@ export const VideoTab: React.FC = () => {
         )}
 
         {/* API 사용 불가 경고 */}
-        {(videoSource === 'clip' || videoSource === 'ad') && hailuoApiStatus === 'unavailable' && !error && (
+        {(videoSource === 'clip' || videoSource === 'ad') && videoApiStatus === 'unavailable' && !error && (
           <div className="mt-3 p-2 sm:p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-xs sm:text-sm text-amber-300">
-            <p className="font-medium mb-1 text-xs sm:text-sm">Hailuo API 사용 불가</p>
-            <p className="text-xs text-amber-400">{hailuoApiError}</p>
+            <p className="font-medium mb-1 text-xs sm:text-sm">AI 영상 API 사용 불가</p>
+            <p className="text-xs text-amber-400">{videoApiError}</p>
             <p className="text-xs text-gray-400 mt-2">
-              설정에서 Hailuo API 키를 입력해 주세요.
+              설정에서 EachLabs API 키를 입력해 주세요.
               eachlabs.ai에서 API 키를 발급받을 수 있습니다.
             </p>
           </div>
@@ -934,7 +934,7 @@ export const VideoTab: React.FC = () => {
             )}
           </div>
         ) : clips.length === 0 ? (
-          /* Hailuo 모드 - 클립이 없을 때 */
+          /* AI 영상 모드 - 클립이 없을 때 */
           <div className="flex-grow flex flex-col items-center justify-center">
             <div className="text-center max-w-md px-4">
               <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center">
@@ -960,7 +960,7 @@ export const VideoTab: React.FC = () => {
             </div>
           </div>
         ) : (
-          /* Hailuo 모드 - 클립이 있을 때 */
+          /* AI 영상 모드 - 클립이 있을 때 */
           <>
             {/* 클립 그리드 */}
             <div className="flex-grow overflow-y-auto">
@@ -1024,9 +1024,9 @@ export const VideoTab: React.FC = () => {
                   <div className="flex items-end">
                     <button
                       onClick={() => handleGenerateClip(selectedClip.id)}
-                      disabled={isGenerating || !selectedClip.sourceImage || hailuoApiStatus === 'unavailable'}
+                      disabled={isGenerating || !selectedClip.sourceImage || videoApiStatus === 'unavailable'}
                       className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-50 min-h-[44px]"
-                      title={hailuoApiStatus === 'unavailable' ? 'Hailuo API 사용 불가' : ''}
+                      title={videoApiStatus === 'unavailable' ? 'AI 영상 API 사용 불가' : ''}
                     >
                       {selectedClip.generatedVideo ? '재생성' : '비디오 생성'}
                     </button>

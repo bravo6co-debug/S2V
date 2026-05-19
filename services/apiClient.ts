@@ -560,15 +560,27 @@ export interface FoodVideoResult {
     duration: number;
 }
 
+export interface FoodVideoOptions {
+    videoEngine?: 'happyhorse' | 'seedance';     // 기본 'seedance'
+    resolution?: '480P' | '720P' | '1080P';      // 기본 480P (seedance) / 720P (happyhorse)
+    generateAudio?: boolean;                     // Seedance 전용, 기본 true
+    seed?: number;
+}
+
 export const generateFoodVideo = async (
     foodImage: ImageData,
     englishPrompt: string,
-    durationSeconds: number = 6
+    durationSeconds: number = 6,
+    options?: FoodVideoOptions
 ): Promise<FoodVideoResult> => {
     return post<FoodVideoResult>('/api/generate-food-video', {
         foodImage,
         englishPrompt,
         durationSeconds,
+        ...(options?.videoEngine && { videoEngine: options.videoEngine }),
+        ...(options?.resolution && { resolution: options.resolution }),
+        ...(options?.generateAudio !== undefined && { generateAudio: options.generateAudio }),
+        ...(typeof options?.seed === 'number' && { seed: options.seed }),
     }, 'video');
 };
 

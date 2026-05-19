@@ -13,11 +13,14 @@ import {
   ImageStyle,
   AspectRatio,
   ScenarioTone,
+  VideoEngine,
+  VideoResolution,
   AD_TYPE_OPTIONS,
   INDUSTRY_OPTIONS,
   TARGET_AUDIENCE_OPTIONS,
   AD_DURATION_OPTIONS,
   AD_ENGINE_OPTIONS,
+  VIDEO_ENGINE_OPTIONS,
   IMAGE_STYLE_OPTIONS,
   TONE_OPTIONS,
 } from '../../types';
@@ -192,6 +195,12 @@ const AdTab: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [duration, setDuration] = useState<AdDuration>(30);
   const [engine, setEngine] = useState<AdEngine>('gemini');
+  // 영상 엔진 — HappyHorse 기본 (저비용/무음) / Seedance (오디오/프리미엄)
+  const [videoEngine, setVideoEngine] = useState<VideoEngine>('happyhorse');
+  // 영상 해상도 — 엔진 기본값으로 자동 조정 (HappyHorse 720P / Seedance 480P)
+  const [videoResolution, setVideoResolution] = useState<VideoResolution | undefined>(undefined);
+  // Seedance 전용 — 네이티브 오디오 ON/OFF (기본 ON)
+  const [generateAudio, setGenerateAudio] = useState<boolean>(true);
 
   // 프로젝트 목록 패널
   const [showProjectList, setShowProjectList] = useState(false);
@@ -237,6 +246,9 @@ const AdTab: React.FC = () => {
       aspectRatio,
       imageStyle,
       duration,
+      videoEngine,
+      resolution: videoResolution,
+      generateAudio: videoEngine === 'seedance' ? generateAudio : undefined,
       // 유형별 고유 필드
       ...(adType === 'product-intro' && {
         usps: [usp1.trim(), usp2.trim()].filter(Boolean),
@@ -276,6 +288,7 @@ const AdTab: React.FC = () => {
       // error handled by hook
     }
   }, [isAuthenticated, canUseApi, adType, industry, productName, selectedTargets, customTarget, tone, imageStyle, duration,
+    aspectRatio, videoEngine, videoResolution, generateAudio,
     usp1, usp2, launchReason, priceInfo,
     painPoint, solution, effectResult,
     brandMood, usageScene, stylingKeywords,
@@ -871,6 +884,95 @@ const AdTab: React.FC = () => {
                   </div>
                 </div>
 
+                {/* 영상 엔진 */}
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1.5 block">영상 엔진</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {VIDEO_ENGINE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setVideoEngine(opt.value);
+                          setVideoResolution(undefined); // 엔진 변경 시 해상도 자동 기본값으로 리셋
+                        }}
+                        className={`p-2.5 rounded-lg border text-left transition-all ${
+                          videoEngine === opt.value
+                            ? 'border-orange-500 bg-orange-900/30'
+                            : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-xs font-bold text-white">{opt.label}</div>
+                          {opt.supportsAudio && (
+                            <span className="text-[9px] px-1 py-0.5 bg-purple-600/40 text-purple-200 rounded">오디오</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{opt.description}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{opt.cost}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 영상 해상도 */}
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1.5 block">
+                    영상 해상도
+                    <span className="text-[10px] text-gray-500 ml-2">기본값 자동 ({videoEngine === 'seedance' ? '480P' : '720P'}) — 만족 시 더 높은 해상도로 재생성</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['480P', '720P', '1080P'] as VideoResolution[]).map(res => {
+                      const engineOpt = VIDEO_ENGINE_OPTIONS.find(o => o.value === videoEngine);
+                      const supported = engineOpt?.supportedResolutions.includes(res) ?? false;
+                      // Seedance i2v는 1080P 미지원 (30/45/60초 i2v 호출에서 차단됨)
+                      // 15초 t2v일 때만 Seedance 1080P 가능 — 단순화 위해 UI는 i2v 기준 비활성화
+                      const seedance1080Disabled = videoEngine === 'seedance' && res === '1080P' && duration > 15;
+                      const isDisabled = !supported || seedance1080Disabled;
+                      const isActive = (videoResolution ?? (videoEngine === 'seedance' ? '480P' : '720P')) === res;
+                      return (
+                        <button
+                          key={res}
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => setVideoResolution(res)}
+                          className={`p-2 rounded-lg border text-center transition-all ${
+                            isDisabled
+                              ? 'border-gray-800 bg-gray-900/20 text-gray-600 cursor-not-allowed'
+                              : isActive
+                                ? 'border-orange-500 bg-orange-900/30 text-white'
+                                : 'border-gray-700 bg-gray-900/50 text-gray-300 hover:border-gray-600'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{res}</div>
+                          {isDisabled && <div className="text-[9px] mt-0.5">미지원</div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Seedance 오디오 토글 */}
+                {videoEngine === 'seedance' && (
+                  <div className="flex items-center justify-between p-2.5 bg-purple-900/20 border border-purple-700/40 rounded-lg">
+                    <div>
+                      <div className="text-xs font-medium text-purple-200">네이티브 오디오 동기화</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">대사·효과음·BGM이 영상과 함께 생성됩니다</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setGenerateAudio(!generateAudio)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                        generateAudio ? 'bg-purple-600' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        generateAudio ? 'translate-x-5' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Summary */}
                 <div className="p-3 bg-gray-900/70 border border-gray-700 rounded-lg">
                   <h4 className="text-xs font-bold text-gray-300 mb-2">설정 요약</h4>
@@ -887,6 +989,13 @@ const AdTab: React.FC = () => {
                     <span className={engine === 'gpt-image' ? 'text-blue-300' : 'text-gray-300'}>
                       {AD_ENGINE_OPTIONS.find(o => o.value === engine)?.label}
                     </span>
+                    <span className="text-gray-500">영상 엔진</span>
+                    <span className={videoEngine === 'seedance' ? 'text-purple-300' : 'text-gray-300'}>
+                      {VIDEO_ENGINE_OPTIONS.find(o => o.value === videoEngine)?.label}
+                      {videoEngine === 'seedance' && generateAudio && ' · 오디오 ON'}
+                    </span>
+                    <span className="text-gray-500">해상도</span>
+                    <span className="text-gray-300">{videoResolution ?? (videoEngine === 'seedance' ? '480P (기본)' : '720P (기본)')}</span>
                   </div>
                 </div>
 

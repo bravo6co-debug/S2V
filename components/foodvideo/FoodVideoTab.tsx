@@ -8,6 +8,7 @@ import {
   type MukbangImageResult,
   type ImageData,
 } from '../../services/apiClient';
+import type { VideoEngine } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { compressImageForVideo, getBase64Size, formatBytes } from '../../services/imageCompression';
 
@@ -178,6 +179,9 @@ export const FoodVideoTab: React.FC = () => {
   // 모드 선택
   const [mode, setMode] = useState<FoodVideoMode>('basic');
 
+  // 영상 엔진 — Seedance 기본 (먹방 ASMR 사운드 핵심)
+  const [videoEngine, setVideoEngine] = useState<VideoEngine>('seedance');
+
   // =============================================
   // 기본 모드 상태
   // =============================================
@@ -268,14 +272,17 @@ export const FoodVideoTab: React.FC = () => {
     setResult(null);
 
     try {
-      const videoResult = await generateFoodVideo(foodUpload.image, englishPrompt.trim(), 6);
+      const videoResult = await generateFoodVideo(foodUpload.image, englishPrompt.trim(), 6, {
+        videoEngine,
+        generateAudio: videoEngine === 'seedance',
+      });
       setResult(videoResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : '영상 생성에 실패했습니다.');
     } finally {
       setIsGenerating(false);
     }
-  }, [foodUpload.image, englishPrompt, checkAuth]);
+  }, [foodUpload.image, englishPrompt, checkAuth, videoEngine]);
 
   const handleKoreanPromptChange = useCallback((value: string) => {
     setKoreanPrompt(value);
@@ -355,14 +362,17 @@ export const FoodVideoTab: React.FC = () => {
     setMukbangResult(null);
 
     try {
-      const videoResult = await generateFoodVideo(mukbangComposite, mukbangVideoPrompt, 6);
+      const videoResult = await generateFoodVideo(mukbangComposite, mukbangVideoPrompt, 6, {
+        videoEngine,
+        generateAudio: videoEngine === 'seedance',
+      });
       setMukbangResult(videoResult);
     } catch (err) {
       setMukbangError(err instanceof Error ? err.message : '영상 생성에 실패했습니다.');
     } finally {
       setIsGeneratingMukbangVideo(false);
     }
-  }, [mukbangComposite, mukbangVideoPrompt, checkAuth]);
+  }, [mukbangComposite, mukbangVideoPrompt, checkAuth, videoEngine]);
 
   // 영상 다운로드 (공통)
   const handleDownload = useCallback(async (videoUrl: string) => {
@@ -431,6 +441,40 @@ export const FoodVideoTab: React.FC = () => {
           >
             먹방 모드
           </button>
+        </div>
+
+        {/* Video Engine Toggle */}
+        <div className="mt-2">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] sm:text-xs text-gray-400">영상 엔진</span>
+            {videoEngine === 'seedance' && <span className="text-[9px] px-1 py-0.5 bg-purple-600/40 text-purple-200 rounded">ASMR 사운드</span>}
+          </div>
+          <div className="flex bg-gray-900/60 rounded-lg p-0.5 gap-0.5">
+            <button
+              type="button"
+              onClick={() => setVideoEngine('seedance')}
+              className={`flex-1 py-1.5 px-3 text-[11px] sm:text-xs font-medium rounded-md transition-all ${
+                videoEngine === 'seedance'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+              title="네이티브 ASMR 사운드 (~$0.67/6초)"
+            >
+              Seedance (오디오, 기본)
+            </button>
+            <button
+              type="button"
+              onClick={() => setVideoEngine('happyhorse')}
+              className={`flex-1 py-1.5 px-3 text-[11px] sm:text-xs font-medium rounded-md transition-all ${
+                videoEngine === 'happyhorse'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+              title="무음, 저비용 (~$0.84/6초)"
+            >
+              HappyHorse (무음, 저비용)
+            </button>
+          </div>
         </div>
       </div>
 
