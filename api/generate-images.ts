@@ -308,7 +308,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 .replace(/\s{2,}/g, ' ')                   // 다중 공백 정리
                 .trim();
 
-            const eachlabsPrompt = `Photorealistic cinematic scene, absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, and labels, no watermarks.${charInfo} ${cleanedPrompt}`;
+            // 사용자가 선택한 imageStyle에 맞는 prefix를 동적으로 사용
+            // (이전: "Photorealistic cinematic scene" 하드코딩 → illustration/animation 등 모든 스타일이 무시되던 버그)
+            const styleStrictness = imageStyle && imageStyle !== 'photorealistic' && imageStyle !== 'cinematic'
+                ? ` The ENTIRE image including all characters, backgrounds, and objects MUST be rendered in this style. Do NOT mix realistic photo elements.`
+                : '';
+            const eachlabsPrompt = `${getStylePrompt(imageStyle)}${styleStrictness} Absolutely no visible text, letters, numbers, or writing in any language including on screens, signs, and labels, no watermarks.${charInfo} ${cleanedPrompt}`;
 
             console.log(`[generate-images] Eachlabs prompt (${eachlabsPrompt.length} chars): ${eachlabsPrompt.substring(0, 200)}...`);
 
