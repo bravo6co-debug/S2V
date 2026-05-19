@@ -479,6 +479,25 @@ ${hookExamples.map(ex => `- ${ex}`).join('\n')}
 - visualDescription의 핵심 내용을 포함하되, AI 이미지 생성에 필요한 모든 시각적 세부사항을 추가
 - 최소 50단어 이상의 상세한 프롬프트 작성
 
+**🚫 회피 규칙: 이미지 속 이미지 (Screen-Within-Screen) 금지**
+AI 이미지 모델은 다른 표면 안에 또 다른 구체적 콘텐츠를 정확히 렌더링하지 못합니다. 다음 컴포지션은 **반드시 피하세요**:
+- 핸드폰/태블릿 화면에 특정 사진·그림·메시지 표시
+- TV/모니터/노트북 화면에 구체적 콘텐츠
+- 액자 속 특정 그림이나 사진
+- 거울에 비친 특정 인물/장면
+- 책/잡지의 가독 가능한 페이지
+
+**상충 지시 금지:** "out of focus" + 구체적 콘텐츠 묘사 등 모순되는 지시문 절대 금지. 모델이 한쪽을 포기해 의도가 깨집니다.
+
+**대안 (스토리에 필수일 때):**
+- **별도 씬으로 분리** — 화면/그림을 메인 주체로 한 클로즈업을 추가 씬으로 작성
+- **추상화** — 화면 콘텐츠는 "warm glowing light", "abstract colorful patterns", "soft warm glow on screen" 등 모호하게 묘사
+- **소품으로 한정** — 콘텐츠 묘사 없이 "smartphone in hand", "a framed photo on the wall" 정도로만
+
+❌ 나쁨: "smartphone showing a vibrant digital painting of a sunset, out of focus"
+✅ 좋음 (분리): Scene 2a = "Korean woman's eyes welling up", Scene 2b = "smartphone screen close-up showing a digital sunset painting in sharp focus"
+✅ 좋음 (추상): "elderly man's hand holding a smartphone, screen emitting a warm amber glow"
+
 ${imagePromptGuidelines}
 
 ${characterGuidelines}

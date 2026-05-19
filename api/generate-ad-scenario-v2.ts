@@ -390,6 +390,22 @@ ${originStory ? `- **브랜드 탄생 배경**: ${sanitizePrompt(originStory, 30
 - 인물이 필요한 씬에는 "Korean [타겟 연령/성별] person/model" 포함
 - 배경, 조명, 소품을 업종에 맞게 구체적으로 묘사
 
+### 🚫 이미지 속 이미지 (Screen-Within-Screen) 금지
+AI 이미지 모델은 다른 표면 안에 또 다른 구체적 콘텐츠를 정확히 렌더링하지 못합니다. 광고 씬에서 특히 주의:
+- ❌ 핸드폰 화면에 특정 사진/메시지/UI 화면
+- ❌ TV/모니터에 구체적 콘텐츠 (제품 데모, 사용 사례 등)
+- ❌ 액자/포스터/잡지 속 특정 이미지
+- ❌ 거울에 비친 특정 장면 (Before/After를 거울로 표현 금지)
+- ❌ "out of focus" + 구체적 콘텐츠 같은 모순 지시
+
+**상품/서비스 시연이 필요할 때 대안:**
+- **별도 씬으로 분리** — 화면/포스터를 메인 주체로 한 클로즈업 컷을 추가 씬으로 작성
+- **추상화** — "warm glowing screen", "abstract colorful UI flow", "soft amber glow" 등 모호하게
+- **소품 한정** — 콘텐츠 묘사 없이 "person holding smartphone", "TV in background" 정도로만
+
+✅ 좋음 (분리): Scene 3 = "Korean woman smiling at her phone", Scene 4 = "smartphone close-up with abstract colorful interface glow"
+✅ 좋음 (추상): "elderly man holding a tablet, screen emitting warm welcoming amber glow"
+
 ### 상품 이미지 가이드
 ${hasProductImage ? `**상품 참조 이미지가 있습니다.** imagePrompt 작성 시:
 - 상품이 자연스럽게 장면에 등장하도록 묘사 (인물이 들고/사용/옆에 놓는 등)

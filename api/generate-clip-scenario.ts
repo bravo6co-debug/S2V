@@ -285,6 +285,14 @@ ${structureConfig.beatGuide}
 ${imagePromptGuidelines}
 - 텍스트/로고/글자 묘사 절대 금지
 
+### 🚫 이미지 속 이미지 (Screen-Within-Screen) 금지
+AI 이미지 모델은 다른 표면 안의 구체적 콘텐츠 렌더링에 약합니다. 다음은 피하세요:
+- 핸드폰/태블릿/모니터 화면에 특정 사진·그림·UI 표시
+- 액자 속 그림, 거울에 비친 특정 장면
+- "out of focus" + 구체적 콘텐츠 같은 모순 지시
+
+**대안:** 화면/그림이 스토리에 핵심이면 그 자체를 메인 주체로 한 별도 씬을 작성. 어쩔 수 없이 포함해야 하면 "warm glowing screen", "abstract colorful glow" 등으로 추상화.
+
 ---
 
 ${CLIP_MOTION_GUIDE}
