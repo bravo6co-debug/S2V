@@ -1,45 +1,43 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { put, del } from '@vercel/blob';
 import { setCorsHeaders } from './lib/gemini.js';
 import { requireAuth } from './lib/auth.js';
 import { findUserById } from './lib/mongodb.js';
-import type { ApiErrorResponse } from './lib/types.js';
+import {
+    generateHappyhorseI2V,
+    generateSeedanceI2V,
+    type HappyhorseResolution,
+    type SeedanceResolution,
+} from './lib/eachlabs.js';
+import { createLogger } from './lib/logger.js';
+import type { ApiErrorResponse, ImageData, VideoEngine } from './lib/types.js';
 
-// Hailuo V2.3 via eachlabs.ai
-const HAILUO_API_URL = 'https://api.eachlabs.ai/v1/prediction';
-const HAILUO_MODEL = 'minimax-hailuo-v2-3-fast-standard-image-to-video';
-const HAILUO_VERSION = '0.0.1';
+const log = createLogger('generate-food-video');
 
 /**
- * Extract image dimensions from a Buffer (supports JPEG and PNG)
+ * Buffer에서 이미지 크기 추출 (JPEG/PNG 지원)
  */
 function getImageDimensions(buffer: Buffer): { width: number; height: number } | null {
     try {
-        // PNG: starts with 0x89 0x50 0x4E 0x47
+        // PNG
         if (buffer[0] === 0x89 && buffer[1] === 0x50) {
-            const width = buffer.readUInt32BE(16);
-            const height = buffer.readUInt32BE(20);
-            return { width, height };
+            return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
         }
-
-        // JPEG: starts with 0xFF 0xD8
+        // JPEG
         if (buffer[0] === 0xFF && buffer[1] === 0xD8) {
             let offset = 2;
             while (offset < buffer.length - 1) {
                 if (buffer[offset] !== 0xFF) { offset++; continue; }
                 const marker = buffer[offset + 1];
-                // SOF0, SOF1, SOF2 markers
                 if (marker === 0xC0 || marker === 0xC1 || marker === 0xC2) {
-                    const height = buffer.readUInt16BE(offset + 5);
-                    const width = buffer.readUInt16BE(offset + 7);
-                    return { width, height };
+                    return {
+                        width: buffer.readUInt16BE(offset + 7),
+                        height: buffer.readUInt16BE(offset + 5),
+                    };
                 }
-                // Skip to next marker
                 if (marker === 0xD8 || marker === 0xD9) {
                     offset += 2;
                 } else {
-                    const segLen = buffer.readUInt16BE(offset + 2);
-                    offset += 2 + segLen;
+                    offset += 2 + buffer.readUInt16BE(offset + 2);
                 }
             }
         }
@@ -50,12 +48,13 @@ function getImageDimensions(buffer: Buffer): { width: number; height: number } |
 }
 
 interface GenerateFoodVideoRequest {
-    foodImage: {
-        mimeType: string;
-        data: string;
-    };
+    foodImage: ImageData;
     englishPrompt: string;
-    durationSeconds?: number;
+    durationSeconds?: number;        // 4~15 (Seedance) / 3~15 (HappyHorse). 기본 6
+    videoEngine?: VideoEngine;       // 기본 'seedance' — 먹방 ASMR 사운드가 핵심
+    resolution?: '480P' | '720P' | '1080P';  // 기본 480P (Seedance) / 720P (HappyHorse)
+    generateAudio?: boolean;         // Seedance 전용. 기본 true (먹방 핵심)
+    seed?: number;
 }
 
 interface FoodVideoResult {
@@ -65,9 +64,10 @@ interface FoodVideoResult {
 
 /**
  * POST /api/generate-food-video
- * Generates a cinematic food video from a food image and an English video prompt.
- * Uses Hailuo V2.3 image-to-video (eachlabs.ai).
- * Note: Prompt translation is handled separately by /api/translate-food-prompt.
+ * Image-to-Video — 먹방/푸드 영상 생성 (씹는 소리·지글거림 ASMR 핵심)
+ *
+ * 기본 엔진: Seedance 2.0 i2v-fast 480P + 오디오 ON (네이티브 ASMR)
+ * 가격: ~$0.11/초 × 6초 = ~$0.67/회 (HappyHorse 720P보다 약간 저렴 + 사운드 포함)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCorsHeaders(res, req.headers.origin as string);
@@ -80,7 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' } as ApiErrorResponse);
     }
 
-    // 인증 체크
     const auth = requireAuth(req);
     if (!auth.authenticated || !auth.userId) {
         return res.status(401).json({
@@ -89,10 +88,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    let blobUrl: string | null = null;
-
     try {
-        const { foodImage, englishPrompt, durationSeconds = 6 } = req.body as GenerateFoodVideoRequest;
+        const {
+            foodImage,
+            englishPrompt,
+            durationSeconds = 6,
+            videoEngine = 'seedance',
+            generateAudio = true,
+            seed,
+        } = req.body as GenerateFoodVideoRequest;
+        let { resolution } = req.body as GenerateFoodVideoRequest;
 
         if (!foodImage || !foodImage.data || !foodImage.mimeType) {
             return res.status(400).json({ error: '음식 이미지가 필요합니다.' } as ApiErrorResponse);
@@ -102,187 +107,107 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: '영어 프롬프트가 필요합니다. 먼저 프롬프트 변환을 진행해 주세요.' } as ApiErrorResponse);
         }
 
-        // 사용자별 Hailuo API 키 조회 (개인 설정 키 우선, 환경변수 폴백)
-        const user = await findUserById(auth.userId);
-        const hailuoApiKey = user?.settings?.hailuoApiKey || process.env.HAILUO_API_KEY;
+        // 엔진별 기본 해상도 (Seedance 480P, HappyHorse 720P)
+        if (!resolution) {
+            resolution = videoEngine === 'seedance' ? '480P' : '720P';
+        }
 
-        if (!hailuoApiKey) {
+        // 엔진별 잘못된 조합 차단
+        if (videoEngine === 'happyhorse' && resolution === '480P') {
             return res.status(400).json({
-                error: 'Hailuo API 키가 설정되지 않았습니다. 설정에서 Hailuo API 키를 입력해 주세요.',
-                code: 'HAILUO_API_KEY_MISSING'
+                error: 'HappyHorse 엔진은 480P를 지원하지 않습니다. 720P 또는 1080P를 선택하세요.',
+                code: 'INVALID_RESOLUTION',
+            } as ApiErrorResponse);
+        }
+        if (videoEngine === 'seedance' && resolution === '1080P') {
+            return res.status(400).json({
+                error: 'Seedance i2v는 1080P를 지원하지 않습니다. 480P/720P 또는 HappyHorse 엔진을 선택하세요.',
+                code: 'INVALID_RESOLUTION',
             } as ApiErrorResponse);
         }
 
-        // Step 1: 이미지를 Vercel Blob에 업로드 (eachlabs.ai는 HTTPS URL 필요)
-        let imageUrl: string;
-        try {
-            const buffer = Buffer.from(foodImage.data, 'base64');
-
-            // 이미지 크기 확인
-            const dims = getImageDimensions(buffer);
-            if (dims) {
-                if (dims.width < 300 || dims.height < 300) {
-                    return res.status(400).json({
-                        error: `이미지가 너무 작습니다 (${dims.width}x${dims.height}). 최소 300x300 이상의 이미지를 사용하세요.`,
-                        code: 'IMAGE_TOO_SMALL'
-                    } as ApiErrorResponse);
-                }
-            }
-
-            const ext = foodImage.mimeType === 'image/png' ? 'png' : foodImage.mimeType === 'image/webp' ? 'webp' : 'jpg';
-            const blob = await put(`food-video/${Date.now()}.${ext}`, buffer, {
-                access: 'public',
-                contentType: foodImage.mimeType,
-            });
-            imageUrl = blob.url;
-            blobUrl = blob.url;
-        } catch (uploadError) {
-            console.error('Vercel Blob upload failed:', uploadError);
-            const msg = uploadError instanceof Error ? uploadError.message : String(uploadError);
-            return res.status(500).json({
-                error: `이미지 업로드 실패: ${msg}`,
-                code: 'IMAGE_UPLOAD_FAILED'
+        // 이미지 크기 검증 (최소 300x300)
+        const buffer = Buffer.from(foodImage.data, 'base64');
+        const dims = getImageDimensions(buffer);
+        if (dims && (dims.width < 300 || dims.height < 300)) {
+            return res.status(400).json({
+                error: `이미지가 너무 작습니다 (${dims.width}x${dims.height}). 최소 300x300 이상의 이미지를 사용하세요.`,
+                code: 'IMAGE_TOO_SMALL'
             } as ApiErrorResponse);
         }
 
-        // Step 2: Hailuo API로 prediction 생성
-        let predictionId: string;
-        try {
-            const requestBody = {
-                model: HAILUO_MODEL,
-                version: HAILUO_VERSION,
-                input: {
-                    prompt: englishPrompt,
-                    prompt_optimizer: true,
-                    image_url: imageUrl,
-                    duration: '6',
-                },
-                webhook_url: '',
-            };
+        // EachLabs API 키 — 일반 사용자는 본인 키만, admin만 환경변수 폴백 (비용 누수 차단)
+        const user = await findUserById(auth.userId);
+        const personalKey = user?.settings?.hailuoApiKey;
+        const apiKey = personalKey || (user?.isAdmin ? process.env.HAILUO_API_KEY : undefined);
 
-            const createResponse = await fetch(`${HAILUO_API_URL}/`, {
-                method: 'POST',
-                headers: {
-                    'X-API-Key': hailuoApiKey,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody),
+        if (!apiKey) {
+            return res.status(400).json({
+                error: 'EachLabs API 키가 설정되지 않았습니다. 설정에서 본인 EachLabs API 키를 입력해 주세요.',
+                code: 'API_KEY_MISSING'
+            } as ApiErrorResponse);
+        }
+
+        // duration — 엔진별 최소값 (HappyHorse 3, Seedance 4)
+        const minDur = videoEngine === 'seedance' ? 4 : 3;
+        const clampedDuration = Math.max(minDur, Math.min(15, Math.round(durationSeconds)));
+
+        log.info(`${videoEngine} 먹방 영상 생성`, {
+            engine: videoEngine,
+            duration: clampedDuration,
+            resolution,
+            audio: videoEngine === 'seedance' ? generateAudio : false,
+            promptChars: englishPrompt.length,
+            seed: seed ?? '(none)',
+        });
+
+        let videoUrl: string;
+
+        if (videoEngine === 'seedance') {
+            const result = await generateSeedanceI2V({
+                apiKey,
+                prompt: englishPrompt,
+                firstFrame: foodImage,
+                duration: clampedDuration,
+                resolution: resolution as SeedanceResolution,
+                aspectRatio: 'auto',
+                generateAudio,
+                ...(typeof seed === 'number' && { seed }),
             });
-
-            const responseText = await createResponse.text();
-            let createResult: any;
-            try {
-                createResult = JSON.parse(responseText);
-            } catch {
-                throw new Error(`API 응답이 올바른 형식이 아닙니다 (HTTP ${createResponse.status}): ${responseText.substring(0, 200)}`);
-            }
-
-            if (!createResponse.ok) {
-                const errMsg = createResult.error || createResult.message || createResult.detail || JSON.stringify(createResult);
-                throw new Error(`HTTP ${createResponse.status}: ${errMsg}`);
-            }
-
-            if (createResult.status !== 'success' || !createResult.predictionID) {
-                const errMsg = createResult.error || createResult.message || JSON.stringify(createResult);
-                throw new Error(errMsg);
-            }
-
-            predictionId = createResult.predictionID;
-        } catch (initError) {
-            console.error('Failed to create food video prediction:', initError);
-            const errorMsg = initError instanceof Error ? initError.message : String(initError);
-
-            if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
-                return res.status(403).json({
-                    error: 'Hailuo API 키가 유효하지 않습니다. 설정에서 키를 확인하세요.',
-                    code: 'HAILUO_PERMISSION_DENIED'
-                } as ApiErrorResponse);
-            }
-
-            throw new Error(`Hailuo API 호출 실패: ${errorMsg}`);
+            videoUrl = result.videoUrl;
+        } else {
+            const result = await generateHappyhorseI2V({
+                apiKey,
+                prompt: englishPrompt,
+                firstFrame: foodImage,
+                duration: clampedDuration,
+                resolution: resolution as HappyhorseResolution,
+                ...(typeof seed === 'number' && { seed }),
+            });
+            videoUrl = result.videoUrl;
         }
 
-        // Step 3: 폴링으로 결과 확인 (최대 5분)
-        const maxPollingTime = 300000; // 5 minutes
-        const pollInterval = 5000; // 5초 간격
-        const startTime = Date.now();
-        let pollCount = 0;
-
-        while (true) {
-            pollCount++;
-            const elapsed = Math.round((Date.now() - startTime) / 1000);
-
-            if (Date.now() - startTime > maxPollingTime) {
-                throw new Error(`영상 생성 시간 초과 (${elapsed}초 경과). 나중에 다시 시도하세요.`);
-            }
-
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
-
-            try {
-                const pollResponse = await fetch(`${HAILUO_API_URL}/${predictionId}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-API-Key': hailuoApiKey,
-                        'Content-Type': 'application/json',
-                    },
-                });
-                const pollText = await pollResponse.text();
-                let pollResult: any;
-                try {
-                    pollResult = JSON.parse(pollText);
-                } catch {
-                    continue;
-                }
-
-                if (pollResult.status === 'success' && pollResult.output) {
-                    const videoUrl = pollResult.output;
-
-                    // Blob 정리
-                    if (blobUrl) {
-                        try { await del(blobUrl); } catch (delErr) { console.warn('Blob cleanup failed:', delErr); }
-                    }
-
-                    const result: FoodVideoResult = {
-                        videoUrl: videoUrl,
-                        duration: durationSeconds,
-                    };
-                    return res.status(200).json(result);
-                }
-
-                if (pollResult.status === 'error') {
-                    const errDetail = pollResult.error || pollResult.message || '알 수 없는 오류';
-                    throw new Error(`영상 생성 실패: ${errDetail}`);
-                }
-
-                // 아직 처리 중 (processing/pending) -> 계속 폴링
-            } catch (pollError) {
-                if (pollError instanceof Error && pollError.message.includes('영상 생성')) {
-                    throw pollError;
-                }
-                if (pollCount > 3) {
-                    throw new Error('영상 생성 상태 확인이 반복 실패했습니다.');
-                }
-            }
-        }
+        const result: FoodVideoResult = {
+            videoUrl,
+            duration: clampedDuration,
+        };
+        return res.status(200).json(result);
 
     } catch (e) {
-        // Blob 정리
-        if (blobUrl) {
-            try { await del(blobUrl); } catch (delErr) { console.warn('Blob cleanup failed:', delErr); }
-        }
+        log.error('Food video generation failed', { error: e instanceof Error ? e.message : String(e) });
 
         if (e instanceof Error) {
             const msg = e.message;
 
-            if (msg.includes('PERMISSION_DENIED') || msg.includes('403') || msg.includes('Forbidden') || msg.includes('Unauthorized')) {
+            if (msg.includes('401') || msg.includes('Unauthorized') || msg.includes('PERMISSION_DENIED') || msg.includes('403')) {
                 return res.status(403).json({
-                    error: 'Hailuo API 접근 권한이 없습니다. API 키를 확인하세요.',
-                    code: 'HAILUO_PERMISSION_DENIED'
+                    error: 'EachLabs API 키가 유효하지 않거나 권한이 없습니다.',
+                    code: 'PERMISSION_DENIED'
                 } as ApiErrorResponse);
             }
             if (msg.includes('QUOTA_EXCEEDED') || msg.includes('429') || msg.includes('Resource exhausted') || msg.includes('rate limit')) {
                 return res.status(429).json({
-                    error: 'Hailuo API 할당량을 초과했습니다. 잠시 후 다시 시도하세요.',
+                    error: 'API 할당량을 초과했습니다. 잠시 후 다시 시도하세요.',
                     code: 'QUOTA_EXCEEDED'
                 } as ApiErrorResponse);
             }

@@ -176,7 +176,7 @@ const ClipSceneCard: React.FC<SceneCardProps> = ({
                       value={editVideoPrompt}
                       onChange={e => setEditVideoPrompt(e.target.value)}
                       className="w-full bg-gray-900 text-gray-200 rounded p-2 text-[16px] sm:text-sm h-16 resize-none border border-gray-600 focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                      placeholder="Hailuo motion prompt (English)"
+                      placeholder="Motion prompt (English)"
                     />
                   </div>
                   <div className="flex gap-2">
@@ -357,7 +357,7 @@ const ClipGeneratorModal: React.FC<GeneratorModalProps> = ({
           </div>
 
           <p className="text-xs text-gray-400">
-            Hailuo AI 전용 6초 단위 클립 영상 시나리오를 생성합니다.
+            15초 단위 클립 영상 시나리오를 생성합니다.
           </p>
 
           {/* Topic */}
@@ -573,8 +573,8 @@ const ClipScenarioTab: React.FC = () => {
           </div>
           <h2 className="text-xl font-bold text-white">클립 시나리오</h2>
           <p className="text-gray-400 text-sm">
-            Hailuo AI 전용 6초 단위 클립 영상 시나리오를 생성합니다.
-            <br />최대 2분, 씬당 6초, 모션 프롬프트 자동 생성.
+            15초 단위 클립 영상 시나리오를 생성합니다.
+            <br />최대 2분, 씬당 15초, 모션 프롬프트 자동 생성.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
             <button
@@ -629,7 +629,7 @@ const ClipScenarioTab: React.FC = () => {
           </span>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3 text-[10px] sm:text-xs text-gray-400">
-          <span>{clipScenario.totalDuration}초 ({totalScenes}씬 × 6초)</span>
+          <span>{clipScenario.totalDuration}초 ({totalScenes}씬 × 15초)</span>
           <span>|</span>
           <span>이미지: {totalGeneratedImages}/{totalScenes}</span>
           <span>|</span>

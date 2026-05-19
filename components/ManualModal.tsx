@@ -130,10 +130,16 @@ export const ManualModal: React.FC<ManualModalProps> = ({ isOpen, onClose }) => 
                                             <td className="py-2">전문가용</td>
                                         </tr>
                                         <tr className="border-b border-gray-700/50 text-orange-400">
-                                            <td className="py-2 pr-4">Hailuo AI 영상</td>
-                                            <td className="py-2 pr-4">6초</td>
-                                            <td className="py-2 pr-4">크레딧 차감</td>
-                                            <td className="py-2">음식/클립 영상</td>
+                                            <td className="py-2 pr-4">HappyHorse 1.0</td>
+                                            <td className="py-2 pr-4">3~15초</td>
+                                            <td className="py-2 pr-4">720P $0.14/초</td>
+                                            <td className="py-2">기본/저비용 (무음)</td>
+                                        </tr>
+                                        <tr className="border-b border-gray-700/50 text-pink-400">
+                                            <td className="py-2 pr-4">Seedance 2.0</td>
+                                            <td className="py-2 pr-4">4~15초</td>
+                                            <td className="py-2 pr-4">480P $0.11/초 ~ 720P $0.24/초</td>
+                                            <td className="py-2">네이티브 오디오 (먹방 기본)</td>
                                         </tr>
                                         <tr className="text-indigo-400 font-semibold">
                                             <td className="py-2 pr-4">Remotion 내보내기</td>
@@ -241,10 +247,10 @@ export const ManualModal: React.FC<ManualModalProps> = ({ isOpen, onClose }) => 
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                     </svg>
                                     <span className="text-amber-300 font-semibold text-sm sm:text-base">음식 영상 탭</span>
-                                    <span className="text-gray-500 text-xs ml-auto">Hailuo AI 음식/먹방 영상</span>
+                                    <span className="text-gray-500 text-xs ml-auto">Seedance/HappyHorse 음식 영상</span>
                                 </summary>
                                 <div className="p-3 sm:p-4 pt-0 space-y-3 text-sm text-gray-400">
-                                    <p>음식 사진을 업로드하면 Hailuo AI가 6초 세로 영상(9:16)으로 변환합니다.</p>
+                                    <p>음식 사진을 업로드하면 AI가 세로 영상(9:16)으로 변환합니다. 기본 엔진은 Seedance 2.0 480P (네이티브 ASMR 사운드 포함).</p>
                                     <div className="space-y-3">
                                         <div>
                                             <p className="text-white font-medium mb-1">기본 모드</p>
@@ -308,16 +314,16 @@ export const ManualModal: React.FC<ManualModalProps> = ({ isOpen, onClose }) => 
                                     <span className="text-gray-500 text-xs ml-auto">30~120초 숏폼 클립</span>
                                 </summary>
                                 <div className="p-3 sm:p-4 pt-0 space-y-3 text-sm text-gray-400">
-                                    <p>Hailuo AI 6초 클립 생성에 최적화된 숏폼 시나리오(9:16 세로)를 만듭니다.</p>
+                                    <p>15초 단위 숏폼 클립 시나리오(9:16 세로)를 만듭니다. HappyHorse/Seedance 엔진 공통.</p>
                                     <ol className="list-decimal list-inside space-y-2">
                                         <li><strong className="text-white">주제 입력:</strong> 영상 주제를 입력합니다.</li>
-                                        <li><strong className="text-white">길이 선택:</strong> 30초(5씬), 60초(10씬), 90초(15씬), 120초(20씬) 중 선택합니다.</li>
+                                        <li><strong className="text-white">길이 선택:</strong> 30초(2씬), 60초(4씬), 90초(6씬), 120초(8씬) 중 선택합니다.</li>
                                         <li><strong className="text-white">시나리오 모드/스타일/분위기</strong>를 설정합니다.</li>
-                                        <li><strong className="text-white">씬 편집:</strong> 나레이션(20~30자 권장), 비주얼 설명, 영상 모션 프롬프트를 수정합니다.</li>
+                                        <li><strong className="text-white">씬 편집:</strong> 나레이션(50~75자 권장), 비주얼 설명, 영상 모션 프롬프트를 수정합니다.</li>
                                         <li><strong className="text-white">이미지 생성:</strong> 각 씬의 이미지를 생성합니다.</li>
                                     </ol>
                                     <div className="p-2 bg-cyan-900/20 rounded-lg">
-                                        <p className="text-cyan-300 text-xs">각 씬은 6초 고정이며, Shorts/Reels/TikTok에 최적화되어 있습니다.</p>
+                                        <p className="text-cyan-300 text-xs">각 씬은 15초 고정이며, Shorts/Reels/TikTok에 최적화되어 있습니다.</p>
                                     </div>
                                 </div>
                             </details>
@@ -332,7 +338,7 @@ export const ManualModal: React.FC<ManualModalProps> = ({ isOpen, onClose }) => 
                                 <p className="text-white font-medium mb-1">API 키 설정 (설정 버튼)</p>
                                 <ul className="list-disc list-inside space-y-1">
                                     <li><strong className="text-gray-200">Gemini API:</strong> 이미지 생성, TTS, 텍스트 생성 (필수)</li>
-                                    <li><strong className="text-gray-200">Hailuo API:</strong> 음식/클립 AI 영상 생성 (선택)</li>
+                                    <li><strong className="text-gray-200">EachLabs API:</strong> 음식/광고/클립 AI 영상 생성 (HappyHorse, Seedance — 선택)</li>
                                     <li><strong className="text-gray-200">OpenAI API:</strong> TTS 나레이션 (선택, 롱폼 탭)</li>
                                 </ul>
                             </div>
@@ -401,13 +407,13 @@ export const ManualModal: React.FC<ManualModalProps> = ({ isOpen, onClose }) => 
                             <div className="flex items-start gap-2">
                                 <span className="text-green-400 mt-0.5">&#10003;</span>
                                 <p className="text-gray-300 text-sm">
-                                    <strong className="text-white">클립 탭</strong>의 나레이션은 20~30자로 짧게 작성해야 6초에 맞습니다.
+                                    <strong className="text-white">클립 탭</strong>의 나레이션은 50~75자로 작성해야 15초 씬에 맞습니다.
                                 </p>
                             </div>
                             <div className="flex items-start gap-2">
                                 <span className="text-yellow-400 mt-0.5">!</span>
                                 <p className="text-gray-300 text-sm">
-                                    <strong className="text-white">Remotion 영상 내보내기</strong>는 무료이며, Veo/Hailuo AI 영상 생성은 비용이 발생합니다.
+                                    <strong className="text-white">Remotion 영상 내보내기</strong>는 무료이며, Veo/HappyHorse/Seedance AI 영상 생성은 비용이 발생합니다.
                                 </p>
                             </div>
                         </div>
