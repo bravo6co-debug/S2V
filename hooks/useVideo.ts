@@ -7,8 +7,9 @@ import {
   ImageData,
   VideoEngine,
   VideoResolution,
+  AspectRatio,
 } from '../types';
-import { generateVideoFromImage } from '../services/geminiService';
+import { generateVideoFromImage, generateAdTextToVideo } from '../services/geminiService';
 
 export interface ClipVideoGenerationOptions {
   videoEngine?: VideoEngine;
@@ -41,6 +42,8 @@ interface UseVideoReturn {
   // 영상 클립 생성 (AI)
   generateClipVideo: (clipId: string, referenceImages?: ImageData[], options?: ClipVideoGenerationOptions) => Promise<void>;
   generateAllClipVideos: (referenceImages?: ImageData[], options?: ClipVideoGenerationOptions) => Promise<void>;
+  // 15초 광고 t2v — multi-shot 프롬프트 1콜로 영상 생성 (source image 불필요)
+  generateClipVideoT2V: (clipId: string, multiShotPrompt: string, aspectRatio: AspectRatio, options?: ClipVideoGenerationOptions) => Promise<void>;
   // 동일 seed로 더 높은 해상도 재생성
   upgradeClipResolution: (clipId: string, target: '720P' | '1080P') => Promise<void>;
 
@@ -368,6 +371,80 @@ export function useVideo(): UseVideoReturn {
     setIsGenerating(false);
   }, [timeline, contextSetTimeline]);
 
+  // 15초 광고 t2v — multi-shot 프롬프트 1콜로 영상 생성 (source image 불필요)
+  const generateClipVideoT2V = useCallback(async (
+    clipId: string,
+    multiShotPrompt: string,
+    aspectRatio: AspectRatio,
+    options?: ClipVideoGenerationOptions,
+  ): Promise<void> => {
+    if (!timeline) return;
+
+    const clip = timeline.clips.find(c => c.id === clipId);
+    if (!clip) return;
+
+    setGeneratingClipId(clipId);
+    setIsGenerating(true);
+    setError(null);
+
+    let currentTimeline = { ...timeline };
+
+    try {
+      currentTimeline = {
+        ...currentTimeline,
+        clips: currentTimeline.clips.map(c =>
+          c.id === clipId ? { ...c, status: 'generating' as const } : c
+        ),
+        updatedAt: Date.now(),
+      };
+      contextSetTimeline(currentTimeline);
+
+      // t2v는 firstFrame 없이 prompt만으로 영상 생성. duration은 clip.duration(최대 15초)
+      const result = await generateAdTextToVideo(
+        multiShotPrompt,
+        aspectRatio,
+        Math.min(clip.duration, 15),
+        options,
+      );
+
+      currentTimeline = {
+        ...currentTimeline,
+        clips: currentTimeline.clips.map(c =>
+          c.id === clipId
+            ? {
+                ...c,
+                status: 'complete' as const,
+                generatedVideo: {
+                  url: result.videoUrl,
+                  thumbnailUrl: result.thumbnailUrl,
+                  duration: result.duration,
+                  seed: result.seed,
+                  resolution: result.resolution,
+                  videoEngine: result.videoEngine,
+                },
+              }
+            : c
+        ),
+        updatedAt: Date.now(),
+      };
+      contextSetTimeline(currentTimeline);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : '15초 광고 t2v 생성에 실패했습니다.';
+      setError(message);
+      currentTimeline = {
+        ...currentTimeline,
+        clips: currentTimeline.clips.map(c =>
+          c.id === clipId ? { ...c, status: 'error' as const, error: message } : c
+        ),
+        updatedAt: Date.now(),
+      };
+      contextSetTimeline(currentTimeline);
+    } finally {
+      setGeneratingClipId(null);
+      setIsGenerating(false);
+    }
+  }, [timeline, contextSetTimeline]);
+
   // 동일 seed로 더 높은 해상도 재생성 — clip의 generatedVideo에 저장된 seed/engine을 재사용
   const upgradeClipResolution = useCallback(async (
     clipId: string,
@@ -442,6 +519,7 @@ export function useVideo(): UseVideoReturn {
     // 영상 클립 생성
     generateClipVideo,
     generateAllClipVideos,
+    generateClipVideoT2V,
     upgradeClipResolution,
 
     // 재생 컨트롤

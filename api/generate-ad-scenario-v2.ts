@@ -4,7 +4,7 @@ import { getUserIdFromRequest } from './lib/auth.js';
 import { isOpenAIModel, getOpenAIKeyForUser, generateTextWithOpenAI } from './lib/openai.js';
 import type {
     GenerateAdScenarioV2Request, Scenario, Scene, ScenarioTone, ImageStyle,
-    StoryBeat, CameraAngle, ApiErrorResponse, AdType, IndustryCategory, TargetAudience, AdDuration
+    StoryBeat, CameraAngle, ApiErrorResponse, AdType, IndustryCategory, TargetAudience, AdDuration, HDSERBeat
 } from './lib/types.js';
 
 // =============================================
@@ -191,6 +191,21 @@ const TONE_DESCRIPTIONS: Record<ScenarioTone, string> = {
     energetic: '역동적이고 활력 넘치는',
 };
 
+// =============================================
+// 영상 길이별 HDSER 비트 → 씬 그룹핑
+// =============================================
+// 15초: 1씬 (5비트 전체를 multi-shot 프롬프트로 통합 → t2v 1콜)
+// 30/45/60초: 2/3/4씬 (씬당 15초, 각 씬에 1~2비트 묶음 → i2v 다중 호출)
+//
+// 5비트(Hook/Discovery/Story/Experience/Reason)는 항상 모두 다뤄지되,
+// 씬 수에 따라 다음과 같이 묶임:
+const BEAT_GROUPING_BY_DURATION: Record<AdDuration, HDSERBeat[][]> = {
+    15: [['Hook', 'Discovery', 'Story', 'Experience', 'Reason']],
+    30: [['Hook', 'Discovery', 'Story'], ['Experience', 'Reason']],
+    45: [['Hook', 'Discovery'], ['Story', 'Experience'], ['Reason']],
+    60: [['Hook'], ['Discovery', 'Story'], ['Experience'], ['Reason']],
+};
+
 /**
  * POST /api/generate-ad-scenario-v2
  * HDSER 프레임워크 기반 광고 시나리오 생성
@@ -265,14 +280,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const targetLabels = targetAudiences.map(t => TARGET_LABELS[t]).join(', ');
         const industryLabel = INDUSTRY_LABELS[industry];
 
-        // 씬 수 결정 (duration 기반)
-        const sceneCount = hdserConfig.scenes.length;
-        const sceneDuration = Math.round(duration / sceneCount);
+        // 씬 수 결정 — 영상 길이별로 HDSER 5비트를 N씬에 그룹핑
+        // 15초: 1씬 (t2v 1콜용 multi-shot 프롬프트), 30/45/60초: 2/3/4씬 (i2v 다중 호출)
+        const beatGroups = BEAT_GROUPING_BY_DURATION[duration as AdDuration] ?? BEAT_GROUPING_BY_DURATION[60];
+        const sceneCount = beatGroups.length;
+        const sceneDuration = Math.round(duration / sceneCount); // 모든 경우 씬당 15초
+        const isT2VMode = duration === 15;
 
-        // 씬 구조 텍스트 생성
-        const sceneStructureText = hdserConfig.scenes.map((s, i) =>
-            `씬 ${i + 1} - ${s.beat} (비중 ${s.weight}%):\n  역할: ${s.role}\n  비주얼 가이드: ${s.visualGuide}`
-        ).join('\n\n');
+        // 비트 정보 lookup (HDSER_CONFIGS에서 광고 유형별 역할 정보 사용)
+        const beatDetailMap = new Map(hdserConfig.scenes.map(s => [s.beat, s]));
+
+        // 씬 구조 텍스트 생성 — 그룹핑된 비트들을 한 씬에 묶어 표시
+        const sceneStructureText = beatGroups.map((beatsInScene, sceneIdx) => {
+            const sceneTitle = `씬 ${sceneIdx + 1} (${sceneDuration}초)`;
+            const beatLines = beatsInScene.map(beatName => {
+                const beat = beatDetailMap.get(beatName);
+                if (!beat) return `  - ${beatName}`;
+                return `  - ${beat.beat}: ${beat.role}\n    비주얼 가이드: ${beat.visualGuide}`;
+            }).join('\n');
+            const beatList = beatsInScene.join(' + ');
+            return `${sceneTitle} — 비트 그룹: ${beatList}\n${beatLines}`;
+        }).join('\n\n');
+
+        // 15초(t2v 1콜) 모드 추가 지시문 — multi-shot 프롬프트 작성 가이드
+        const t2vGuide = isT2VMode ? `
+
+## ⚠️ 중요: 15초 t2v 모드 (단일 씬, multi-shot 프롬프트)
+
+이 광고는 **15초 짜리이며 1개의 씬만 생성**합니다. 그 1개의 씬은 t2v(text-to-video) 모델로 한 번에 생성되며, **imagePrompt는 5개의 샷(shot)을 순차적으로 묘사하는 multi-shot 프롬프트**로 작성해야 합니다.
+
+**imagePrompt 작성 형식 (반드시 준수):**
+\`\`\`
+[스타일 프리픽스]. Multi-shot advertisement video for [product].
+Shot 1 (0-3s, Hook): [Hook 비주얼을 영어로 묘사]
+Shot 2 (3-6s, Discovery): [Discovery 비주얼]
+Shot 3 (6-9s, Story): [Story 비주얼]
+Shot 4 (9-12s, Experience): [Experience 비주얼]
+Shot 5 (12-15s, Reason): [Reason 비주얼]
+\`\`\`
+
+**narration 작성:**
+- 15초 전체에 흐르는 하나의 카피로 작성 (60-75자, 한국어)
+- 5개 비트의 감정 흐름을 자연스럽게 담아냄 (Hook → ... → Reason)
+- 씬별로 끊기지 않는 연결된 카피
+
+**videoPrompt 작성:**
+- 각 샷의 카메라/모션 변화를 시간순으로 묘사 (영어)
+- 예: "Slow zoom-in on product (0-3s), then quick cut to user smile (3-6s), pan to context (6-9s), tight close-up of result (9-12s), wide brand shot (12-15s)"
+` : `
+
+## 씬 구성 안내 (i2v 다중 호출 모드)
+
+이 광고는 ${sceneCount}개의 씬으로 구성되며, **각 씬은 정확히 ${sceneDuration}초**이고 i2v(image-to-video) 모델로 씬별로 영상이 생성됩니다.
+
+- 각 씬은 그룹된 HDSER 비트들의 감정/메시지를 한 번에 전달하는 **하나의 코히어런트한 장면**이어야 합니다
+- imagePrompt는 multi-shot 형식이 아닌, **${sceneDuration}초 영상의 첫 프레임이 될 단일 정지 이미지**를 묘사 (영어)
+- 씬당 narration: 60-75자 (한국어, ${sceneDuration}초 × 4~5자/초)
+`;
 
         const prompt = `당신은 대한민국 최고의 숏폼 광고 크리에이터입니다.
 틱톡, 유튜브 쇼츠, 인스타 릴스에서 수백만 조회수를 기록하는 광고 영상 시나리오를 작성합니다.
@@ -290,6 +354,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 ## 씬 구조 (${sceneCount}씬 × ${sceneDuration}초 = ${duration}초)
 
 ${sceneStructureText}
+${t2vGuide}
 
 ---
 

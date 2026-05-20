@@ -95,6 +95,7 @@ export const VideoTab: React.FC = () => {
     reorderClip,
     generateClipVideo,
     generateAllClipVideos,
+    generateClipVideoT2V,
     upgradeClipResolution,
     play,
     pause,
@@ -451,11 +452,34 @@ export const VideoTab: React.FC = () => {
     generateAudio: activeScenario?.videoGenerateAudio,
   };
 
+  // 15초 광고는 t2v(text-to-video) 1콜로 처리 — i2v 분기 대신 multi-shot 프롬프트 1회 호출
+  const isAdT2VMode = videoSource === 'ad' && activeScenario?.totalDuration === 15;
+
   const handleGenerateClip = async (clipId: string) => {
+    if (isAdT2VMode && activeScenario) {
+      // 15초 광고 t2v: 첫(유일한) 씬의 imagePrompt를 multi-shot 프롬프트로 사용
+      const scene = activeScenario.scenes[0];
+      if (!scene) return;
+      const aspectRatio = activeScenario.aspectRatio || '16:9';
+      // motionPrompt가 있으면 multi-shot에 동작 가이드로 추가
+      const combinedPrompt = scene.videoPrompt
+        ? `${scene.imagePrompt}\n\nMotion timeline: ${scene.videoPrompt}`
+        : scene.imagePrompt;
+
+      // useVideo의 clip update 흐름 재사용 — t2v 결과를 generatedVideo에 저장
+      await generateClipVideoT2V(clipId, combinedPrompt, aspectRatio, videoGenOptions);
+      return;
+    }
     await generateClipVideo(clipId, referenceImages, videoGenOptions);
   };
 
   const handleGenerateAllClips = async () => {
+    if (isAdT2VMode) {
+      // 15초 광고는 클립이 1개뿐 — 첫 클립만 t2v로 생성
+      const firstClip = clips[0];
+      if (firstClip) await handleGenerateClip(firstClip.id);
+      return;
+    }
     await generateAllClipVideos(referenceImages, videoGenOptions);
   };
 
@@ -1036,7 +1060,7 @@ export const VideoTab: React.FC = () => {
                   <div className="flex items-end gap-2">
                     <button
                       onClick={() => handleGenerateClip(selectedClip.id)}
-                      disabled={isGenerating || !selectedClip.sourceImage || videoApiStatus === 'unavailable'}
+                      disabled={isGenerating || (!isAdT2VMode && !selectedClip.sourceImage) || videoApiStatus === 'unavailable'}
                       className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-50 min-h-[44px]"
                       title={videoApiStatus === 'unavailable' ? 'AI 영상 API 사용 불가' : ''}
                     >

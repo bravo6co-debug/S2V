@@ -543,6 +543,27 @@ export const generateVideoFromImage = async (
     }, 'video');
 };
 
+/**
+ * 15초 광고 t2v (text-to-video) — 단일 multi-shot 프롬프트로 영상 1콜 생성
+ * 광고 시나리오 v2에서 duration=15일 때 사용 (1씬, 5비트 통합 multi-shot 프롬프트)
+ */
+export const generateAdTextToVideo = async (
+    prompt: string,
+    aspectRatio: AspectRatio,
+    durationSeconds: number = 15,
+    options?: GenerateVideoOptions
+): Promise<VideoGenerationResult> => {
+    return post<VideoGenerationResult>('/api/generate-ad-text-to-video', {
+        prompt,
+        durationSeconds,
+        aspectRatio,
+        ...(options?.videoEngine && { videoEngine: options.videoEngine }),
+        ...(options?.resolution && { resolution: options.resolution }),
+        ...(options?.generateAudio !== undefined && { generateAudio: options.generateAudio }),
+        ...(typeof options?.seed === 'number' && { seed: options.seed }),
+    }, 'video');
+};
+
 export const checkVideoApiAvailability = async (): Promise<{ available: boolean; error?: string }> => {
     try {
         return { available: true };
